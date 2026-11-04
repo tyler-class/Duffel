@@ -4,8 +4,8 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
-- **Per-person lists.** Every item belongs to someone (or is shared), with quantities that scale with trip length: “1 T-shirt per day, at most 7”.
-- **Bags.** Put things in specific bags. Carry-on is a property of the bag, so the carry-on view is always right. Car seats and strollers go under “No bag”.
+- **Per-person lists.** Every item belongs to someone (or is shared), with quantities that scale with trip length: “1 T-shirt per day, at most 7”. Set a custom number any time and it stays put.
+- **Bags.** Bags belong to people (or are shared), and items land in the right one automatically. Carry-on is a property of the bag, so the carry-on view is always right. Car seats and strollers go under “No bag”.
 - **Templates and past trips.** Start a trip from a template, copy last year’s trip (everything starts unpacked), or save any trip as a new template.
 - **Built for phones.** Install it to your home screen. The last trip you opened works offline, and check-offs sync when you’re back online.
 - **Pack together.** Everyone in the household signs in with one shared password and sees changes within seconds.
@@ -47,7 +47,7 @@ It opens full screen like a regular app.
 
 ## Connect an AI assistant
 
-Duffel includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-duffel>/mcp`. In Duffel, open **More → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, Duffel shows a sign-in page; enter your household password to approve it. **More → Connect an AI assistant → Disconnect all** revokes every connected assistant.
+Duffel includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-duffel>/mcp`. In Duffel, open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, Duffel shows a sign-in page; enter your household password to approve it. **Settings → Connect an AI assistant → Disconnect all** revokes every connected assistant.
 
 ## Change the password
 
@@ -61,7 +61,7 @@ Everyone is signed out and signs in again with the new password. Connected AI as
 
 ## Back up and restore
 
-**More → Settings → Download backup** saves everything as one JSON file. **Restore from backup** replaces everything with a backup’s contents. Use it to move to a new deployment, too.
+**Settings → Backup → Download backup** saves everything as one JSON file. **Restore from backup** replaces everything with a backup’s contents. Use it to move to a new deployment, too.
 
 ## Update your copy
 
