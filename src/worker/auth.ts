@@ -125,7 +125,8 @@ export async function clearFailures(db: D1Database, ip: string): Promise<void> {
 export function setSessionCookie(c: Context, token: string) {
   setCookie(c, COOKIE, token, {
     httpOnly: true,
-    secure: true,
+    // Always HTTPS in production; plain http only happens in local dev (e.g. a phone on the LAN).
+    secure: new URL(c.req.url).protocol === 'https:',
     sameSite: 'Lax',
     path: '/',
     maxAge: SESSION_DAYS * 86_400,
@@ -133,7 +134,7 @@ export function setSessionCookie(c: Context, token: string) {
 }
 
 export function clearSessionCookie(c: Context) {
-  deleteCookie(c, COOKIE, { path: '/', secure: true });
+  deleteCookie(c, COOKIE, { path: '/', secure: new URL(c.req.url).protocol === 'https:' });
 }
 
 export async function isSignedIn(c: Context<Env>): Promise<boolean> {

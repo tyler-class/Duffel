@@ -41,8 +41,28 @@ function providerFor(origin: string) {
   return p;
 }
 
+/** OAuth needs HTTPS (or localhost). Plain http elsewhere only happens in local dev on a LAN. */
+function oauthCapable(url: URL): boolean {
+  return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
+}
+
 export default {
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
-    return providerFor(new URL(request.url).origin).fetch(request, env, ctx);
+    const url = new URL(request.url);
+    if (!oauthCapable(url)) {
+      // e.g. testing from a phone at http://192.168.x.x:5199: the app works, assistant connections don't.
+      if (
+        url.pathname.startsWith('/mcp') ||
+        url.pathname.startsWith('/oauth/') ||
+        url.pathname.startsWith('/.well-known/')
+      ) {
+        return Response.json(
+          { error: 'https_required', message: 'Connecting assistants needs HTTPS.' },
+          { status: 503 },
+        );
+      }
+      return defaultHandler.fetch(request, env, ctx);
+    }
+    return providerFor(url.origin).fetch(request, env, ctx);
   },
 } satisfies ExportedHandler<Cloudflare.Env>;
