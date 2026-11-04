@@ -5,7 +5,6 @@ import type { AppState, Trip, TripBag, TripDetail } from '@shared/types';
 import { api } from '../lib/api';
 import { keys, useAppState, useTrip } from '../lib/queries';
 import { useSave } from '../lib/useSave';
-import { selectTrip } from '../lib/selection';
 import { plural } from '../lib/format';
 import { Icon } from '../components/Icon';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
@@ -64,7 +63,7 @@ export function TripSettings() {
     return (
       <Empty
         title="Trip not found"
-        action={<GhostButton onClick={() => nav('/trips')}>Back to trips</GhostButton>}
+        action={<GhostButton onClick={() => nav('/')}>Back to trips</GhostButton>}
       />
     );
   if (!detail || !state) return null;
@@ -124,8 +123,7 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
       Object.assign(body, { days: form.days, nights: form.nights });
     const saved = await run(() => api.patch(`/trips/${trip.id}`, body), [keys.trip(trip.id)]);
     if (saved) {
-      selectTrip(trip.id);
-      nav('/');
+      nav(`/trips/${trip.id}`);
     }
   }
 
@@ -145,7 +143,7 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
       <PageHeader title={trip.name} back />
 
       <SectionLabel icon="bag">Bags</SectionLabel>
-      <div className="px-5">
+      <div className="px-6">
         {fits.map(({ bag, fit }) => (
           <button
             key={bag.id}
@@ -197,7 +195,7 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
       </div>
 
       <SectionLabel icon="settings">Details</SectionLabel>
-      <div className="px-5">
+      <div className="px-6">
         <FieldRow icon="tag" label="Name" htmlFor="t-name">
           <TextInput
             id="t-name"
@@ -286,12 +284,14 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
             onChange={(travelers) => set({ travelers })}
           />
         </FieldRow>
-        <FieldRow icon="sparkle" label="Weather and activities">
+        <FieldRow icon="weather" label="Weather">
           <OnePicker
             value={form.climate}
             onChange={(climate) => set({ climate })}
             options={state.lookups.climate ?? []}
           />
+        </FieldRow>
+        <FieldRow icon="run" label="Activities">
           <TagPicker
             value={form.activities}
             onChange={(activities) => set({ activities })}
@@ -371,9 +371,9 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
           <>
             <GhostButton onClick={() => setConfirmDelete(false)}>Cancel</GhostButton>
             <PrimaryButton
-              className="bg-danger"
+              tone="danger"
               onClick={async () => {
-                if (await run(() => api.del(`/trips/${trip.id}`))) nav('/trips');
+                if (await run(() => api.del(`/trips/${trip.id}`))) nav('/', { replace: true });
               }}
             >
               Delete

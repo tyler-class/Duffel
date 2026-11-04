@@ -48,6 +48,14 @@ const P = {
   phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
   edit: '<path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13 7l4 4"/>',
   scale: '<path d="M12 3v18M5 7h14M5 7l-3 7a3 3 0 0 0 6 0L5 7zM19 7l-3 7a3 3 0 0 0 6 0l-3-7z"/>',
+  weather:
+    '<path d="M10 3v1.5M4.6 5.6l1 1M3 11h1.5M15.4 5.6l-1 1"/><path d="M6.6 11.5a3.5 3.5 0 0 1 6.6-2.8"/><path d="M9 21h8.5a3.5 3.5 0 0 0 .5-7 5 5 0 0 0-9.4-1A4 4 0 0 0 9 21z"/>',
+  run: '<circle cx="15" cy="4.5" r="1.8"/><path d="M7.5 21.5l3.2-5.2 2.8 2.2v3M5.5 11.5l3.2-3.3 4.3.8 2.5 3.5h3"/><path d="M10.7 16.3l2.3-7.3"/>',
+  palette:
+    '<path d="M12 3a9 9 0 0 0 0 18c1.1 0 1.8-.8 1.8-1.8 0-.5-.2-.9-.5-1.2-.3-.3-.5-.8-.5-1.2 0-1 .8-1.8 1.8-1.8H17a4 4 0 0 0 4-4C21 6.5 17 3 12 3z"/><circle cx="7.5" cy="11" r="1"/><circle cx="10" cy="7" r="1"/><circle cx="14.5" cy="7" r="1"/>',
+  smile:
+    '<circle cx="12" cy="12" r="9"/><path d="M8.5 14a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/>',
+  chevDown: '<path d="M6 9l6 6 6-6"/>',
   ai: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><rect x="7" y="7" width="10" height="10" rx="3"/><path d="M10 12h4"/>',
 } as const;
 

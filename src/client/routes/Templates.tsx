@@ -36,7 +36,6 @@ export function Templates() {
     <div className="pb-10">
       <PageHeader
         title="Templates"
-        back="/more"
         action={
           <PrimaryButton icon="plus" onClick={() => (setName(''), setCreating(true))}>
             New
@@ -157,7 +156,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
           <button
             key={ti.id}
             onClick={() => setEditing(ti)}
-            className="flex w-full items-center gap-3 border-b border-line px-5 py-3 text-left"
+            className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3 text-left"
           >
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-base">{item?.name ?? 'Removed item'}</span>
@@ -206,12 +205,14 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
             options={data.lookups.tripType ?? []}
           />
         </FieldRow>
-        <FieldRow icon="sparkle" label="Weather and activities">
+        <FieldRow icon="weather" label="Weather">
           <OnePicker
             value={form.climate}
             onChange={(climate) => setForm({ ...form, climate })}
             options={data.lookups.climate ?? []}
           />
+        </FieldRow>
+        <FieldRow icon="run" label="Activities">
           <TagPicker
             value={form.activities}
             onChange={(activities) => setForm({ ...form, activities })}
@@ -267,7 +268,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
           <>
             <GhostButton onClick={() => setConfirmDelete(false)}>Cancel</GhostButton>
             <PrimaryButton
-              className="bg-danger"
+              tone="danger"
               onClick={async () => {
                 if (await run(() => api.del(`/templates/${tpl.id}`))) nav('/templates');
               }}
@@ -371,9 +372,11 @@ function TemplateItemSheet({
         icon="user"
         label="For"
         hint={
-          assignees.length
-            ? undefined
-            : 'Nobody picked: uses the catalog item’s people, or one shared row.'
+          assignees.length > 1
+            ? 'Each person gets their own row on the trip, with this quantity each.'
+            : assignees.length
+              ? undefined
+              : 'Nobody picked: uses the catalog item’s people, or one shared row.'
         }
       >
         <PeoplePicker people={data.people} value={assignees} onChange={setAssignees} />

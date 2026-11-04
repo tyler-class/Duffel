@@ -2,6 +2,7 @@ import {
   useEffect,
   useId,
   useRef,
+  useState,
   type ReactNode,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
@@ -16,12 +17,19 @@ export function cx(...c: (string | false | null | undefined)[]) {
 // ---------- buttons ----------
 type BtnProps = ButtonHTMLAttributes<HTMLButtonElement> & { icon?: IconName };
 
-export function PrimaryButton({ icon, className, children, ...p }: BtnProps) {
+export function PrimaryButton({
+  icon,
+  className,
+  children,
+  tone,
+  ...p
+}: BtnProps & { tone?: 'danger' }) {
   return (
     <button
       {...p}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-[10px] bg-ink px-3.5 py-2.5 text-[15px] font-medium text-bg disabled:opacity-50',
+        'inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[15px] font-medium disabled:opacity-50',
+        tone === 'danger' ? 'bg-danger text-white' : 'bg-accent text-accent-ink',
         className,
       )}
     >
@@ -153,10 +161,12 @@ export function Switch({
   on,
   onChange,
   label,
+  disabled,
 }: {
   on: boolean;
   onChange: (v: boolean) => void;
   label: string;
+  disabled?: boolean;
 }) {
   return (
     <button
@@ -164,9 +174,10 @@ export function Switch({
       role="switch"
       aria-checked={on}
       aria-label={label}
+      disabled={disabled}
       onClick={() => onChange(!on)}
       className={cx(
-        'relative h-6 w-10 flex-none rounded-full transition-colors',
+        'relative h-6 w-10 flex-none rounded-full transition-colors disabled:opacity-40',
         on ? 'bg-accent' : 'bg-track',
       )}
     >
@@ -311,14 +322,14 @@ export function Sheet({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-40 flex items-end justify-center">
+    <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-6">
       <div className="absolute inset-0 bg-[var(--scrim)]" onClick={onClose} />
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-[18px] bg-surface pb-safe sm:mb-6 sm:rounded-[18px]"
+        className="relative flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-[18px] bg-surface pb-safe sm:rounded-[18px] sm:shadow-xl"
       >
         <div className="mx-auto mt-2.5 mb-2 h-1 w-9 flex-none rounded-full bg-line" />
         <h2 id={titleId} className="flex-none px-5 pb-1.5 text-lg font-semibold tracking-tight">
@@ -402,11 +413,30 @@ export function PageHeader({
   );
 }
 
-export function SectionLabel({ children, icon }: { children: ReactNode; icon?: IconName }) {
+/** A section header pill: tinted, bold, with an optional accent icon and trailing count or action. */
+export function SectionLabel({
+  children,
+  icon,
+  trailing,
+  sticky,
+}: {
+  children: ReactNode;
+  icon?: IconName;
+  trailing?: ReactNode;
+  sticky?: boolean;
+}) {
   return (
-    <div className="flex items-center gap-1.5 px-5 pt-6 pb-2 text-xs tracking-[0.08em] text-soft uppercase">
-      {icon && <Icon name={icon} size={13} />}
-      {children}
+    <div
+      className={cx(
+        'px-4 pt-6 pb-1',
+        sticky && 'sticky top-[env(safe-area-inset-top,0px)] z-10 bg-bg',
+      )}
+    >
+      <div className="flex items-center gap-2 rounded-full bg-accent-tint px-4 py-2">
+        {icon && <Icon name={icon} size={15} className="text-accent" />}
+        <span className="flex-1 text-[13px] font-semibold text-ink">{children}</span>
+        {trailing}
+      </div>
     </div>
   );
 }
@@ -442,10 +472,73 @@ export function ListRow({
   return (
     <button
       onClick={onClick}
-      className="flex w-full items-center gap-3.5 border-b border-line px-5 py-3.5 text-left"
+      className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3.5 border-b border-line py-3.5 text-left"
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
       {trailing ?? <Icon name="chevRight" className="text-faint" />}
     </button>
+  );
+}
+
+/** True on wide screens (tablet and desktop). */
+export function useIsWide(): boolean {
+  const query = '(min-width: 640px)';
+  const [wide, setWide] = useState(() => window.matchMedia?.(query).matches ?? false);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener('change', on);
+    return () => mq.removeEventListener('change', on);
+  }, []);
+  return wide;
+}
+
+/**
+ * A menu opened from a button: a dropdown under the button on wide screens,
+ * a bottom sheet on phones.
+ */
+export function Menu({
+  open,
+  onClose,
+  anchor,
+  title,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  anchor: DOMRect | null;
+  title: ReactNode;
+  children: ReactNode;
+}) {
+  const wide = useIsWide();
+  useEffect(() => {
+    if (!open || !wide) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('resize', onClose);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      window.removeEventListener('resize', onClose);
+    };
+  }, [open, wide, onClose]);
+  if (!open) return null;
+  if (!wide || !anchor) {
+    return (
+      <Sheet open={open} onClose={onClose} title={title}>
+        {children}
+      </Sheet>
+    );
+  }
+  return (
+    <div className="fixed inset-0 z-40" onClick={onClose}>
+      <div
+        role="menu"
+        className="absolute w-72 rounded-xl border border-line bg-surface px-4 py-1 shadow-xl"
+        style={{ top: anchor.bottom + 6, right: Math.max(8, window.innerWidth - anchor.right) }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="[&>div>button:last-child]:border-b-0">{children}</div>
+      </div>
+    </div>
   );
 }

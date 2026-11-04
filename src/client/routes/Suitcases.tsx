@@ -5,13 +5,13 @@ import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { Icon } from '../components/Icon';
 import { NumberInput, OnePicker } from '../components/fields';
+import { CatalogHeader } from '../components/CatalogNav';
 import {
   DangerButton,
   Empty,
   ErrorText,
   FieldRow,
   GhostButton,
-  PageHeader,
   PrimaryButton,
   Sheet,
   TextInput,
@@ -60,15 +60,7 @@ export function Suitcases() {
   };
   return (
     <div className="pb-10">
-      <PageHeader
-        title="Suitcases"
-        back="/more"
-        action={
-          <PrimaryButton icon="plus" onClick={() => open('new')}>
-            Add
-          </PrimaryButton>
-        }
-      />
+      <CatalogHeader addLabel="Bag" onAdd={() => open('new')} />
       {!data.suitcases.length && (
         <Empty title="No suitcases yet">
           Add the bags you own. Give them a capacity in liters to see how full they get on a trip.
@@ -78,7 +70,7 @@ export function Suitcases() {
         <button
           key={s.id}
           onClick={() => open(s)}
-          className="flex w-full items-center gap-3 border-b border-line px-5 py-3.5 text-left"
+          className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3.5 text-left"
         >
           <Icon
             name={/carry|back|diaper/i.test(s.type ?? '') ? 'backpack' : 'bag'}

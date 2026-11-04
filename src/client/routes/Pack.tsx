@@ -1,19 +1,11 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router';
-import {
-  displayQty,
-  isCarryOn,
-  localToday,
-  progress,
-  shortBagLabel,
-  splitTrips,
-} from '@shared/logic';
+import { useNavigate, useParams } from 'react-router';
+import { displayQty, isCarryOn, progress, shortBagLabel } from '@shared/logic';
 import type { Item, Person, Trip, TripBag, TripDetail, TripItem } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { formatRange, plural } from '../lib/format';
 import { keys, useAppState, usePatchTripItem, useTrip } from '../lib/queries';
-import { useSelectedTrip } from '../lib/selection';
 import { load, save } from '../lib/storage';
 import { isOffline } from '../lib/offline';
 import { Icon } from '../components/Icon';
@@ -28,13 +20,13 @@ import {
   FieldRow,
   GhostButton,
   IconButton,
+  Menu,
   PersonDot,
   PrimaryButton,
   Segmented,
   Sheet,
   TextInput,
 } from '../components/ui';
-import { Onboarding } from './Onboarding';
 
 type Status = 'all' | 'packed' | 'todo';
 type Where = 'all' | 'carry' | 'luggage';
@@ -53,21 +45,16 @@ interface Group {
 }
 
 export function Pack() {
+  const { id = '' } = useParams();
   const state = useAppState();
-  const [tripId, setTripId] = useSelectedTrip(state.data?.trips);
-  const trip = useTrip(tripId);
-
+  const trip = useTrip(id);
   if (state.isPending) return <div className="h-40" />;
   if (state.error) return <Empty title="Couldn’t load Duffel">{errorMessage(state.error)}</Empty>;
   const s = state.data;
-  if (!s.trips.length) {
-    if (!s.people.length && !s.items.length) return <Onboarding />;
-    return <NoTrips />;
-  }
+  if (!s.trips.some((t) => t.id === id)) return <Empty title="Trip not found" />;
   return (
     <PackTrip
-      tripId={tripId}
-      setTripId={setTripId}
+      tripId={id}
       trips={s.trips}
       people={s.people}
       catalog={s.items}
@@ -77,25 +64,8 @@ export function Pack() {
   );
 }
 
-function NoTrips() {
-  const nav = useNavigate();
-  return (
-    <Empty
-      title="No trips yet"
-      action={
-        <PrimaryButton icon="plus" onClick={() => nav('/trips/new')}>
-          New trip
-        </PrimaryButton>
-      }
-    >
-      Start one from a template, copy a past trip, or begin with a blank list.
-    </Empty>
-  );
-}
-
 function PackTrip(props: {
   tripId: string | null;
-  setTripId: (id: string) => void;
   trips: Trip[];
   people: Person[];
   catalog: Item[];
@@ -103,9 +73,9 @@ function PackTrip(props: {
   error: Error | null;
 }) {
   const { trips, people, catalog, detail } = props;
+  const nav = useNavigate();
   const qc = useQueryClient();
   const toast = useToast();
-  const [showPast, setShowPast] = useState(false);
   const [status, setStatusRaw] = useState<Status>(() => load('status', 'all'));
   const [where, setWhereRaw] = useState<Where>(() => load('where', 'all'));
   const [groupBy, setGroupByRaw] = useState<GroupBy>(() => load('groupBy', 'person'));
@@ -114,6 +84,7 @@ function PackTrip(props: {
   const [adding, setAdding] = useState<Partial<ItemDraft> | null>(null);
   const [menu, setMenu] = useState<null | 'menu' | 'reset' | 'template' | 'catalog'>(null);
   const [error, setError] = useState('');
+  const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
   const patch = usePatchTripItem(props.tripId ?? 'none');
 
   const setStatus = (v: Status) => (setStatusRaw(v), save('status', v));
@@ -126,7 +97,6 @@ function PackTrip(props: {
       return n;
     });
 
-  const { active, archived } = useMemo(() => splitTrips(trips, localToday()), [trips]);
   const trip = detail?.trip ?? trips.find((t) => t.id === props.tripId);
   const bags = useMemo(() => detail?.bags ?? [], [detail]);
   const rows = useMemo(() => detail?.items ?? [], [detail]);
@@ -288,23 +258,26 @@ function PackTrip(props: {
 
   return (
     <div>
-      {trips.length > 1 && (
-        <TripTabs
-          active={active}
-          archived={archived}
-          current={trip.id}
-          showPast={showPast}
-          setShowPast={setShowPast}
-          onPick={props.setTripId}
-        />
-      )}
+      <button
+        onClick={() => nav('/')}
+        className="ml-3.5 flex items-center gap-0.5 pt-3 text-[15px] text-soft"
+      >
+        <Icon name="back" size={18} /> Trips
+      </button>
 
       <header className="flex flex-col gap-2 px-5 pt-5 pb-2">
         <div className="flex items-center justify-between gap-3">
           <h1 className="min-w-0 text-[28px] leading-tight font-semibold tracking-[-0.025em] text-balance">
             {trip.name}
           </h1>
-          <IconButton icon="more" label="Trip menu" onClick={() => setMenu('menu')} />
+          <IconButton
+            icon="more"
+            label="Trip menu"
+            onClick={(e) => {
+              setMenuAnchor(e.currentTarget.getBoundingClientRect());
+              setMenu('menu');
+            }}
+          />
         </div>
         <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 text-sm text-soft">
           {(trip.start_date || trip.end_date) && (
@@ -393,7 +366,9 @@ function PackTrip(props: {
               onClick={() => setGroupBy(g)}
               className={cx(
                 'border-b-[1.5px] py-0.5',
-                groupBy === g ? 'border-ink font-medium text-ink' : 'border-transparent text-soft',
+                groupBy === g
+                  ? 'border-accent font-medium text-ink'
+                  : 'border-transparent text-soft',
               )}
             >
               {g === 'person' ? 'Person' : 'Bag'}
@@ -517,6 +492,7 @@ function PackTrip(props: {
         onSave={saveNew}
       />
       <TripMenu
+        anchor={menuAnchor}
         trip={trip}
         open={menu}
         setOpen={setMenu}
@@ -713,52 +689,8 @@ function Row({
   );
 }
 
-function TripTabs(props: {
-  active: Trip[];
-  archived: Trip[];
-  current: string;
-  showPast: boolean;
-  setShowPast: (v: boolean) => void;
-  onPick: (id: string) => void;
-}) {
-  const tab = (t: Trip) => (
-    <button
-      key={t.id}
-      onClick={() => props.onPick(t.id)}
-      aria-current={t.id === props.current}
-      className={cx(
-        'border-b-[1.5px] py-1.5 whitespace-nowrap',
-        t.id === props.current ? 'border-ink font-medium text-ink' : 'border-transparent text-soft',
-      )}
-    >
-      {t.name}
-    </button>
-  );
-  const currentIsPast = props.archived.some((t) => t.id === props.current);
-  return (
-    <div className="pt-1">
-      <div className="no-scrollbar flex gap-[18px] overflow-x-auto px-5 text-sm">
-        {props.active.map(tab)}
-        {props.archived.length > 0 && (
-          <button
-            onClick={() => props.setShowPast(!props.showPast)}
-            className={cx('py-1.5 whitespace-nowrap', currentIsPast ? 'text-ink' : 'text-faint')}
-            aria-expanded={props.showPast}
-          >
-            Past ({props.archived.length}) {props.showPast ? '▴' : '▾'}
-          </button>
-        )}
-      </div>
-      {props.showPast && (
-        <div className="no-scrollbar flex gap-[18px] overflow-x-auto px-5 text-sm">
-          {props.archived.map(tab)}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function TripMenu(props: {
+  anchor: DOMRect | null;
   trip: Trip;
   open: null | 'menu' | 'reset' | 'template' | 'catalog';
   setOpen: (v: null | 'menu' | 'reset' | 'template' | 'catalog') => void;
@@ -803,14 +735,14 @@ function TripMenu(props: {
   const onTrip = new Set(props.rows.map((r) => r.item_id).filter((x): x is string => !!x));
   return (
     <>
-      <Sheet open={open === 'menu'} onClose={close} title={trip.name}>
+      <Menu open={open === 'menu'} onClose={close} anchor={props.anchor} title={trip.name}>
         <ActionList
           actions={[
             { icon: 'plus', label: 'Add from catalog', onClick: openCatalog },
             {
               icon: 'settings',
               label: 'Trip details and bags',
-              onClick: () => nav(`/trips/${trip.id}`),
+              onClick: () => nav(`/trips/${trip.id}/details`),
             },
             {
               icon: 'tmpl',
@@ -831,7 +763,7 @@ function TripMenu(props: {
             },
           ]}
         />
-      </Sheet>
+      </Menu>
 
       <Sheet
         open={open === 'reset'}

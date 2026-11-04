@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router';
 import { localToday, splitTrips } from '@shared/logic';
 import type { Trip } from '@shared/types';
 import { useAppState } from '../lib/queries';
-import { selectTrip } from '../lib/selection';
+import { Onboarding } from './Onboarding';
 import { formatRange } from '../lib/format';
 import { Icon, tripIcon } from '../components/Icon';
 import { cx, Empty, IconButton, PageHeader, PrimaryButton, SectionLabel } from '../components/ui';
@@ -11,14 +11,14 @@ export function Trips() {
   const nav = useNavigate();
   const { data } = useAppState();
   if (!data) return null;
+  if (!data.trips.length && !data.people.length && !data.items.length) return <Onboarding />;
   const { active, archived } = splitTrips(data.trips, localToday());
   const row = (t: Trip, highlight: boolean) => (
-    <div key={t.id} className="flex items-center border-b border-line">
+    <div key={t.id} className="mx-6 flex items-center border-b border-line">
       <button
-        className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 pl-5 text-left"
+        className="flex min-w-0 flex-1 items-center gap-3.5 py-3.5 text-left"
         onClick={() => {
-          selectTrip(t.id);
-          nav('/');
+          nav(`/trips/${t.id}`);
         }}
       >
         <span
@@ -56,8 +56,8 @@ export function Trips() {
       <IconButton
         icon="settings"
         label={`${t.name} details`}
-        className="mx-2"
-        onClick={() => nav(`/trips/${t.id}`)}
+        className="-mr-2 ml-2"
+        onClick={() => nav(`/trips/${t.id}/details`)}
       />
     </div>
   );

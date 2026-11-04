@@ -16,6 +16,20 @@ const date = z.preprocess(
 const tags = z.array(z.string().trim().min(1).max(60)).max(50);
 export const qtyModeSchema = z.enum(QTY_MODES);
 
+/**
+ * A PATCH version of a create schema: every field optional and, unlike `.partial()`,
+ * no defaults, so fields the client didn't send are left alone.
+ */
+function patchOf<S extends z.ZodObject>(schema: S): ReturnType<S['partial']> {
+  const shape = Object.fromEntries(
+    Object.entries(schema.shape).map(([k, v]) => [
+      k,
+      ((v instanceof z.ZodDefault ? v.removeDefault() : v) as z.ZodType).optional(),
+    ]),
+  );
+  return z.object(shape) as unknown as ReturnType<S['partial']>;
+}
+
 export const personInput = z.object({
   name: name(80),
   role: text(40).optional(),
@@ -24,7 +38,7 @@ export const personInput = z.object({
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
 });
-export const personPatch = personInput.partial();
+export const personPatch = patchOf(personInput);
 
 export const itemInput = z.object({
   name: name(),
@@ -44,7 +58,7 @@ export const itemInput = z.object({
   archived: z.boolean().default(false),
   default_people: z.array(id).max(50).default([]),
 });
-export const itemPatch = itemInput.partial();
+export const itemPatch = patchOf(itemInput);
 
 export const suitcaseInput = z.object({
   name: name(),
@@ -56,7 +70,7 @@ export const suitcaseInput = z.object({
   max_weight_lb: num.optional(),
   notes: text(2000).optional(),
 });
-export const suitcasePatch = suitcaseInput.partial();
+export const suitcasePatch = patchOf(suitcaseInput);
 
 export const templateInput = z.object({
   name: name(),
@@ -65,7 +79,7 @@ export const templateInput = z.object({
   activities: tags.default([]),
   notes: text(2000).optional(),
 });
-export const templatePatch = templateInput.partial();
+export const templatePatch = patchOf(templateInput);
 
 export const templateItemInput = z.object({
   item_id: id,
@@ -76,7 +90,7 @@ export const templateItemInput = z.object({
   sort_order: z.number().int().optional(),
   assignees: z.array(id).max(50).default([]),
 });
-export const templateItemPatch = templateItemInput.omit({ item_id: true }).partial();
+export const templateItemPatch = patchOf(templateItemInput.omit({ item_id: true }));
 export const templateItemsAdd = z.object({ item_ids: z.array(id).min(1).max(500) });
 
 export const tripBagInput = z.object({
@@ -87,7 +101,7 @@ export const tripBagInput = z.object({
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
 });
-export const tripBagPatch = tripBagInput.partial();
+export const tripBagPatch = patchOf(tripBagInput);
 
 export const tripInput = z.object({
   name: name(),
@@ -104,7 +118,7 @@ export const tripInput = z.object({
   archived: z.boolean().optional(),
   travelers: z.array(id).max(50).default([]),
 });
-export const tripPatch = tripInput.partial();
+export const tripPatch = patchOf(tripInput);
 export const tripSource = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('blank') }),
   z.object({ kind: z.literal('template'), template_id: id }),
@@ -128,7 +142,7 @@ export const tripItemInput = z.object({
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
 });
-export const tripItemPatch = tripItemInput.omit({ id: true, item_id: true }).partial();
+export const tripItemPatch = patchOf(tripItemInput.omit({ id: true, item_id: true }));
 export const tripItemsAdd = z.object({
   item_ids: z.array(id).min(1).max(500),
   person_id: id.nullable().optional(),

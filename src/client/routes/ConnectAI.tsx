@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { Icon } from '../components/Icon';
-import { ErrorText, GhostButton, PageHeader, SectionLabel } from '../components/ui';
+import { ErrorText, GhostButton, SectionLabel } from '../components/ui';
 
 function Copy({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -33,13 +33,14 @@ function Code({ children }: { children: string }) {
   );
 }
 
-export function ConnectAI() {
+/** The “Connect an AI assistant” part of Settings. */
+export function ConnectAISection() {
   const url = `${window.location.origin}/mcp`;
   const cli = `claude mcp add --transport http duffel ${url}`;
   return (
-    <div className="pb-12">
-      <PageHeader title="Connect an AI assistant" back="/more" />
-      <div className="flex flex-col gap-3 px-5 text-sm text-soft">
+    <div>
+      <SectionLabel icon="ai">Connect an AI assistant</SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 text-sm text-soft">
         <p>
           Let Claude, ChatGPT or any assistant that supports MCP read and update your packing lists.
         </p>
@@ -60,14 +61,14 @@ export function ConnectAI() {
       </div>
 
       <SectionLabel>Claude (web, desktop, mobile)</SectionLabel>
-      <ol className="flex list-decimal flex-col gap-1.5 pr-5 pl-10 text-sm text-ink">
+      <ol className="flex list-decimal flex-col gap-1.5 pr-6 pl-11 text-sm text-ink">
         <li>Open Settings → Connectors and choose “Add custom connector”.</li>
         <li>Name it Duffel and paste the URL above.</li>
         <li>Choose Connect, then enter your household password on the Duffel page.</li>
       </ol>
 
       <SectionLabel>ChatGPT</SectionLabel>
-      <ol className="flex list-decimal flex-col gap-1.5 pr-5 pl-10 text-sm text-ink">
+      <ol className="flex list-decimal flex-col gap-1.5 pr-6 pl-11 text-sm text-ink">
         <li>
           In Settings, add a custom connector (MCP server). Your plan may need developer mode turned
           on.
@@ -77,7 +78,7 @@ export function ConnectAI() {
       </ol>
 
       <SectionLabel>Claude Code</SectionLabel>
-      <div className="flex flex-col gap-2 px-5 text-sm text-ink">
+      <div className="flex flex-col gap-2 px-6 text-sm text-ink">
         <div className="flex items-center gap-1">
           <div className="min-w-0 flex-1">
             <Code>{cli}</Code>
@@ -88,7 +89,7 @@ export function ConnectAI() {
       </div>
 
       <SectionLabel>Other apps</SectionLabel>
-      <p className="px-5 text-sm text-ink">
+      <p className="px-6 text-sm text-ink">
         Cursor, VS Code and other MCP apps: add a remote (HTTP) MCP server with the URL above. They
         open the Duffel sign-in page the first time.
       </p>
@@ -111,7 +112,7 @@ function Connections() {
   });
   const list = q.data?.connections ?? [];
   return (
-    <div className="flex flex-col gap-1 px-5 text-sm">
+    <div className="flex flex-col gap-1 px-6 text-sm">
       {q.isPending && <p className="text-soft">Loading…</p>}
       {!q.isPending && !list.length && <p className="text-soft">No assistants are connected.</p>}
       {list.map((c) => (

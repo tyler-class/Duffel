@@ -61,6 +61,30 @@ describe('people and catalog', () => {
   });
 });
 
+describe('catalog rules', () => {
+  it('an item that never goes in a bag is never usually carry-on', async () => {
+    const api = await session();
+    const i = (await api.post<Item>('/items', { name: 'Stroller', not_in_suitcase: true, usually_carry_on: true })).data;
+    expect(i).toMatchObject({ not_in_suitcase: true, usually_carry_on: false });
+    const j = (await api.patch<Item>(`/items/${i.id}`, { usually_carry_on: true })).data;
+    expect(j.usually_carry_on).toBe(false);
+  });
+
+  it('PATCH only changes the fields that were sent', async () => {
+    const api = await session();
+    const p = (await api.post<Person>('/people', { name: 'Pat' })).data;
+    const i = (await api.post<Item>('/items', { name: 'Wipes', qty_mode: 'per_day', qty: 3, climate_tags: ['Hot'], default_people: [p.id] })).data;
+    const j = (await api.patch<Item>(`/items/${i.id}`, { notes: 'unscented' })).data;
+    expect(j).toMatchObject({ qty_mode: 'per_day', qty: 3, climate_tags: ['Hot'], default_people: [p.id], notes: 'unscented' });
+    const t = (await api.post<TripDetail>('/trips', { name: 'Keep', travelers: [p.id] })).data;
+    const row = (await api.post<TripItem>(`/trips/${t.trip.id}/items`, { name: 'Car seat', no_bag: true })).data;
+    const packed = (await api.patch<TripItem>(`/trip-items/${row.id}`, { packed: true })).data;
+    expect(packed).toMatchObject({ packed: true, no_bag: true });
+    const renamed = (await api.patch<TripDetail>(`/trips/${t.trip.id}`, { name: 'Kept' })).data;
+    expect(renamed.trip.travelers).toEqual([p.id]);
+  });
+});
+
 describe('key workflows', () => {
   it('builds a trip from a template, clones it unpacked, and saves it as a template', async () => {
     const api = await session();

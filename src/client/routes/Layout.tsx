@@ -3,21 +3,14 @@ import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
 
 const TABS: [string, string, IconName][] = [
-  ['/', 'Pack', 'list'],
-  ['/trips', 'Trips', 'map'],
+  ['/', 'Trips', 'map'],
   ['/catalog', 'Catalog', 'grid'],
-  ['/more', 'More', 'more'],
+  ['/templates', 'Templates', 'tmpl'],
+  ['/settings', 'Settings', 'settings'],
 ];
 
 function activeTab(path: string): string {
-  if (path.startsWith('/trips')) return '/trips';
-  if (path.startsWith('/catalog')) return '/catalog';
-  if (
-    ['/more', '/templates', '/people', '/suitcases', '/settings', '/connect'].some((p) =>
-      path.startsWith(p),
-    )
-  )
-    return '/more';
+  for (const p of ['/catalog', '/templates', '/settings']) if (path.startsWith(p)) return p;
   return '/';
 }
 
@@ -37,7 +30,7 @@ export function Layout() {
               to={to}
               className={cx(
                 'flex flex-col items-center gap-1 text-[11px]',
-                active === to ? 'text-ink' : 'text-faint',
+                active === to ? 'text-accent' : 'text-faint',
               )}
               aria-current={active === to ? 'page' : undefined}
             >

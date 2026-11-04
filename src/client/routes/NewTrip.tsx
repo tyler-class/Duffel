@@ -5,7 +5,6 @@ import type { TripDetail } from '@shared/types';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
-import { selectTrip } from '../lib/selection';
 import { formatRange, plural } from '../lib/format';
 import { Icon, type IconName } from '../components/Icon';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
@@ -112,14 +111,13 @@ export function NewTrip() {
       }),
     );
     if (created) {
-      selectTrip(created.trip.id);
-      nav('/');
+      nav(`/trips/${created.trip.id}`, { replace: true });
     }
   }
 
   return (
     <div className="pb-10">
-      <PageHeader title="New trip" back="/trips" />
+      <PageHeader title="New trip" back="/" />
       <div className="px-5">
         <div className="flex flex-col border-t border-line">
           {options.map(([v, title, sub, icon]) => (
@@ -238,16 +236,14 @@ export function NewTrip() {
         <FieldRow icon="users" label="Travelers">
           <PeoplePicker people={data.people} value={effectiveTravelers} onChange={setTravelers} />
         </FieldRow>
-        <FieldRow
-          icon="sparkle"
-          label="Weather and activities"
-          hint="Used to suggest catalog items."
-        >
+        <FieldRow icon="weather" label="Weather" hint="Used to suggest catalog items.">
           <OnePicker
             value={effectiveClimate}
             onChange={setClimate}
             options={data.lookups.climate ?? []}
           />
+        </FieldRow>
+        <FieldRow icon="run" label="Activities">
           <TagPicker
             value={effectiveActivities}
             onChange={setActivities}

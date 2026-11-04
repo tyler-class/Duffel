@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { OnePicker } from '../components/fields';
+import { CatalogHeader } from '../components/CatalogNav';
 import {
   cx,
   DangerButton,
@@ -12,7 +13,6 @@ import {
   ErrorText,
   FieldRow,
   GhostButton,
-  PageHeader,
   PersonDot,
   PrimaryButton,
   Sheet,
@@ -65,15 +65,7 @@ export function People() {
 
   return (
     <div className="pb-10">
-      <PageHeader
-        title="People"
-        back="/more"
-        action={
-          <PrimaryButton icon="plus" onClick={() => open('new')}>
-            Add
-          </PrimaryButton>
-        }
-      />
+      <CatalogHeader addLabel="Person" onAdd={() => open('new')} />
       {!data.people.length && (
         <Empty title="No one yet">
           Add everyone you pack for. Each person gets a color so their things are easy to spot.
@@ -83,7 +75,7 @@ export function People() {
         <button
           key={p.id}
           onClick={() => open(p)}
-          className="flex w-full items-center gap-3 border-b border-line px-5 py-3.5 text-left"
+          className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3.5 text-left"
         >
           <PersonDot color={p.color} size={10} />
           <span className="flex-1 text-base">
@@ -134,7 +126,7 @@ export function People() {
             options={data.lookups.role ?? []}
           />
         </FieldRow>
-        <FieldRow icon="sparkle" label="Color">
+        <FieldRow icon="palette" label="Color">
           <div className="flex flex-wrap gap-2.5">
             {PERSON_COLORS.map((c) => (
               <button
@@ -153,7 +145,7 @@ export function People() {
             ))}
           </div>
         </FieldRow>
-        <FieldRow icon="sparkle" label="Emoji (optional)" htmlFor="p-emoji">
+        <FieldRow icon="smile" label="Emoji (optional)" htmlFor="p-emoji">
           <TextInput
             id="p-emoji"
             value={d.emoji}

@@ -2,61 +2,61 @@
 @import '@fontsource-variable/geist';
 @import '@fontsource-variable/geist-mono';
 
-/* Duffel "Quiet": warm stone neutrals, one deep teal accent, hairlines. */
+/* Duffel palette, after MemryNote's "Warm Utility" theme: paper beige, warm greys, orange accent. */
 :root {
-  --bg: #fafaf8;
+  --bg: #f6f5f0;
   --surface: #ffffff;
-  --ink: #1c1b19;
-  --soft: #78746d;
-  --faint: #a9a59e;
-  --line: #ecebe7;
-  --accent: #1f6f63;
+  --ink: #1a1a1a;
+  --soft: #4a4a4a;
+  --faint: #8c8c8c;
+  --line: #e4e4de;
+  --accent: #f97316;
   --accent-ink: #ffffff;
-  --accent-tint: #e3f0ed;
-  --track: #ecebe7;
-  --chip: #f2f1ee;
+  --accent-tint: color-mix(in srgb, #f97316 11%, #f6f5f0);
+  --track: #e4e4de;
+  --chip: #efefe9;
   --seg: #ffffff;
-  --danger: #c4483c;
-  --scrim: rgb(20 20 18 / 0.32);
+  --danger: #dc2626;
+  --scrim: rgb(26 26 26 / 0.32);
 
-  --person-blue: #4a7fd1;
-  --person-violet: #8a63d2;
-  --person-coral: #e0695a;
-  --person-amber: #d49a2a;
-  --person-green: #4f9a5b;
-  --person-rose: #d45c8a;
-  --person-teal: #2f8f9d;
-  --person-slate: #6b7280;
-  --person-mist: #a9a59e;
+  --person-blue: #3b82f6;
+  --person-violet: #8b5cf6;
+  --person-coral: #ef4444;
+  --person-amber: #d97706;
+  --person-green: #22a05a;
+  --person-rose: #e0457b;
+  --person-teal: #0891b2;
+  --person-slate: #64748b;
+  --person-mist: #8c8c8c;
   color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #141413;
-    --surface: #1c1c1a;
-    --ink: #edece8;
-    --soft: #9b978f;
-    --faint: #67645e;
-    --line: #2a2926;
-    --accent: #5fb8a8;
-    --accent-ink: #0d1f1c;
-    --accent-tint: #1b2e2a;
-    --track: #2a2926;
-    --chip: #242321;
-    --seg: #3a3935;
-    --danger: #e0786c;
-    --scrim: rgb(0 0 0 / 0.5);
+    --bg: #181818;
+    --surface: #212121;
+    --ink: #dedede;
+    --soft: #cdcdcd;
+    --faint: #9a9a9a;
+    --line: #2e2e2e;
+    --accent: #fb923c;
+    --accent-ink: #181818;
+    --accent-tint: color-mix(in srgb, #fb923c 14%, #181818);
+    --track: #313131;
+    --chip: #212121;
+    --seg: #313131;
+    --danger: #ef4444;
+    --scrim: rgb(0 0 0 / 0.55);
 
-    --person-blue: #7aa5ea;
-    --person-violet: #ad8ff0;
-    --person-coral: #f08e80;
-    --person-amber: #e7b858;
-    --person-green: #7cc488;
-    --person-rose: #ef8bb2;
-    --person-teal: #63c0cc;
-    --person-slate: #9ca3af;
-    --person-mist: #67645e;
+    --person-blue: #60a5fa;
+    --person-violet: #a78bfa;
+    --person-coral: #f87171;
+    --person-amber: #fbbf24;
+    --person-green: #4ade80;
+    --person-rose: #f472b6;
+    --person-teal: #22d3ee;
+    --person-slate: #94a3b8;
+    --person-mist: #9a9a9a;
     color-scheme: dark;
   }
 }

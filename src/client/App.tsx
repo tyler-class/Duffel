@@ -15,9 +15,7 @@ import { Catalog, ItemEditor } from './routes/Catalog';
 import { Templates, TemplateEditor } from './routes/Templates';
 import { People } from './routes/People';
 import { Suitcases } from './routes/Suitcases';
-import { More } from './routes/More';
 import { Settings } from './routes/Settings';
-import { ConnectAI } from './routes/ConnectAI';
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -35,20 +33,19 @@ const router = createBrowserRouter([
   {
     element: <Layout />,
     children: [
-      { path: '/', element: <Pack /> },
+      { path: '/', element: <Trips /> },
       { path: '/trips', element: <Trips /> },
       { path: '/trips/new', element: <NewTrip /> },
-      { path: '/trips/:id', element: <TripSettings /> },
+      { path: '/trips/:id', element: <Pack /> },
+      { path: '/trips/:id/details', element: <TripSettings /> },
       { path: '/catalog', element: <Catalog /> },
-      { path: '/catalog/:id', element: <ItemEditor /> },
-      { path: '/more', element: <More /> },
+      { path: '/catalog/item/:id', element: <ItemEditor /> },
+      { path: '/catalog/bags', element: <Suitcases /> },
+      { path: '/catalog/people', element: <People /> },
       { path: '/templates', element: <Templates /> },
       { path: '/templates/:id', element: <TemplateEditor /> },
-      { path: '/people', element: <People /> },
-      { path: '/suitcases', element: <Suitcases /> },
       { path: '/settings', element: <Settings /> },
-      { path: '/connect', element: <ConnectAI /> },
-      { path: '*', element: <Pack /> },
+      { path: '*', element: <Trips /> },
     ],
   },
 ]);

@@ -1,7 +1,7 @@
-import { useId, useState } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import type { Person } from '@shared/types';
 import { Icon } from './Icon';
-import { Pick, PersonDot, TextInput } from './ui';
+import { Pick, PersonDot, Sheet, TextInput } from './ui';
 
 /** Free text with suggestions. */
 export function Combo({
@@ -202,5 +202,113 @@ export function NumberInput({
       onChange={(e) => onChange(e.target.value === '' ? null : Number(e.target.value))}
       className="tnum"
     />
+  );
+}
+
+/**
+ * A tap-to-open picker: shows the current value like a select, opens a sheet
+ * listing the options, and lets you add a new one.
+ */
+export function SelectSheet({
+  id,
+  value,
+  onChange,
+  options,
+  title,
+  placeholder = 'Choose',
+  allowNone = true,
+}: {
+  id?: string;
+  value: string | null;
+  onChange: (v: string | null) => void;
+  options: string[];
+  title: string;
+  placeholder?: string;
+  allowNone?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [custom, setCustom] = useState('');
+  const all =
+    value && !options.some((o) => o.toLowerCase() === value.toLowerCase())
+      ? [...options, value]
+      : options;
+  const pick = (v: string | null) => {
+    onChange(v);
+    setOpen(false);
+    setCustom('');
+  };
+  return (
+    <>
+      <button
+        id={id}
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex w-full items-center justify-between gap-2 text-left text-base"
+      >
+        <span className={value ? 'text-ink' : 'text-faint'}>{value || placeholder}</span>
+        <Icon name="chevDown" size={16} className="text-soft" />
+      </button>
+      <Sheet open={open} onClose={() => setOpen(false)} title={title}>
+        <div className="flex flex-col">
+          {allowNone && (
+            <OptionRow on={!value} onClick={() => pick(null)}>
+              <span className="text-soft">None</span>
+            </OptionRow>
+          )}
+          {all.map((o) => (
+            <OptionRow
+              key={o}
+              on={value?.toLowerCase() === o.toLowerCase()}
+              onClick={() => pick(o)}
+            >
+              {o}
+            </OptionRow>
+          ))}
+          <form
+            className="flex items-center gap-3 border-b border-line py-3"
+            onSubmit={(e) => {
+              e.preventDefault();
+              if (custom.trim()) pick(custom.trim());
+            }}
+          >
+            <Icon name="plus" size={16} className="text-faint" />
+            <input
+              aria-label={`New ${title.toLowerCase()}`}
+              value={custom}
+              onChange={(e) => setCustom(e.target.value)}
+              placeholder="Add new…"
+              className="flex-1 bg-transparent text-base focus:outline-none"
+            />
+            {custom.trim() && (
+              <button type="submit" className="text-[15px] text-accent">
+                Add
+              </button>
+            )}
+          </form>
+        </div>
+      </Sheet>
+    </>
+  );
+}
+
+function OptionRow({
+  on,
+  onClick,
+  children,
+}: {
+  on: boolean;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className="flex items-center gap-3 border-b border-line py-3 text-left text-base"
+    >
+      <span className="flex-1">{children}</span>
+      {on && <Icon name="check" size={16} className="text-accent" strokeWidth={2.2} />}
+    </button>
   );
 }

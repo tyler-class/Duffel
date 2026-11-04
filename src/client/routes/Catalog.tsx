@@ -7,7 +7,8 @@ import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { load, save } from '../lib/storage';
 import { Icon } from '../components/Icon';
-import { Combo, NumberInput, PeoplePicker, TagPicker } from '../components/fields';
+import { NumberInput, PeoplePicker, SelectSheet, TagPicker } from '../components/fields';
+import { CatalogHeader } from '../components/CatalogNav';
 import {
   DangerButton,
   Empty,
@@ -19,6 +20,7 @@ import {
   Segmented,
   Switch,
   TextInput,
+  SectionLabel,
 } from '../components/ui';
 
 function qtySummary(i: Item): string {
@@ -58,14 +60,7 @@ export function Catalog() {
 
   return (
     <div className="pb-10">
-      <PageHeader
-        title="Catalog"
-        action={
-          <PrimaryButton icon="plus" onClick={() => nav('/catalog/new')}>
-            New item
-          </PrimaryButton>
-        }
-      />
+      <CatalogHeader addLabel="Item" onAdd={() => nav('/catalog/item/new')} />
       <div className="mx-5 flex items-center gap-2 border-b border-line py-2.5">
         <Icon name="search" className="text-faint" />
         <input
@@ -83,12 +78,17 @@ export function Catalog() {
       )}
       {groups.map(([cat, items]) => (
         <section key={cat}>
-          <div className="px-5 pt-6 pb-1 text-xs tracking-[0.08em] text-soft uppercase">{cat}</div>
+          <SectionLabel
+            sticky
+            trailing={<span className="text-xs text-soft tnum">{items.length}</span>}
+          >
+            {cat}
+          </SectionLabel>
           {items.map((i) => (
             <button
               key={i.id}
-              onClick={() => nav(`/catalog/${i.id}`)}
-              className="flex w-full items-center gap-3 border-b border-line px-5 py-3 text-left"
+              onClick={() => nav(`/catalog/item/${i.id}`)}
+              className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3 text-left"
             >
               <span className="flex min-w-0 flex-1 flex-col gap-0.5">
                 <span className={i.archived ? 'text-faint' : 'text-base'}>{i.name}</span>
@@ -195,12 +195,13 @@ function ItemForm({
           />
         </FieldRow>
         <FieldRow icon="grid" label="Category" htmlFor="i-cat">
-          <Combo
+          <SelectSheet
             id="i-cat"
-            value={f.category ?? ''}
-            onChange={(v) => set({ category: v || null })}
+            title="Category"
+            value={f.category}
+            onChange={(category) => set({ category })}
             options={data.lookups.category ?? []}
-            placeholder="e.g. Clothing"
+            placeholder="Choose a category"
           />
         </FieldRow>
         <FieldRow
@@ -257,14 +258,14 @@ function ItemForm({
             onChange={(default_people) => set({ default_people })}
           />
         </FieldRow>
-        <FieldRow icon="sparkle" label="Weather" hint="Leave empty if the weather doesn’t matter.">
+        <FieldRow icon="weather" label="Weather" hint="Leave empty if the weather doesn’t matter.">
           <TagPicker
             value={f.climate_tags}
             onChange={(climate_tags) => set({ climate_tags })}
             options={data.lookups.climate ?? []}
           />
         </FieldRow>
-        <FieldRow icon="map" label="Activities" hint="Leave empty if it always comes along.">
+        <FieldRow icon="run" label="Activities" hint="Leave empty if it always comes along.">
           <TagPicker
             value={f.activity_tags}
             onChange={(activity_tags) => set({ activity_tags })}
@@ -277,16 +278,32 @@ function ItemForm({
             <Switch
               label="Doesn’t go in a bag"
               on={f.not_in_suitcase}
-              onChange={(not_in_suitcase) => set({ not_in_suitcase })}
+              onChange={(not_in_suitcase) =>
+                set(
+                  not_in_suitcase
+                    ? { not_in_suitcase, usually_carry_on: false }
+                    : { not_in_suitcase },
+                )
+              }
             />
           </div>
         </FieldRow>
-        <FieldRow icon="backpack" hint="Goes into the person’s carry-on bag when a trip is built.">
+        <FieldRow
+          icon="backpack"
+          hint={
+            f.not_in_suitcase
+              ? 'Off because this item doesn’t go in a bag.'
+              : 'Goes into the person’s carry-on bag when a trip is built.'
+          }
+        >
           <div className="flex items-center justify-between">
-            <span className="text-base">Usually carry-on</span>
+            <span className={f.not_in_suitcase ? 'text-base text-faint' : 'text-base'}>
+              Usually carry-on
+            </span>
             <Switch
               label="Usually carry-on"
-              on={f.usually_carry_on}
+              disabled={f.not_in_suitcase}
+              on={f.usually_carry_on && !f.not_in_suitcase}
               onChange={(usually_carry_on) => set({ usually_carry_on })}
             />
           </div>

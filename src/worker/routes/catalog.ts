@@ -104,6 +104,14 @@ async function setDefaultPeople(db: D1Database, itemId: string, people: string[]
   ]);
 }
 
+/** An item that never goes in a bag can't usually be carry-on. */
+async function noCarryOnWithoutBag(db: D1Database, itemId: string) {
+  await db
+    .prepare('UPDATE items SET usually_carry_on = 0 WHERE id = ? AND not_in_suitcase = 1')
+    .bind(itemId)
+    .run();
+}
+
 catalog.post('/items', async (c) => {
   const input = await body(c, itemInput);
   const id = newId();
@@ -115,6 +123,7 @@ catalog.post('/items', async (c) => {
     updated_at: now,
   }).run();
   if (input.default_people.length) await setDefaultPeople(c.env.DB, id, input.default_people);
+  await noCarryOnWithoutBag(c.env.DB, id);
   return c.json(
     (await loadItems(c.env.DB)).find((i) => i.id === id),
     201,
@@ -128,6 +137,7 @@ catalog.patch('/items/:id', async (c) => {
   const fields = itemFields(input);
   if (Object.keys(fields).length) await updateStmt(c.env.DB, 'items', id, fields).run();
   if (input.default_people) await setDefaultPeople(c.env.DB, id, input.default_people);
+  await noCarryOnWithoutBag(c.env.DB, id);
   return c.json((await loadItems(c.env.DB)).find((i) => i.id === id));
 });
 
