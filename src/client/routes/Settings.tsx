@@ -132,6 +132,38 @@ export function Settings() {
         </button>
       </div>
 
+      <SectionLabel icon="info">About</SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 text-sm text-soft">
+        <p>
+          Duffel is a free, open-source packing list for families. It runs on your own Cloudflare
+          account, so your lists stay yours.
+        </p>
+        <p>
+          Built by{' '}
+          <a
+            href="https://tylerclass.net"
+            target="_blank"
+            rel="noreferrer"
+            className="font-medium text-accent"
+          >
+            Tyler Class
+          </a>
+          .
+        </p>
+      </div>
+      <div className="px-6 pt-2">
+        <a
+          href="https://ko-fi.com/tylerclass"
+          target="_blank"
+          rel="noreferrer"
+          className="flex w-full items-center gap-3 border-y border-line py-3.5 text-base text-ink"
+        >
+          <Icon name="coffee" size={18} className="text-accent" />
+          <span className="flex-1">If you want to say thank you, coffee is my love language</span>
+          <Icon name="chevRight" size={16} className="text-faint" />
+        </a>
+      </div>
+
       <div className="flex items-center justify-between px-6 pt-8 text-xs text-faint md:hidden">
         <span>Duffel {__APP_VERSION__}</span>
         <a

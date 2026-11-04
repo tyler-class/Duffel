@@ -97,6 +97,10 @@ npm run dev
 
 See [docs/](docs) for importing from Airtable and other notes.
 
+## Support
+
+Duffel is free and built by [Tyler Class](https://tylerclass.net). If you want to say thank you, coffee is my love language: [ko-fi.com/tylerclass](https://ko-fi.com/tylerclass) ☕
+
 ## License
 
 [MIT](LICENSE)

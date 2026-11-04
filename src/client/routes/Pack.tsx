@@ -485,12 +485,9 @@ function PackTrip(props: {
                     className={cx('text-faint transition-transform', isCollapsed && '-rotate-90')}
                   />
                 </button>
-                <span className="ml-auto font-mono text-xs text-faint tnum">
-                  {done}/{g.rows.length}
-                </span>
                 {selecting && g.rows.length > 0 && (
                   <button
-                    className="ml-1 text-sm text-accent"
+                    className="ml-auto text-sm text-accent"
                     onClick={() => {
                       const all = g.rows.every((r) => selected.has(r.id));
                       setSelected((cur) => {
@@ -503,9 +500,17 @@ function PackTrip(props: {
                       });
                     }}
                   >
-                    {g.rows.every((r) => selected.has(r.id)) ? 'None' : 'All'}
+                    {g.rows.every((r) => selected.has(r.id)) ? 'Deselect all' : 'Select all'}
                   </button>
                 )}
+                <span
+                  className={cx(
+                    'font-mono text-xs text-faint tnum',
+                    !(selecting && g.rows.length > 0) && 'ml-auto',
+                  )}
+                >
+                  {done}/{g.rows.length}
+                </span>
                 {!selecting && (
                   <IconButton
                     icon="plus"
@@ -813,6 +818,11 @@ function Row({
               row.packed ? 'text-faint' : 'text-soft',
             )}
           >
+            {row.calc_mode && row.qty_override !== null && (
+              <span title="Custom quantity">
+                <Icon name="edit" size={11} className="mr-1 inline text-accent" />
+              </span>
+            )}
             {qty === null ? '–' : `×${qty}`}
           </span>
         </button>

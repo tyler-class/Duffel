@@ -28,6 +28,8 @@ export interface ItemDraft {
   notes: string;
   qty: number | null;
   qtyTouched: boolean;
+  /** A fixed number instead of the catalog rule; stays put when trip dates change. */
+  custom: boolean;
 }
 
 export interface SaveResult {
@@ -60,6 +62,7 @@ function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | und
       notes: row.notes ?? '',
       qty: displayQty(row),
       qtyTouched: false,
+      custom: row.qty_override !== null,
     };
   }
   return {
@@ -71,6 +74,7 @@ function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | und
     notes: '',
     qty: 1,
     qtyTouched: false,
+    custom: false,
     ...initial,
   };
 }
@@ -121,7 +125,7 @@ function ItemSheetBody(props: ItemSheetProps) {
         ? resolveCalc(match)
         : null;
   const calculated = calc ? calcQty(calc, len) : null;
-  const shownQty = mode === 'add' && match && !draft.qtyTouched ? calculated : draft.qty;
+  const shownQty = calc && !draft.custom ? calculated : draft.qty;
 
   const set = (patch: Partial<ItemDraft>) => setDraft((d) => ({ ...d, ...patch }));
 
@@ -147,17 +151,13 @@ function ItemSheetBody(props: ItemSheetProps) {
         ? {
             ...base,
             item_id: match.id,
-            qty_override: draft.qtyTouched && draft.qty !== calculated ? draft.qty : null,
+            qty_override: draft.custom ? draft.qty : null,
           }
         : { ...base, item_id: null, qty: draft.qty ?? 1 };
     } else if (calc) {
       result = {
         ...base,
-        qty_override: draft.qtyTouched
-          ? draft.qty === calculated
-            ? null
-            : draft.qty
-          : row!.qty_override,
+        qty_override: draft.custom ? draft.qty : null,
       };
     } else {
       result = { ...base, qty: draft.qty, qty_override: null };
@@ -172,16 +172,20 @@ function ItemSheetBody(props: ItemSheetProps) {
     }
   }
 
-  const calcNote =
-    calc && calculated !== null
-      ? `Calculated ${calculated}${calc.mode !== 'fixed' ? ` · ${calc.unitQty} ${QTY_MODE_LABELS[calc.mode].toLowerCase()}` : ''}`
-      : calc && calculated === null
-        ? 'Set trip dates to calculate'
-        : null;
-  const overridden =
-    mode === 'edit' &&
-    calc &&
-    (draft.qtyTouched ? draft.qty !== calculated : row?.qty_override !== null);
+  const ruleText = calc
+    ? calc.mode === 'fixed'
+      ? `${calc.unitQty}`
+      : `${calc.unitQty} ${QTY_MODE_LABELS[calc.mode].toLowerCase()}${calc.max ? `, max ${calc.max}` : ''}`
+    : '';
+  const qtyHint = !calc
+    ? null
+    : draft.custom
+      ? 'Stays at this number when trip dates change.'
+      : calculated === null
+        ? 'Set trip dates to calculate.'
+        : calc.mode === 'fixed'
+          ? 'Catalog default.'
+          : 'Updates when trip dates change.';
 
   return (
     <Sheet
@@ -229,28 +233,28 @@ function ItemSheetBody(props: ItemSheetProps) {
               ))}
           </datalist>
         </FieldRow>
-        <FieldRow
-          icon="hash"
-          hint={
-            calcNote && (
-              <span className="flex items-center gap-2">
-                {calcNote}
-                {overridden && calculated !== null && (
-                  <button
-                    type="button"
-                    className="text-accent"
-                    onClick={() => set({ qty: calculated, qtyTouched: true })}
-                  >
-                    Use calculated
-                  </button>
-                )}
-              </span>
-            )
-          }
-        >
-          <div className="flex items-center justify-between gap-3">
-            <span className="text-xs text-soft">Quantity</span>
-            <Stepper value={shownQty} onChange={(v) => set({ qty: v, qtyTouched: true })} />
+        <FieldRow icon="hash" hint={qtyHint}>
+          <div className="flex flex-col gap-2.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs text-soft">Quantity</span>
+              <Stepper
+                value={shownQty}
+                onChange={(v) => set({ qty: v, qtyTouched: true, custom: !!calc })}
+              />
+            </div>
+            {calc && (
+              <div className="flex flex-wrap gap-1.5">
+                <Pick on={!draft.custom} onClick={() => set({ custom: false, qty: calculated })}>
+                  Catalog · {ruleText}
+                </Pick>
+                <Pick
+                  on={draft.custom}
+                  onClick={() => set({ custom: true, qty: shownQty ?? 1, qtyTouched: true })}
+                >
+                  Custom
+                </Pick>
+              </div>
+            )}
           </div>
         </FieldRow>
         {mode === 'add' ? (
