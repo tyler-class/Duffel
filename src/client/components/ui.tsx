@@ -148,8 +148,8 @@ export function Pick({
       aria-pressed={on}
       onClick={onClick}
       className={cx(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-sm',
-        on ? 'border-ink text-ink' : 'border-line text-soft',
+        'inline-flex items-center gap-1.5 rounded-full border-2 px-2.5 py-[3px] text-sm transition-colors',
+        on ? 'border-accent bg-accent-tint/40 font-medium text-ink' : 'border-line text-soft',
         className,
       )}
     >

@@ -126,7 +126,7 @@ function AddTag({
     setValue('');
   };
   return (
-    <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-line px-2.5 py-0.5">
+    <span className="inline-flex items-center gap-1 rounded-full border-2 border-dashed border-line px-2.5 py-[1px]">
       <Icon name="plus" size={13} className="text-faint" />
       <input
         aria-label="Add your own"

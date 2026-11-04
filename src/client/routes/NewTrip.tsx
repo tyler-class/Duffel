@@ -51,8 +51,8 @@ export function NewTrip() {
 
   const tpl = data.templates.find((t) => t.id === templateId);
   const src = data.trips.find((t) => t.id === cloneId);
-  const effectiveTravelers =
-    travelers ?? (start === 'clone' && src ? src.travelers : data.people.map((p) => p.id));
+  // Nobody is pre-selected: you pick who's going.
+  const effectiveTravelers = travelers ?? [];
   const effectiveClimate =
     climate ??
     (start === 'template'
@@ -87,6 +87,7 @@ export function NewTrip() {
 
   async function create() {
     if (!name.trim()) return setError('Give the trip a name.');
+    if (data?.people.length && !effectiveTravelers.length) return setError('Pick who’s traveling.');
     if (start === 'template' && !templateId) return setError('Pick a template.');
     if (start === 'clone' && !cloneId) return setError('Pick a trip to copy.');
     if (startDate && endDate && !len) return setError('The return date is before the start date.');
