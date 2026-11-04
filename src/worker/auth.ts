@@ -148,9 +148,16 @@ const PUBLIC = new Set(['/api/health', '/api/login', '/api/logout', '/api/sessio
 export const SETUP_MESSAGE =
   'Duffel has no password yet. Set the APP_PASSWORD secret (wrangler secret put APP_PASSWORD, or in the Cloudflare dashboard) and reload.';
 
+/** Marks requests the MCP server makes to the API on behalf of an authorized assistant. */
+export const INTERNAL = Symbol('duffel-internal');
+export function isInternal(env: object): boolean {
+  return (env as Record<symbol, unknown>)[INTERNAL] === true;
+}
+
 /** Refuses to run open, blocks cross-site writes, and requires a session for the API. */
 export const guard: MiddlewareHandler<Env> = async (c, next) => {
   const path = c.req.path;
+  if (isInternal(c.env)) return next();
   if (path === '/api/health') return next();
   if (!c.env.APP_PASSWORD) return c.json({ error: 'setup', message: SETUP_MESSAGE }, 503);
 

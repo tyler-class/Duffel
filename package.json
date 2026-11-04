@@ -24,16 +24,21 @@
   "cloudflare": {
     "bindings": {
       "APP_PASSWORD": {
-        "description": "The one password your household uses to sign in to Duffel. Pick something long; you can change it later in the Cloudflare dashboard under **Workers → duffel → Settings → Variables and Secrets**."
+        "description": "The one password your household uses to sign in to Duffel. Pick something long; you can change it later in the Cloudflare dashboard under **Workers \u2192 duffel \u2192 Settings \u2192 Variables and Secrets**."
       },
       "DB": {
         "description": "Where your trips, items and packing lists are stored."
+      },
+      "OAUTH_KV": {
+        "description": "Stores sign-ins for AI assistants you connect to Duffel over MCP."
       }
     }
   },
   "dependencies": {
+    "@cloudflare/workers-oauth-provider": "1.2.3",
     "@fontsource-variable/geist": "5.3.0",
     "@fontsource-variable/geist-mono": "5.3.0",
+    "@modelcontextprotocol/server": "2.3.1",
     "@tanstack/react-query": "5.104.5",
     "hono": "4.13.13",
     "react": "19.3.1",

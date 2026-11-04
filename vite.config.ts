@@ -46,8 +46,7 @@ export default defineConfig({
           /^\/api\//,
           /^\/mcp/,
           /^\/authorize/,
-          /^\/token/,
-          /^\/register/,
+          /^\/oauth\//,
           /^\/\.well-known\//,
         ],
         runtimeCaching: [

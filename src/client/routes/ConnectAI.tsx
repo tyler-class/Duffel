@@ -1,6 +1,8 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
+import { api, errorMessage } from '../lib/api';
 import { Icon } from '../components/Icon';
-import { GhostButton, PageHeader, SectionLabel } from '../components/ui';
+import { ErrorText, GhostButton, PageHeader, SectionLabel } from '../components/ui';
 
 function Copy({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -90,6 +92,57 @@ export function ConnectAI() {
         Cursor, VS Code and other MCP apps: add a remote (HTTP) MCP server with the URL above. They
         open the Duffel sign-in page the first time.
       </p>
+
+      <SectionLabel>Connected</SectionLabel>
+      <Connections />
+    </div>
+  );
+}
+
+function Connections() {
+  const qc = useQueryClient();
+  const [error, setError] = useState('');
+  const q = useQuery({
+    queryKey: ['connections'],
+    queryFn: () =>
+      api.get<{ connections: { id: string; name: string; created_at: string | null }[] }>(
+        '/connections',
+      ),
+  });
+  const list = q.data?.connections ?? [];
+  return (
+    <div className="flex flex-col gap-1 px-5 text-sm">
+      {q.isPending && <p className="text-soft">Loading…</p>}
+      {!q.isPending && !list.length && <p className="text-soft">No assistants are connected.</p>}
+      {list.map((c) => (
+        <div key={c.id} className="flex items-center gap-2 border-b border-line py-2.5 text-ink">
+          <Icon name="ai" size={16} className="text-soft" />
+          <span className="flex-1">{c.name}</span>
+          {c.created_at && (
+            <span className="text-xs text-faint">
+              {new Date(c.created_at).toLocaleDateString()}
+            </span>
+          )}
+        </div>
+      ))}
+      {list.length > 0 && (
+        <GhostButton
+          icon="x"
+          className="-ml-3 self-start text-danger"
+          onClick={async () => {
+            setError('');
+            try {
+              await api.post('/connections/revoke-all');
+              await qc.invalidateQueries({ queryKey: ['connections'] });
+            } catch (e) {
+              setError(errorMessage(e));
+            }
+          }}
+        >
+          Disconnect all
+        </GhostButton>
+      )}
+      <ErrorText>{error || (q.error ? errorMessage(q.error) : '')}</ErrorText>
     </div>
   );
 }

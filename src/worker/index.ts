@@ -1,96 +1,48 @@
-import { Hono } from 'hono';
-import { HTTPException } from 'hono/http-exception';
-import { loginInput } from '@shared/schemas';
-import {
-  clearFailures,
-  clearSessionCookie,
-  clientIp,
-  getSalt,
-  guard,
-  isSignedIn,
-  makeToken,
-  passwordMatches,
-  recordFailure,
-  setSessionCookie,
-  tooManyFailures,
-  WINDOW_MINUTES,
-} from './auth';
-import { getSetting } from './db';
-import { admin, DEFAULT_INSTANCE_NAME } from './routes/admin';
-import { catalog } from './routes/catalog';
-import { templates } from './routes/templates';
-import { trips } from './routes/trips';
-import { ApiError, body, type AppEnv } from './routes/util';
+// Worker entry. OAuthProvider sits in front so AI assistants can connect over MCP:
+//   /mcp            → MCP server (needs an OAuth token)
+//   /authorize      → consent page (approve with the household password)
+//   /oauth/*, /.well-known/* → handled by the provider
+//   /api/*          → the app's REST API (cookie session)
+import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
+import { app } from './app';
+import { handleAuthorize } from './consent';
+import { mcpApiHandler } from './mcp';
 
-const app = new Hono<AppEnv>().basePath('/api');
+const defaultHandler = {
+  fetch(
+    request: Request,
+    env: Cloudflare.Env,
+    ctx: ExecutionContext,
+  ): Response | Promise<Response> {
+    if (new URL(request.url).pathname === '/authorize') return handleAuthorize(request, env);
+    return app.fetch(request, env, ctx);
+  },
+};
 
-app.use('*', guard);
-
-app.get('/health', (c) => c.json({ ok: true }));
-
-app.get('/session', async (c) => {
-  if (!(await isSignedIn(c)))
-    return c.json({ error: 'unauthorized', message: 'Sign in first.' }, 401);
-  const name = (await getSetting(c.env.DB, 'instance_name')) ?? DEFAULT_INSTANCE_NAME;
-  return c.json({ ok: true, instance_name: name });
-});
-
-app.post('/login', async (c) => {
-  const db = c.env.DB;
-  const ip = clientIp(c);
-  if (await tooManyFailures(db, ip)) {
-    c.header('Retry-After', String(WINDOW_MINUTES * 60));
-    throw new ApiError(
-      429,
-      'rate_limited',
-      `Too many wrong passwords. Try again in ${WINDOW_MINUTES} minutes.`,
-    );
+// The public URL isn't known until deploy, so build one provider per origin the Worker is reached on.
+const providers = new Map<string, OAuthProvider<Cloudflare.Env>>();
+function providerFor(origin: string) {
+  let p = providers.get(origin);
+  if (!p) {
+    p = new OAuthProvider<Cloudflare.Env>({
+      apiRoute: '/mcp',
+      apiHandler: mcpApiHandler,
+      defaultHandler,
+      authorizeEndpoint: '/authorize',
+      tokenEndpoint: '/oauth/token',
+      clientRegistrationEndpoint: '/oauth/register',
+      scopesSupported: ['packing'],
+      requiredScopes: ['packing'],
+      resourceMetadata: { resource: `${origin}/mcp`, authorization_servers: [origin] },
+      clientIdMetadataDocumentEnabled: true,
+    });
+    providers.set(origin, p);
   }
-  const { password } = await body(c, loginInput);
-  if (!(await passwordMatches(password, c.env.APP_PASSWORD!))) {
-    await recordFailure(db, ip);
-    throw new ApiError(401, 'wrong_password', 'That password is not right.');
-  }
-  await clearFailures(db, ip);
-  setSessionCookie(c, await makeToken(c.env.APP_PASSWORD!, await getSalt(db)));
-  return c.json({ ok: true });
-});
+  return p;
+}
 
-app.post('/logout', (c) => {
-  clearSessionCookie(c);
-  return c.json({ ok: true });
-});
-
-app.route('/', admin);
-app.route('/', catalog);
-app.route('/', templates);
-app.route('/', trips);
-
-app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));
-
-app.onError((err, c) => {
-  if (err instanceof ApiError)
-    return c.json({ error: err.code, message: err.message, details: err.details }, err.status);
-  if (err instanceof HTTPException)
-    return c.json({ error: 'http', message: err.message }, err.status);
-  const msg = err.message ?? '';
-  if (/FOREIGN KEY constraint failed/i.test(msg))
-    return c.json(
-      { error: 'invalid', message: 'That refers to something that no longer exists.' },
-      400,
-    );
-  if (/no such table/i.test(msg)) {
-    return c.json(
-      {
-        error: 'setup',
-        message:
-          'The database has not been set up yet. Run the D1 migrations (npm run db:migrate:remote).',
-      },
-      503,
-    );
-  }
-  console.error(err);
-  return c.json({ error: 'server', message: 'Something went wrong on the server.' }, 500);
-});
-
-export default app;
+export default {
+  fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
+    return providerFor(new URL(request.url).origin).fetch(request, env, ctx);
+  },
+} satisfies ExportedHandler<Cloudflare.Env>;

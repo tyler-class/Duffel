@@ -1,6 +1,6 @@
 import { SELF, env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
-import app from '../../src/worker/index';
+import { app } from '../../src/worker/app';
 import { getSalt, makeToken, verifyToken } from '../../src/worker/auth';
 import { ORIGIN, PASSWORD, cookieFrom, login } from './helpers';
 
