@@ -15,6 +15,7 @@ import { formatRange, plural } from '../lib/format';
 import { keys, useAppState, usePatchTripItem, useTrip } from '../lib/queries';
 import { useSelectedTrip } from '../lib/selection';
 import { load, save } from '../lib/storage';
+import { isOffline } from '../lib/offline';
 import { Icon } from '../components/Icon';
 import { ItemSheet, type ItemDraft, type SaveResult } from '../components/ItemSheet';
 import { CatalogPicker } from '../components/CatalogPicker';
@@ -207,7 +208,7 @@ function PackTrip(props: {
     setError('');
     patch.mutate(
       { id: r.id, patch: { packed: !r.packed } },
-      { onError: (e) => setError(errorMessage(e)) },
+      { onError: (e) => !isOffline(e) && setError(errorMessage(e)) },
     );
   }
 

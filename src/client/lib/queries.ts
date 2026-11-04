@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient, type QueryKey } from '@tanstack/react-query';
 import type { AppState, TripDetail, TripItem } from '@shared/types';
 import { api } from './api';
+import { enqueuePack, isOffline } from './offline';
 
 export const keys = {
   state: ['state'] as const,
@@ -63,8 +64,17 @@ export function usePatchTripItem(tripId: string) {
       }
       return { prev };
     },
-    onError: (_e, _v, ctx) => ctx?.prev && qc.setQueryData(key, ctx.prev),
-    onSettled: () => {
+    onError: (e, vars, ctx) => {
+      // Offline check-offs stay checked and sync later.
+      const keys = Object.keys(vars.patch);
+      if (isOffline(e) && keys.length === 1 && keys[0] === 'packed') {
+        enqueuePack({ id: vars.id, tripId, packed: !!vars.patch.packed });
+        return;
+      }
+      if (ctx?.prev) qc.setQueryData(key, ctx.prev);
+    },
+    onSettled: (_d, e) => {
+      if (isOffline(e)) return;
       qc.invalidateQueries({ queryKey: key });
       qc.invalidateQueries({ queryKey: keys.state });
     },
