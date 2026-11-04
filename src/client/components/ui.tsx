@@ -28,7 +28,7 @@ export function PrimaryButton({
     <button
       {...p}
       className={cx(
-        'inline-flex items-center justify-center gap-1.5 rounded-[10px] px-3.5 py-2.5 text-[15px] font-medium disabled:opacity-50',
+        'inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-[15px] font-medium disabled:opacity-50',
         tone === 'danger' ? 'bg-danger text-white' : 'bg-accent text-accent-ink',
         className,
       )}
@@ -249,7 +249,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className="flex min-w-0 gap-0.5 rounded-[9px] bg-chip p-[3px]"
+      className="flex min-w-0 gap-0.5 rounded-full bg-chip p-[3px]"
     >
       {options.map(([v, text]) => (
         <button
@@ -258,7 +258,7 @@ export function Segmented<T extends string>({
           aria-pressed={value === v}
           onClick={() => onChange(v)}
           className={cx(
-            'flex-1 rounded-[7px] px-0.5 py-1.5 text-[13px] whitespace-nowrap',
+            'flex-1 rounded-full px-0.5 py-1.5 text-[13px] whitespace-nowrap',
             value === v
               ? 'bg-seg font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.08)]'
               : 'text-soft',

@@ -132,7 +132,18 @@ export function Settings() {
         </button>
       </div>
 
-      <p className="px-5 pt-8 text-xs text-faint">Duffel {__APP_VERSION__}</p>
+      <div className="flex items-center justify-between px-6 pt-8 text-xs text-faint">
+        <span>Duffel {__APP_VERSION__}</span>
+        <a
+          href="https://github.com/tyler-class/Duffel"
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex items-center gap-1.5 text-soft"
+        >
+          <Icon name="github" size={16} />
+          Duffel on GitHub
+        </a>
+      </div>
 
       <Sheet
         open={!!restore}

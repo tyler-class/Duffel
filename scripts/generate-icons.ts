@@ -3,7 +3,7 @@
 import sharp from 'sharp';
 import { writeFileSync } from 'node:fs';
 
-const BG = '#1f6f63';
+const BG = '#f97316';
 const FG = '#fafaf8';
 // The glyph on a 64-unit grid, without the rounded tile.
 const glyph = `<g fill="none" stroke="${FG}" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M24 25c0-6 3.5-9 8-9s8 3 8 9"/><rect x="9" y="25" width="46" height="25" rx="12.5"/><path d="M19 33h26"/><path d="M21 25.5v24M43 25.5v24" stroke-width="2.6"/></g>`;

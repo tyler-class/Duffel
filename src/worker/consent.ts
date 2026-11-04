@@ -33,8 +33,8 @@ function page(info: PageInfo, handle: string, error = ''): string {
 <title>Connect ${name} to Duffel</title>
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <style>
-:root{--bg:#fafaf8;--surface:#fff;--ink:#1c1b19;--soft:#78746d;--line:#ecebe7;--accent:#1f6f63;--tint:#e3f0ed;--danger:#c4483c;color-scheme:light}
-@media (prefers-color-scheme:dark){:root{--bg:#141413;--surface:#1c1c1a;--ink:#edece8;--soft:#9b978f;--line:#2a2926;--accent:#5fb8a8;--tint:#1b2e2a;--danger:#e0786c;color-scheme:dark}}
+:root{--bg:#f6f5f0;--surface:#fff;--ink:#1a1a1a;--soft:#4a4a4a;--line:#e4e4de;--accent:#f97316;--tint:#fdeee2;--danger:#dc2626;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#181818;--surface:#212121;--ink:#dedede;--soft:#cdcdcd;--line:#2e2e2e;--accent:#fb923c;--tint:#33251a;--danger:#ef4444;color-scheme:dark}}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;background:var(--bg);color:var(--ink);font:16px/1.5 ui-sans-serif,-apple-system,"Segoe UI",system-ui,sans-serif;padding:24px max(16px,env(safe-area-inset-left)) 24px max(16px,env(safe-area-inset-right))}
 main{width:100%;max-width:380px;display:flex;flex-direction:column;gap:18px}
 .mark{width:48px;height:48px;border-radius:14px;background:var(--accent)}
@@ -46,10 +46,10 @@ input[type=password]{width:100%;font:inherit;font-size:16px;color:var(--ink);bac
 input:focus{outline:none;border-bottom-color:var(--ink)}
 .err{color:var(--danger);font-size:14px}
 .row{display:flex;flex-direction:row-reverse;gap:8px;justify-content:flex-start}
-button{font:inherit;font-size:15px;border:0;border-radius:10px;padding:10px 16px;cursor:pointer}
+button{font:inherit;font-size:15px;border:0;border-radius:999px;padding:10px 18px;cursor:pointer}
 .allow{background:var(--ink);color:var(--bg);font-weight:500}.deny{background:none;color:var(--soft)}
 </style></head><body><main>
-<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor" style="color:var(--accent)"/><g fill="none" stroke="#fafaf8" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M24 25c0-6 3.5-9 8-9s8 3 8 9"/><rect x="9" y="25" width="46" height="25" rx="12.5"/><path d="M19 33h26"/></g></svg>
+<svg class="mark" viewBox="0 0 64 64" aria-hidden="true"><rect width="64" height="64" rx="14" fill="currentColor" style="color:var(--accent)"/><g fill="none" stroke="#ffffff" stroke-width="3.6" stroke-linecap="round" stroke-linejoin="round"><path d="M24 25c0-6 3.5-9 8-9s8 3 8 9"/><rect x="9" y="25" width="46" height="25" rx="12.5"/><path d="M19 33h26"/><path d="M21 25.5v24M43 25.5v24" stroke-width="2.6"/></g></svg>
 <h1>Let ${name} use Duffel?</h1>
 <p>It will be able to read and change your trips, packing lists, templates and catalog.</p>
 <p>${who} Access goes to <strong>${esc(info.redirectHost)}</strong>.</p>
