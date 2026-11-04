@@ -9,7 +9,7 @@
     "dev": "vite dev",
     "build": "vite build",
     "preview": "npm run build && vite preview",
-    "deploy": "npm run build && wrangler d1 migrations apply DB --remote && wrangler deploy",
+    "deploy": "npm run build && wrangler deploy && wrangler d1 migrations apply DB --remote",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
     "db:seed:sample:local": "tsx scripts/export-to-sql.ts seed/sample.json .wrangler/sample.sql && wrangler d1 execute DB --local --file .wrangler/sample.sql",
@@ -24,7 +24,7 @@
   "cloudflare": {
     "bindings": {
       "APP_PASSWORD": {
-        "description": "The one password your household uses to sign in to Duffel. Pick something long; you can change it later in the Cloudflare dashboard under **Workers \u2192 duffel \u2192 Settings \u2192 Variables and Secrets**."
+        "description": "The one password your household uses to sign in to Duffel. Pick something long; you can change it later in the Cloudflare dashboard under **Workers → duffel → Settings → Variables and Secrets**."
       },
       "DB": {
         "description": "Where your trips, items and packing lists are stored."
