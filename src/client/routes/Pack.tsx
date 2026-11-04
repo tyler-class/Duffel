@@ -36,14 +36,13 @@ type Where = 'all' | 'carry' | 'luggage';
 type GroupBy = 'person' | 'bag';
 const NO_BAG = '__nobag';
 const SHARED = '__shared';
-const UNDECIDED = '__undecided';
 
 interface Group {
   key: string;
   label: string;
   person?: Person;
   bag?: TripBag;
-  kind: 'person' | 'shared' | 'bag' | 'nobag' | 'undecided';
+  kind: 'person' | 'shared' | 'bag' | 'nobag';
   rows: TripItem[];
 }
 
@@ -148,7 +147,7 @@ function PackTrip(props: {
     if (status === 'todo' && r.packed) return false;
     const carry = isCarryOn(r, bagMap);
     if (where === 'carry' && !carry) return false;
-    if (where === 'luggage' && (carry || r.no_bag)) return false;
+    if (where === 'luggage' && (carry || !r.trip_bag_id)) return false;
     return true;
   });
 
@@ -187,13 +186,7 @@ function PackTrip(props: {
         key: NO_BAG,
         label: 'No bag',
         kind: 'nobag',
-        rows: visible.filter((r) => r.no_bag),
-      });
-      out.push({
-        key: UNDECIDED,
-        label: 'No bag yet',
-        kind: 'undecided',
-        rows: visible.filter((r) => !r.no_bag && (!r.trip_bag_id || !bagMap.has(r.trip_bag_id))),
+        rows: visible.filter((r) => !r.trip_bag_id || !bagMap.has(r.trip_bag_id)),
       });
     }
     // With filters on, hide empty groups. Without, keep people and bags (so + is always there),
@@ -513,7 +506,7 @@ function PackTrip(props: {
                     {g.rows.every((r) => selected.has(r.id)) ? 'None' : 'All'}
                   </button>
                 )}
-                {!selecting && g.kind !== 'undecided' && (
+                {!selecting && (
                   <IconButton
                     icon="plus"
                     label={`Add to ${g.label}`}
@@ -610,23 +603,11 @@ function PackTrip(props: {
             </button>
           ))}
           <button
-            onClick={() => bulk({ patch: { no_bag: true } }, `Marked ${selected.size} as no bag`)}
+            onClick={() => bulk({ patch: { no_bag: true } }, `Moved ${selected.size} to No bag`)}
             className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
           >
             <Icon name="nobag" className="text-soft" />
             No bag
-          </button>
-          <button
-            onClick={() =>
-              bulk(
-                { patch: { no_bag: false, trip_bag_id: null } },
-                `Moved ${selected.size} to No bag yet`,
-              )
-            }
-            className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
-          >
-            <Icon name="layers" className="text-soft" />
-            No bag yet
           </button>
           {!bags.length && (
             <p className="pt-3 text-sm text-soft">
@@ -692,7 +673,7 @@ function rowSub(
           <span className="truncate">{bagName(b)}</span>
         </span>,
       );
-    else if (r.no_bag)
+    else
       parts.push(
         <span key="b" className="inline-flex items-center gap-1">
           <Icon name="nobag" size={13} />
@@ -724,11 +705,9 @@ function GroupMark({ g }: { g: Group }) {
       ? 'users'
       : g.kind === 'nobag'
         ? 'nobag'
-        : g.kind === 'undecided'
-          ? 'layers'
-          : g.bag?.carry_on
-            ? 'backpack'
-            : 'bag';
+        : g.bag?.carry_on
+          ? 'backpack'
+          : 'bag';
   return <Icon name={icon} size={15} className="text-soft" />;
 }
 

@@ -89,9 +89,7 @@ function summarizeTrip(d: TripDetail, people: Person[]) {
       for: r.person_id ? (names.get(r.person_id) ?? 'Shared') : 'Shared',
       bag: r.trip_bag_id
         ? shortBagLabel(bags.get(r.trip_bag_id)?.label ?? '', d.trip.name)
-        : r.no_bag
-          ? 'No bag'
-          : 'No bag yet',
+        : 'No bag',
       carry_on: isCarryOn(r, bags),
       qty: displayQty(r),
       packed: r.packed,

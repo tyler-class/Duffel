@@ -380,7 +380,7 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
                   setBagSheet(null);
                   toast({
                     text: res.moved
-                      ? `Bag removed. ${plural(res.moved, 'item')} moved to No bag yet.`
+                      ? `Bag removed. ${plural(res.moved, 'item')} moved to No bag.`
                       : 'Bag removed.',
                   });
                 }
@@ -435,8 +435,8 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
         }
       >
         <p className="py-2 text-sm text-soft">
-          {plural(fillCount, 'item')} waiting in No bag yet now {fillCount === 1 ? 'has' : 'have'} a
-          matching bag. Move {fillCount === 1 ? 'it' : 'them'} in?
+          {plural(fillCount, 'item')} in No bag now {fillCount === 1 ? 'has' : 'have'} a matching
+          bag. Move {fillCount === 1 ? 'it' : 'them'} in?
         </p>
       </Sheet>
     </div>

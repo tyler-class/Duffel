@@ -357,8 +357,8 @@ export function NewTrip() {
               })}
             </div>
             <p className="text-sm text-soft">
-              They’d wait in No bag yet. You can add bags first, or create the trip and sort them
-              into bags later.
+              They’d start in No bag. You can add bags first, or create the trip and sort them into
+              bags later.
             </p>
             <div className="flex flex-col gap-2">
               {start === 'template' && templateId && (

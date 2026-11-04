@@ -240,7 +240,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
               {g.carry ? 'carry-on' : 'checked'} bag
             </span>
           ))}
-          <span className="text-xs text-faint">They’ll wait in No bag yet on new trips.</span>
+          <span className="text-xs text-faint">They’ll start in No bag on new trips.</span>
         </div>
       )}
 

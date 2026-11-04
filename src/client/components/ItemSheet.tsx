@@ -44,9 +44,8 @@ export interface SaveResult {
 }
 
 function bagHint(bags: TripBag[], draft: ItemDraft): string {
-  if (draft.no_bag) return 'Travels outside any bag, like a car seat or stroller.';
-  const bag = bags.find((b) => b.id === draft.trip_bag_id);
-  if (!bag) return 'Shows under “No bag yet” until you pick one.';
+  const bag = draft.no_bag ? undefined : bags.find((b) => b.id === draft.trip_bag_id);
+  if (!bag) return 'Not packed in a bag.';
   return bag.carry_on ? 'Carry-on bag, so this counts as carry-on.' : 'Checked bag.';
 }
 
@@ -334,15 +333,12 @@ function ItemSheetBody(props: ItemSheetProps) {
                 {props.bagName(b)}
               </Pick>
             ))}
-            <Pick on={draft.no_bag} onClick={() => set({ no_bag: true, trip_bag_id: null })}>
+            <Pick
+              on={draft.no_bag || !draft.trip_bag_id}
+              onClick={() => set({ no_bag: true, trip_bag_id: null })}
+            >
               <Icon name="nobag" size={13} />
               No bag
-            </Pick>
-            <Pick
-              on={!draft.no_bag && !draft.trip_bag_id}
-              onClick={() => set({ no_bag: false, trip_bag_id: null })}
-            >
-              Decide later
             </Pick>
           </div>
         </FieldRow>
