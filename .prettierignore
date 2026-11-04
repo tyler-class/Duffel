@@ -6,3 +6,4 @@ docs/design
 package-lock.json
 src/worker/worker-configuration.d.ts
 public/*.svg
+*.local.*

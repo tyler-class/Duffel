@@ -1,0 +1,303 @@
+import { useId, useMemo, useState } from 'react';
+import type { Item, Person, TripBag, TripItem } from '@shared/types';
+import { calcQty, displayQty, resolveCalc } from '@shared/logic';
+import { QTY_MODE_LABELS } from '@shared/lookups';
+import { Icon } from './Icon';
+import {
+  DangerButton,
+  ErrorText,
+  FieldRow,
+  GhostButton,
+  Pick,
+  PersonDot,
+  PrimaryButton,
+  Sheet,
+  Stepper,
+  TextInput,
+} from './ui';
+
+export type Placement = { trip_bag_id: string | null; no_bag: boolean };
+
+export interface ItemDraft {
+  name: string;
+  person_id: string | null;
+  trip_bag_id: string | null;
+  no_bag: boolean;
+  notes: string;
+  qty: number | null;
+  qtyTouched: boolean;
+}
+
+export interface SaveResult {
+  item_id?: string | null;
+  name: string;
+  person_id: string | null;
+  trip_bag_id: string | null;
+  no_bag: boolean;
+  notes: string | null;
+  qty?: number | null;
+  qty_override?: number | null;
+}
+
+function bagHint(bags: TripBag[], draft: ItemDraft): string {
+  if (draft.no_bag) return 'Travels outside any bag, like a car seat or stroller.';
+  const bag = bags.find((b) => b.id === draft.trip_bag_id);
+  if (!bag) return 'Shows under “No bag yet” until you pick one.';
+  return bag.carry_on ? 'Carry-on bag, so this counts as carry-on.' : 'Checked bag.';
+}
+
+function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | undefined): ItemDraft {
+  if (row) {
+    return {
+      name: row.name,
+      person_id: row.person_id,
+      trip_bag_id: row.trip_bag_id,
+      no_bag: row.no_bag,
+      notes: row.notes ?? '',
+      qty: displayQty(row),
+      qtyTouched: false,
+    };
+  }
+  return {
+    name: '',
+    person_id: null,
+    trip_bag_id: null,
+    no_bag: false,
+    notes: '',
+    qty: 1,
+    qtyTouched: false,
+    ...initial,
+  };
+}
+
+type ItemSheetProps = {
+  open: boolean;
+  mode: 'add' | 'edit';
+  row?: TripItem;
+  initial?: Partial<ItemDraft>;
+  people: Person[];
+  bags: TripBag[];
+  catalog: Item[];
+  len: { days: number | null; nights: number | null } | null;
+  onClose: () => void;
+  onSave: (r: SaveResult) => Promise<void>;
+  onDelete?: () => void;
+  bagName: (b: TripBag) => string;
+};
+
+/** Add or edit one row on a trip's list. */
+export function ItemSheet(props: ItemSheetProps) {
+  if (!props.open) return null;
+  return <ItemSheetBody key={props.row?.id ?? 'new'} {...props} />;
+}
+
+function ItemSheetBody(props: ItemSheetProps) {
+  const { open, mode, row, people, bags, catalog, len } = props;
+  const listId = useId();
+  const [draft, setDraft] = useState<ItemDraft>(() => blankDraft(row, props.initial));
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const match = useMemo(() => {
+    const n = draft.name.trim().toLowerCase();
+    return n ? catalog.find((i) => !i.archived && i.name.toLowerCase() === n) : undefined;
+  }, [draft.name, catalog]);
+
+  // What the calculation would give: the row's snapshot when editing, or the catalog item when adding.
+  const calc =
+    row?.calc_mode && row.calc_unit_qty !== null
+      ? { mode: row.calc_mode, unitQty: row.calc_unit_qty, max: row.calc_max }
+      : !row && match
+        ? resolveCalc(match)
+        : null;
+  const calculated = calc ? calcQty(calc, len) : null;
+  const shownQty = mode === 'add' && match && !draft.qtyTouched ? calculated : draft.qty;
+
+  const set = (patch: Partial<ItemDraft>) => setDraft((d) => ({ ...d, ...patch }));
+
+  async function save() {
+    const name = draft.name.trim();
+    if (!name) {
+      setError('Enter an item name.');
+      return;
+    }
+    setBusy(true);
+    setError('');
+    const base = {
+      name,
+      person_id: draft.person_id,
+      trip_bag_id: draft.no_bag ? null : draft.trip_bag_id,
+      no_bag: draft.no_bag,
+      notes: draft.notes.trim() || null,
+    };
+    let result: SaveResult;
+    if (mode === 'add') {
+      result = match
+        ? {
+            ...base,
+            item_id: match.id,
+            qty_override: draft.qtyTouched && draft.qty !== calculated ? draft.qty : null,
+          }
+        : { ...base, item_id: null, qty: draft.qty ?? 1 };
+    } else if (calc) {
+      result = {
+        ...base,
+        qty_override: draft.qtyTouched
+          ? draft.qty === calculated
+            ? null
+            : draft.qty
+          : row!.qty_override,
+      };
+    } else {
+      result = { ...base, qty: draft.qty, qty_override: null };
+    }
+    try {
+      await props.onSave(result);
+      props.onClose();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Could not save that.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const calcNote =
+    calc && calculated !== null
+      ? `Calculated ${calculated}${calc.mode !== 'fixed' ? ` · ${calc.unitQty} ${QTY_MODE_LABELS[calc.mode].toLowerCase()}` : ''}`
+      : calc && calculated === null
+        ? 'Set trip dates to calculate'
+        : null;
+  const overridden =
+    mode === 'edit' &&
+    calc &&
+    (draft.qtyTouched ? draft.qty !== calculated : row?.qty_override !== null);
+
+  return (
+    <Sheet
+      open={open}
+      onClose={props.onClose}
+      title={mode === 'add' ? 'Add item' : 'Edit item'}
+      footer={
+        <>
+          {mode === 'edit' && props.onDelete ? (
+            <DangerButton onClick={props.onDelete}>Delete</DangerButton>
+          ) : (
+            <span />
+          )}
+          <div className="flex items-center">
+            <GhostButton onClick={props.onClose}>Cancel</GhostButton>
+            <PrimaryButton onClick={save} disabled={busy}>
+              {busy ? 'Saving…' : mode === 'add' ? 'Add' : 'Save'}
+            </PrimaryButton>
+          </div>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          save();
+        }}
+      >
+        <FieldRow icon="tag" label="Item" htmlFor="item-name">
+          <TextInput
+            id="item-name"
+            autoFocus={mode === 'add'}
+            list={listId}
+            value={draft.name}
+            placeholder="e.g. Swim diapers"
+            autoComplete="off"
+            enterKeyHint="done"
+            onChange={(e) => set({ name: e.target.value })}
+          />
+          <datalist id={listId}>
+            {catalog
+              .filter((i) => !i.archived)
+              .map((i) => (
+                <option key={i.id} value={i.name} />
+              ))}
+          </datalist>
+        </FieldRow>
+        <FieldRow
+          icon="hash"
+          hint={
+            calcNote && (
+              <span className="flex items-center gap-2">
+                {calcNote}
+                {overridden && calculated !== null && (
+                  <button
+                    type="button"
+                    className="text-accent"
+                    onClick={() => set({ qty: calculated, qtyTouched: true })}
+                  >
+                    Use calculated
+                  </button>
+                )}
+              </span>
+            )
+          }
+        >
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-xs text-soft">Quantity</span>
+            <Stepper value={shownQty} onChange={(v) => set({ qty: v, qtyTouched: true })} />
+          </div>
+        </FieldRow>
+        <FieldRow icon="user" label="For">
+          <div className="flex flex-wrap gap-1.5">
+            {people.map((p) => (
+              <Pick
+                key={p.id}
+                on={draft.person_id === p.id}
+                onClick={() => set({ person_id: p.id })}
+              >
+                <PersonDot color={p.color} />
+                {p.emoji ? `${p.emoji} ` : ''}
+                {p.name}
+              </Pick>
+            ))}
+            <Pick on={draft.person_id === null} onClick={() => set({ person_id: null })}>
+              <Icon name="users" size={13} />
+              Shared
+            </Pick>
+          </div>
+        </FieldRow>
+        <FieldRow icon="bag" label="Bag" hint={bagHint(bags, draft)}>
+          <div className="flex flex-wrap gap-1.5">
+            {bags.map((b) => (
+              <Pick
+                key={b.id}
+                on={!draft.no_bag && draft.trip_bag_id === b.id}
+                onClick={() => set({ trip_bag_id: b.id, no_bag: false })}
+              >
+                <Icon name={b.carry_on ? 'backpack' : 'bag'} size={13} />
+                {props.bagName(b)}
+              </Pick>
+            ))}
+            <Pick on={draft.no_bag} onClick={() => set({ no_bag: true, trip_bag_id: null })}>
+              <Icon name="nobag" size={13} />
+              No bag
+            </Pick>
+            <Pick
+              on={!draft.no_bag && !draft.trip_bag_id}
+              onClick={() => set({ no_bag: false, trip_bag_id: null })}
+            >
+              Decide later
+            </Pick>
+          </div>
+        </FieldRow>
+        <FieldRow icon="note" label="Notes" htmlFor="item-notes">
+          <TextInput
+            id="item-notes"
+            value={draft.notes}
+            placeholder="Size, brand, anything to remember"
+            onChange={(e) => set({ notes: e.target.value })}
+          />
+        </FieldRow>
+        <button type="submit" hidden />
+        <div className="pt-3">
+          <ErrorText>{error}</ErrorText>
+        </div>
+      </form>
+    </Sheet>
+  );
+}

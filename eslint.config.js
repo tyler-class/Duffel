@@ -14,6 +14,7 @@ export default tseslint.config(
       'node_modules',
       'src/worker/worker-configuration.d.ts',
       'dev-dist',
+      '**/*.local.*',
     ],
   },
   js.configs.recommended,

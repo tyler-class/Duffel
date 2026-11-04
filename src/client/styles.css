@@ -1,1 +1,133 @@
 @import 'tailwindcss';
+@import '@fontsource-variable/geist';
+@import '@fontsource-variable/geist-mono';
+
+/* Duffel "Quiet": warm stone neutrals, one deep teal accent, hairlines. */
+:root {
+  --bg: #fafaf8;
+  --surface: #ffffff;
+  --ink: #1c1b19;
+  --soft: #78746d;
+  --faint: #a9a59e;
+  --line: #ecebe7;
+  --accent: #1f6f63;
+  --accent-ink: #ffffff;
+  --accent-tint: #e3f0ed;
+  --track: #ecebe7;
+  --chip: #f2f1ee;
+  --seg: #ffffff;
+  --danger: #c4483c;
+  --scrim: rgb(20 20 18 / 0.32);
+
+  --person-blue: #4a7fd1;
+  --person-violet: #8a63d2;
+  --person-coral: #e0695a;
+  --person-amber: #d49a2a;
+  --person-green: #4f9a5b;
+  --person-rose: #d45c8a;
+  --person-teal: #2f8f9d;
+  --person-slate: #6b7280;
+  --person-mist: #a9a59e;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #141413;
+    --surface: #1c1c1a;
+    --ink: #edece8;
+    --soft: #9b978f;
+    --faint: #67645e;
+    --line: #2a2926;
+    --accent: #5fb8a8;
+    --accent-ink: #0d1f1c;
+    --accent-tint: #1b2e2a;
+    --track: #2a2926;
+    --chip: #242321;
+    --seg: #3a3935;
+    --danger: #e0786c;
+    --scrim: rgb(0 0 0 / 0.5);
+
+    --person-blue: #7aa5ea;
+    --person-violet: #ad8ff0;
+    --person-coral: #f08e80;
+    --person-amber: #e7b858;
+    --person-green: #7cc488;
+    --person-rose: #ef8bb2;
+    --person-teal: #63c0cc;
+    --person-slate: #9ca3af;
+    --person-mist: #67645e;
+    color-scheme: dark;
+  }
+}
+
+@theme {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-soft: var(--soft);
+  --color-faint: var(--faint);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-accent-tint: var(--accent-tint);
+  --color-track: var(--track);
+  --color-chip: var(--chip);
+  --color-seg: var(--seg);
+  --color-danger: var(--danger);
+  --font-sans: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Geist Mono Variable', ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior-y: none;
+  }
+  button {
+    cursor: pointer;
+  }
+  /* 16px keeps iOS Safari from zooming into fields. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      transition: none !important;
+      animation: none !important;
+    }
+  }
+}
+
+@utility tnum {
+  font-variant-numeric: tabular-nums;
+}
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
