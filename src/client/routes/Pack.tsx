@@ -764,7 +764,7 @@ function Row({
       highlight={selecting && selected}
       className="border-b border-line"
     >
-      <div className={cx('flex items-center', selecting && 'px-3')}>
+      <div className="flex items-center px-3">
         <button
           className="flex h-full items-center py-3 pr-3.5"
           aria-label={row.packed ? `Mark ${row.name} not packed` : `Mark ${row.name} packed`}
