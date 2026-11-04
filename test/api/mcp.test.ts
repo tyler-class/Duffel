@@ -49,6 +49,8 @@ async function connect(password = PASSWORD) {
   });
   const page = await SELF.fetch(`${ORIGIN}/authorize?${q}`);
   expect(page.status).toBe(200);
+  // A form-action CSP would block the browser from following the redirect back to the client.
+  expect(page.headers.get('Content-Security-Policy') ?? '').not.toMatch(/form-action/);
   const html = await page.text();
   expect(html).toContain('Let Test Assistant use Duffel?');
   expect(html).toContain('client.example');

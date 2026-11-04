@@ -72,7 +72,7 @@ function html(body: string, headers: Headers = new Headers(), status = 200) {
   headers.set('X-Frame-Options', 'DENY');
   headers.set(
     'Content-Security-Policy',
-    "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; form-action 'self'; frame-ancestors 'none'",
+    "default-src 'none'; style-src 'unsafe-inline'; img-src 'self'; frame-ancestors 'none'",
   );
   return new Response(body, { status, headers });
 }
