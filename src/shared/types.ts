@@ -40,6 +40,10 @@ export interface Suitcase {
   capacity_l: number | null;
   max_weight_lb: number | null;
   notes: string | null;
+  /** Its items count as carry-on; carry-on items go here when a trip is built. */
+  carry_on: boolean;
+  /** Who this bag is for. Empty = shared. */
+  people: string[];
 }
 
 export interface TemplateItem {
@@ -54,6 +58,19 @@ export interface TemplateItem {
   assignees: string[];
 }
 
+/** A bag in a template's bag setup; copied onto trips built from the template. */
+export interface TemplateBag {
+  id: string;
+  template_id: string;
+  suitcase_id: string | null;
+  label: string;
+  role: string | null;
+  carry_on: boolean;
+  notes: string | null;
+  sort_order: number;
+  people: string[];
+}
+
 export interface Template {
   id: string;
   name: string;
@@ -62,6 +79,7 @@ export interface Template {
   activities: string[];
   notes: string | null;
   items: TemplateItem[];
+  bags: TemplateBag[];
 }
 
 export interface Trip {
@@ -94,6 +112,8 @@ export interface TripBag {
   carry_on: boolean;
   notes: string | null;
   sort_order: number;
+  /** Who this bag is for. Empty = shared. */
+  people: string[];
 }
 
 export interface TripItem {
@@ -111,6 +131,8 @@ export interface TripItem {
   qty_override: number | null;
   packed: boolean;
   packed_at: string | null;
+  /** Should ride in its person's carry-on bag. */
+  carry_hint: boolean;
   notes: string | null;
   sort_order: number;
 }

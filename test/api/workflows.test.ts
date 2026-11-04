@@ -116,10 +116,16 @@ describe('key workflows', () => {
     const tpl = (await api.post<Template>('/templates', { name: 'Beach', climate: 'Hot' })).data;
     const withItems = (
       await api.post<Template>(`/templates/${tpl.id}/items`, {
-        item_ids: [h.shirt.id, h.kindle.id, h.seat.id, h.shirt.id],
+        item_ids: [h.shirt.id, h.kindle.id, h.seat.id],
       })
     ).data;
     expect(withItems.items).toHaveLength(3);
+    // Adding the same catalog item again is allowed (e.g. a second pair).
+    const twice = (
+      await api.post<Template>(`/templates/${tpl.id}/items`, { item_ids: [h.seat.id] })
+    ).data;
+    expect(twice.items.filter((i) => i.item_id === h.seat.id)).toHaveLength(2);
+    await api.del(`/template-items/${twice.items.filter((i) => i.item_id === h.seat.id)[1]!.id}`);
     expect(Object.keys(withItems.items[0]!)).not.toContain('packed');
     await api.patch(`/template-items/${withItems.items[0]!.id}`, { notes: 'light ones' });
 

@@ -14,6 +14,8 @@ import {
   ErrorText,
   FieldRow,
   GhostButton,
+  PersonDot,
+  Sheet,
   PageHeader,
   Pick,
   PrimaryButton,
@@ -21,6 +23,10 @@ import {
 } from '../components/ui';
 
 type Start = 'template' | 'clone' | 'blank';
+interface Preview {
+  rows: number;
+  unplaced: { person_id: string | null; carry: boolean; count: number }[];
+}
 
 export function NewTrip() {
   const nav = useNavigate();
@@ -41,6 +47,7 @@ export function NewTrip() {
   const [activities, setActivities] = useState<string[] | null>(null);
   const [bags, setBags] = useState<BagDraft[]>([]);
   const [bagSheet, setBagSheet] = useState<number | 'new' | null>(null);
+  const [check, setCheck] = useState<Preview | null>(null);
 
   const pastTrips = useMemo(() => {
     if (!data) return [];
@@ -85,7 +92,7 @@ export function NewTrip() {
     ['blank', 'Start blank', 'Add items as you go', 'compose'],
   ];
 
-  async function create() {
+  async function create(skipCheck = false) {
     if (!name.trim()) return setError('Give the trip a name.');
     if (data?.people.length && !effectiveTravelers.length) return setError('Pick who’s traveling.');
     if (start === 'template' && !templateId) return setError('Pick a template.');
@@ -97,20 +104,29 @@ export function NewTrip() {
         : start === 'clone'
           ? { kind: 'clone', trip_id: cloneId }
           : { kind: 'blank' };
-    const created = await run(() =>
-      api.post<TripDetail>('/trips', {
-        name,
-        start_date: startDate || null,
-        end_date: endDate || null,
-        destination,
-        travelers: effectiveTravelers,
-        climate: effectiveClimate,
-        activities: effectiveActivities,
-        trip_type: start === 'template' ? (tpl?.trip_type ?? null) : null,
-        source,
-        bags,
-      }),
-    );
+    const payload = {
+      name,
+      start_date: startDate || null,
+      end_date: endDate || null,
+      destination,
+      travelers: effectiveTravelers,
+      climate: effectiveClimate,
+      activities: effectiveActivities,
+      trip_type: start === 'template' ? (tpl?.trip_type ?? null) : null,
+      source,
+      bags,
+    };
+    // Before creating, check whether any items would be left without a bag.
+    if (!skipCheck && start !== 'clone') {
+      const preview = await run(() => api.post<Preview>('/trips/preview', payload));
+      if (!preview) return;
+      if (preview.unplaced.length) {
+        setCheck(preview);
+        return;
+      }
+    }
+    setCheck(null);
+    const created = await run(() => api.post<TripDetail>('/trips', payload));
     if (created) {
       nav(`/trips/${created.trip.id}`, { replace: true });
     }
@@ -255,10 +271,24 @@ export function NewTrip() {
           icon="bag"
           label="Bags"
           hint={
-            start === 'clone' ? 'Bags from the copied trip come along. Add more here.' : undefined
+            start === 'clone'
+              ? 'Bags from the copied trip come along. Add more here.'
+              : start === 'template' && tpl?.bags.length
+                ? 'From the template. Add more for this trip only.'
+                : undefined
           }
         >
           <div className="flex flex-wrap gap-1.5">
+            {start === 'template' &&
+              tpl?.bags.map((b) => (
+                <span
+                  key={b.id}
+                  className="inline-flex items-center gap-1.5 rounded-full border-2 border-dashed border-line px-2.5 py-[3px] text-sm text-soft"
+                >
+                  <Icon name={b.carry_on ? 'backpack' : 'bag'} size={13} />
+                  {b.label}
+                </span>
+              ))}
             {bags.map((b, i) => (
               <Pick key={i} on onClick={() => setBagSheet(i)}>
                 <Icon name={b.carry_on ? 'backpack' : 'bag'} size={13} />
@@ -273,7 +303,7 @@ export function NewTrip() {
 
         <div className="flex flex-col gap-3 pt-5">
           <ErrorText>{error}</ErrorText>
-          <PrimaryButton onClick={create} disabled={busy}>
+          <PrimaryButton onClick={() => create()} disabled={busy}>
             {busy ? 'Creating…' : 'Create trip'}
           </PrimaryButton>
         </div>
@@ -283,6 +313,7 @@ export function NewTrip() {
         open={bagSheet !== null}
         initial={typeof bagSheet === 'number' ? bags[bagSheet] : undefined}
         suitcases={data.suitcases}
+        people={data.people}
         roles={data.lookups.bagRole ?? []}
         onClose={() => setBagSheet(null)}
         onSave={(b) => {
@@ -299,6 +330,59 @@ export function NewTrip() {
             : undefined
         }
       />
+      <Sheet
+        open={!!check}
+        onClose={() => setCheck(null)}
+        title={
+          check
+            ? `${plural(
+                check.unplaced.reduce((n, g) => n + g.count, 0),
+                'item',
+              )} won’t have a bag`
+            : ''
+        }
+      >
+        {check && (
+          <div className="flex flex-col gap-4 pb-3">
+            <div className="flex flex-col gap-1.5 rounded-2xl bg-chip px-4 py-3 text-sm text-soft">
+              {check.unplaced.map((g) => {
+                const p = data.people.find((x) => x.id === g.person_id);
+                return (
+                  <span key={`${g.person_id}|${g.carry}`} className="flex items-center gap-2">
+                    {p ? <PersonDot person={p} /> : <Icon name="users" size={14} />}
+                    <span className="text-ink">{p?.name ?? 'Shared'}</span>
+                    {plural(g.count, g.carry ? 'carry-on item' : 'item')}
+                  </span>
+                );
+              })}
+            </div>
+            <p className="text-sm text-soft">
+              They’d wait in No bag yet. You can add bags first, or create the trip and sort them
+              into bags later.
+            </p>
+            <div className="flex flex-col gap-2">
+              {start === 'template' && templateId && (
+                <PrimaryButton icon="tmpl" onClick={() => nav(`/templates/${templateId}`)}>
+                  Add bags to the template
+                </PrimaryButton>
+              )}
+              <PrimaryButton
+                icon="bag"
+                tone={start === 'template' ? 'secondary' : undefined}
+                onClick={() => {
+                  setCheck(null);
+                  setBagSheet('new');
+                }}
+              >
+                Add bags to this trip
+              </PrimaryButton>
+              <GhostButton className="justify-center" onClick={() => create(true)}>
+                Create anyway
+              </GhostButton>
+            </div>
+          </div>
+        )}
+      </Sheet>
     </div>
   );
 }

@@ -44,6 +44,7 @@ export function bag(p: Partial<TripBag> & { id: string }): TripBag {
     carry_on: false,
     notes: null,
     sort_order: 0,
+    people: [],
     ...p,
   };
 }
@@ -63,6 +64,7 @@ export function row(p: Partial<TripItem> & { id: string }): TripItem {
     qty_override: null,
     packed: false,
     packed_at: null,
+    carry_hint: false,
     notes: null,
     sort_order: 0,
     ...p,

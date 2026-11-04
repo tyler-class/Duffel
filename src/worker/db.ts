@@ -3,6 +3,7 @@ import type {
   Person,
   Suitcase,
   Template,
+  TemplateBag,
   TemplateItem,
   Trip,
   TripBag,
@@ -103,7 +104,7 @@ export function toItem(r: Row, defaultPeople: string[] = []): Item {
   };
 }
 
-export function toSuitcase(r: Row): Suitcase {
+export function toSuitcase(r: Row, people: string[] = []): Suitcase {
   return {
     id: String(r.id),
     name: String(r.name),
@@ -114,6 +115,8 @@ export function toSuitcase(r: Row): Suitcase {
     capacity_l: n(r.capacity_l),
     max_weight_lb: n(r.max_weight_lb),
     notes: s(r.notes),
+    carry_on: bool(r.carry_on),
+    people,
   };
 }
 
@@ -131,7 +134,21 @@ export function toTemplateItem(r: Row, assignees: string[] = []): TemplateItem {
   };
 }
 
-export function toTemplate(r: Row, items: TemplateItem[] = []): Template {
+export function toTemplateBag(r: Row, people: string[] = []): TemplateBag {
+  return {
+    id: String(r.id),
+    template_id: String(r.template_id),
+    suitcase_id: s(r.suitcase_id),
+    label: String(r.label),
+    role: s(r.role),
+    carry_on: bool(r.carry_on),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+    people,
+  };
+}
+
+export function toTemplate(r: Row, items: TemplateItem[] = [], bags: TemplateBag[] = []): Template {
   return {
     id: String(r.id),
     name: String(r.name),
@@ -140,6 +157,7 @@ export function toTemplate(r: Row, items: TemplateItem[] = []): Template {
     activities: arr(r.activities),
     notes: s(r.notes),
     items,
+    bags,
   };
 }
 
@@ -166,7 +184,7 @@ export function toTrip(r: Row, travelers: string[] = []): Trip {
   };
 }
 
-export function toTripBag(r: Row): TripBag {
+export function toTripBag(r: Row, people: string[] = []): TripBag {
   return {
     id: String(r.id),
     trip_id: String(r.trip_id),
@@ -176,6 +194,7 @@ export function toTripBag(r: Row): TripBag {
     carry_on: bool(r.carry_on),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
+    people,
   };
 }
 
@@ -195,6 +214,7 @@ export function toTripItem(r: Row): TripItem {
     qty_override: n(r.qty_override),
     packed: bool(r.packed),
     packed_at: s(r.packed_at),
+    carry_hint: bool(r.carry_hint),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
   };
@@ -224,7 +244,12 @@ export async function loadItems(db: D1Database): Promise<Item[]> {
 }
 
 export async function loadSuitcases(db: D1Database): Promise<Suitcase[]> {
-  return (await all(db, 'SELECT * FROM suitcases ORDER BY name COLLATE NOCASE')).map(toSuitcase);
+  const [rows, links] = await Promise.all([
+    all(db, 'SELECT * FROM suitcases ORDER BY name COLLATE NOCASE'),
+    all(db, 'SELECT suitcase_id, person_id FROM suitcase_people'),
+  ]);
+  const by = groupPairs(links, 'suitcase_id', 'person_id');
+  return rows.map((r) => toSuitcase(r, by.get(String(r.id)) ?? []));
 }
 
 export async function loadTemplates(db: D1Database, templateId?: string): Promise<Template[]> {
@@ -241,6 +266,22 @@ export async function loadTemplates(db: D1Database, templateId?: string): Promis
       ...binds,
     ),
   ]);
+  const [bagRows, bagPeople] = await Promise.all([
+    all(db, `SELECT * FROM template_bags${tWhere} ORDER BY sort_order, created_at`, ...binds),
+    all(
+      db,
+      `SELECT p.template_bag_id, p.person_id FROM template_bag_people p
+       JOIN template_bags tb ON tb.id = p.template_bag_id${templateId ? ' WHERE tb.template_id = ?' : ''}`,
+      ...binds,
+    ),
+  ]);
+  const byBag = groupPairs(bagPeople, 'template_bag_id', 'person_id');
+  const bagsByTemplate = new Map<string, TemplateBag[]>();
+  for (const r of bagRows) {
+    const tb = toTemplateBag(r, byBag.get(String(r.id)) ?? []);
+    if (!bagsByTemplate.has(tb.template_id)) bagsByTemplate.set(tb.template_id, []);
+    bagsByTemplate.get(tb.template_id)!.push(tb);
+  }
   const byTi = groupPairs(assignees, 'template_item_id', 'person_id');
   const byTemplate = new Map<string, TemplateItem[]>();
   for (const r of items) {
@@ -248,7 +289,9 @@ export async function loadTemplates(db: D1Database, templateId?: string): Promis
     if (!byTemplate.has(ti.template_id)) byTemplate.set(ti.template_id, []);
     byTemplate.get(ti.template_id)!.push(ti);
   }
-  return rows.map((r) => toTemplate(r, byTemplate.get(String(r.id)) ?? []));
+  return rows.map((r) =>
+    toTemplate(r, byTemplate.get(String(r.id)) ?? [], bagsByTemplate.get(String(r.id)) ?? []),
+  );
 }
 
 const TRIP_SELECT = `SELECT t.*,
@@ -278,13 +321,33 @@ export async function loadTrip(db: D1Database, tripId: string): Promise<Trip | n
 }
 
 export async function loadTripBags(db: D1Database, tripId: string): Promise<TripBag[]> {
-  return (
-    await all(
+  const [rows, links] = await Promise.all([
+    all(db, 'SELECT * FROM trip_bags WHERE trip_id = ? ORDER BY sort_order, created_at', tripId),
+    all(
       db,
-      'SELECT * FROM trip_bags WHERE trip_id = ? ORDER BY sort_order, created_at',
+      'SELECT p.trip_bag_id, p.person_id FROM trip_bag_people p JOIN trip_bags b ON b.id = p.trip_bag_id WHERE b.trip_id = ?',
       tripId,
-    )
-  ).map(toTripBag);
+    ),
+  ]);
+  const by = groupPairs(links, 'trip_bag_id', 'person_id');
+  return rows.map((r) => toTripBag(r, by.get(String(r.id)) ?? []));
+}
+
+/** Replaces the people linked to a bag (suitcase, template bag or trip bag). */
+export async function setBagPeople(
+  db: D1Database,
+  table: 'suitcase_people' | 'template_bag_people' | 'trip_bag_people',
+  column: 'suitcase_id' | 'template_bag_id' | 'trip_bag_id',
+  bagId: string,
+  people: string[],
+): Promise<D1PreparedStatement[]> {
+  const valid = await existingIds(db, 'people', people);
+  return [
+    db.prepare(`DELETE FROM ${table} WHERE ${column} = ?`).bind(bagId),
+    ...[...valid].map((p) =>
+      db.prepare(`INSERT INTO ${table} (${column}, person_id) VALUES (?, ?)`).bind(bagId, p),
+    ),
+  ];
 }
 
 export async function loadTripItems(db: D1Database, tripId: string): Promise<TripItem[]> {

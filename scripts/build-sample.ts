@@ -152,7 +152,8 @@ const suitcases = [
   {
     id: id('suitcase'),
     name: 'Big checked',
-    type: 'Checked',
+    type: 'Suitcase',
+    carry_on: false,
     length_in: 30,
     width_in: 20,
     height_in: 12,
@@ -161,7 +162,8 @@ const suitcases = [
   {
     id: id('suitcase'),
     name: 'Medium spinner',
-    type: 'Checked',
+    type: 'Suitcase',
+    carry_on: false,
     length_in: 26,
     width_in: 18,
     height_in: 11,
@@ -170,7 +172,8 @@ const suitcases = [
   {
     id: id('suitcase'),
     name: 'Roller carry-on',
-    type: 'Carry-on',
+    type: 'Suitcase',
+    carry_on: true,
     length_in: 22,
     width_in: 14,
     height_in: 9,
@@ -180,6 +183,7 @@ const suitcases = [
     id: id('suitcase'),
     name: 'Everyday backpack',
     type: 'Backpack',
+    carry_on: true,
     length_in: 18,
     width_in: 12,
     height_in: 7,
@@ -293,23 +297,45 @@ const bagDefs = [
   [suitcases[2]!, 'Sam carry-on', 'Carry-on'],
   [suitcases[3]!, 'Alex backpack', 'Personal item'],
 ] as const;
+// Who each bag is for: Sam and Alex share the big one, the kids share theirs.
+const owners: Record<string, string[]> = {
+  'Big checked': adults,
+  'Kids’ suitcase': kids,
+  'Sam carry-on': [sam],
+  'Alex backpack': [alex],
+};
 const bags = bagDefs.map(([s, label, role], i) => ({
   id: id('bag'),
   trip_id: tripId,
   suitcase_id: s.id,
   label,
   role,
-  carry_on: defaultBagCarryOn(s.type, role) ? 1 : 0,
+  carry_on: defaultBagCarryOn(s.carry_on, role) ? 1 : 0,
   notes: null,
   sort_order: i,
   ...stamp,
 }));
-const names = new Map(people.map((p) => [p.id, p.name]));
+// The beach template has the same bag setup.
+const templateBags = bagDefs.map(([s, label, role], i) => ({
+  id: id('tbag'),
+  template_id: beach.tpl.id,
+  suitcase_id: s.id,
+  label,
+  role,
+  carry_on: defaultBagCarryOn(s.carry_on, role) ? 1 : 0,
+  notes: null,
+  sort_order: i,
+  ...stamp,
+}));
 const drafts = planFromTemplate(beach.tItems, itemMap, {
   len,
   travelers: everyone,
-  bags: bags.map((b) => ({ id: b.id, label: b.label, carry_on: b.carry_on === 1 })),
-  personName: (p) => names.get(p) ?? null,
+  bags: bags.map((b) => ({
+    id: b.id,
+    carry_on: b.carry_on === 1,
+    people: owners[b.label] ?? [],
+    sort_order: b.sort_order,
+  })),
 });
 // Put clothing in sensible bags so "By bag" looks real.
 const kidsBag = bags[1]!.id;
@@ -360,7 +386,26 @@ const data: DuffelExport = {
     item_default_people: items.flatMap((i) =>
       i.default_people.map((p) => ({ item_id: i.id, person_id: p })),
     ),
-    suitcases: suitcases.map((s) => ({ ...s, max_weight_lb: null, notes: null, ...stamp })),
+    suitcases: suitcases.map((s) => ({
+      ...s,
+      carry_on: s.carry_on ? 1 : 0,
+      max_weight_lb: null,
+      notes: null,
+      ...stamp,
+    })),
+    suitcase_people: suitcases.flatMap((s) =>
+      (
+        owners[
+          s.name === 'Roller carry-on'
+            ? 'Sam carry-on'
+            : s.name === 'Everyday backpack'
+              ? 'Alex backpack'
+              : s.name === 'Medium spinner'
+                ? 'Kids’ suitcase'
+                : s.name
+        ] ?? []
+      ).map((p) => ({ suitcase_id: s.id, person_id: p })),
+    ),
     templates: [beach.tpl, weekend.tpl],
     template_items: [...beach.tItems, ...weekend.tItems].map(({ assignees: _a, ...t }) => ({
       ...t,
@@ -368,6 +413,10 @@ const data: DuffelExport = {
       ...stamp,
     })) as ExportRow[],
     template_item_assignees: [],
+    template_bags: templateBags,
+    template_bag_people: templateBags.flatMap((b) =>
+      (owners[b.label] ?? []).map((p) => ({ template_bag_id: b.id, person_id: p })),
+    ),
     trips: [
       {
         id: tripId,
@@ -390,6 +439,9 @@ const data: DuffelExport = {
     ],
     trip_travelers: everyone.map((p) => ({ trip_id: tripId, person_id: p })),
     trip_bags: bags,
+    trip_bag_people: bags.flatMap((b) =>
+      (owners[b.label] ?? []).map((p) => ({ trip_bag_id: b.id, person_id: p })),
+    ),
     trip_items: tripItems as unknown as ExportRow[],
   },
 };

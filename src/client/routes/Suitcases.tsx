@@ -4,7 +4,7 @@ import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { Icon } from '../components/Icon';
-import { NumberInput, OnePicker } from '../components/fields';
+import { NumberInput, OnePicker, PeoplePicker } from '../components/fields';
 import { CatalogHeader } from '../components/CatalogNav';
 import { SwipeRow } from '../components/SwipeRow';
 import {
@@ -15,6 +15,7 @@ import {
   GhostButton,
   PrimaryButton,
   Sheet,
+  Switch,
   TextInput,
 } from '../components/ui';
 
@@ -27,6 +28,8 @@ const blank: Draft = {
   height_in: null,
   capacity_l: null,
   notes: null,
+  carry_on: false,
+  people: [],
 };
 
 export function Suitcases() {
@@ -48,6 +51,8 @@ export function Suitcases() {
             height_in: s.height_in,
             capacity_l: s.capacity_l,
             notes: s.notes,
+            carry_on: s.carry_on,
+            people: s.people,
           },
     );
   };
@@ -78,13 +83,14 @@ export function Suitcases() {
             onClick={() => open(s)}
             className="flex w-full items-center gap-3 py-3.5 text-left"
           >
-            <Icon
-              name={/carry|back|diaper/i.test(s.type ?? '') ? 'backpack' : 'bag'}
-              className="text-soft"
-            />
+            <Icon name={s.carry_on ? 'backpack' : 'bag'} className="text-soft" />
             <span className="flex min-w-0 flex-1 flex-col gap-0.5">
               <span className="text-base">{s.name}</span>
-              {s.type && <span className="text-[13px] text-soft">{s.type}</span>}
+              {(s.type || s.carry_on) && (
+                <span className="text-[13px] text-soft">
+                  {[s.type, s.carry_on && 'Carry-on'].filter(Boolean).join(' · ')}
+                </span>
+              )}
             </span>
             {s.capacity_l !== null && (
               <span className="font-mono text-[13px] text-soft tnum">{s.capacity_l} L</span>
@@ -95,7 +101,7 @@ export function Suitcases() {
       <Sheet
         open={editing !== null}
         onClose={() => setEditing(null)}
-        title={editing === 'new' ? 'Add suitcase' : 'Edit suitcase'}
+        title={editing === 'new' ? 'Add bag' : 'Edit bag'}
         footer={
           <>
             {editing && editing !== 'new' ? (
@@ -128,15 +134,39 @@ export function Suitcases() {
           />
         </FieldRow>
         <FieldRow
-          icon="layers"
-          label="Type"
-          hint="Carry-on, backpack and diaper-bag types start out as carry-on on trips."
+          icon="user"
+          label="Whose bag"
+          hint={
+            d.people.length
+              ? 'Their items go in it when a trip is built.'
+              : 'Nobody picked: a shared bag.'
+          }
         >
+          <PeoplePicker
+            people={data.people}
+            value={d.people}
+            onChange={(people) => setD({ ...d, people })}
+          />
+        </FieldRow>
+        <FieldRow icon="layers" label="Type">
           <OnePicker
             value={d.type}
             onChange={(type) => setD({ ...d, type })}
             options={data.lookups.suitcaseType ?? []}
           />
+        </FieldRow>
+        <FieldRow
+          icon="backpack"
+          hint="Its items count as carry-on, and carry-on items go in it when a trip is built."
+        >
+          <div className="flex items-center justify-between">
+            <span className="text-base">Carry-on</span>
+            <Switch
+              label="Carry-on"
+              on={d.carry_on}
+              onChange={(carry_on) => setD({ ...d, carry_on })}
+            />
+          </div>
         </FieldRow>
         <FieldRow
           icon="scale"

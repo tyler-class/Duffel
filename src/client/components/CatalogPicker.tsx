@@ -8,7 +8,9 @@ type PickerProps = {
   title: string;
   items: Item[];
   suggested?: Item[];
-  exclude?: Set<string>;
+  /** How many of each item are already there (shown, not hidden: duplicates are fine). */
+  existing?: Map<string, number>;
+  existingLabel?: string;
   onClose: () => void;
   onAdd: (ids: string[]) => Promise<void>;
 };
@@ -34,7 +36,6 @@ function PickerBody(props: PickerProps) {
     const visible = props.items.filter(
       (i) =>
         !i.archived &&
-        !props.exclude?.has(i.id) &&
         (!needle ||
           i.name.toLowerCase().includes(needle) ||
           (i.category ?? '').toLowerCase().includes(needle)),
@@ -55,7 +56,7 @@ function PickerBody(props: PickerProps) {
       .filter(([k]) => k !== 'Suggested for this trip')
       .sort(([a], [b]) => (a === 'Other' ? 1 : b === 'Other' ? -1 : a.localeCompare(b)));
     return sugg ? [['Suggested for this trip', sugg] as [string, Item[]], ...rest] : rest;
-  }, [props.items, props.exclude, q, suggestedIds]);
+  }, [props.items, q, suggestedIds]);
 
   const toggle = (id: string) =>
     setPicked((p) => {
@@ -132,6 +133,11 @@ function PickerBody(props: PickerProps) {
                   {on && <Icon name="check" size={14} strokeWidth={2.4} />}
                 </span>
                 <span className="flex-1 text-base">{i.name}</span>
+                {!!props.existing?.get(i.id) && (
+                  <span className="text-xs text-faint tnum">
+                    {props.existingLabel ?? 'Added'} ×{props.existing.get(i.id)}
+                  </span>
+                )}
               </button>
             );
           })}

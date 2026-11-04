@@ -83,7 +83,10 @@ export function People() {
             className="flex w-full items-center gap-3 py-3.5 text-left"
           >
             <PersonDot person={p} size={20} />
-            <span className="flex-1 text-base">{p.name}</span>
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-base">{p.name}</span>
+              {p.notes && <span className="truncate text-[13px] text-soft">{p.notes}</span>}
+            </span>
             {p.role && <span className="text-[13px] text-soft">{p.role}</span>}
           </button>
         </SwipeRow>

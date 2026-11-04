@@ -107,10 +107,16 @@ for (const r of table('Items')) {
 
 // ---------- suitcases ----------
 const suitcaseRecs = new Map(table('Suitcases').map((r) => [r.id, r]));
+const CARRY_TYPES = ['carry-on', 'backpack', 'diaper bag'];
+const suitcaseCarry = (r: Rec) => CARRY_TYPES.includes((str(r.fields['Type']) ?? '').toLowerCase());
 const suitcases: ExportRow[] = table('Suitcases').map((r) => ({
   id: idFor(r.id),
   name: str(r.fields['Suitcase']) ?? 'Bag',
-  type: str(r.fields['Type']),
+  // "Carry-on" and "Checked" aren't bag types in Duffel; carry-on is its own flag.
+  type: /^(carry-on|checked)$/i.test(str(r.fields['Type']) ?? '')
+    ? 'Suitcase'
+    : str(r.fields['Type']),
+  carry_on: suitcaseCarry(r) ? 1 : 0,
   length_in: num(r.fields['Length (in)']),
   width_in: num(r.fields['Width (in)']),
   height_in: num(r.fields['Height (in)']),
@@ -215,7 +221,7 @@ table('Trip Suitcases').forEach((r, i) => {
   const suitcase = one(r.fields['Suitcase']);
   const sRec = suitcase ? suitcaseRecs.get(suitcase) : undefined;
   const role = str(r.fields['Role']);
-  const carry = defaultBagCarryOn(sRec ? str(sRec.fields['Type']) : null, role);
+  const carry = defaultBagCarryOn(sRec ? suitcaseCarry(sRec) : null, role);
   bagCarry.set(r.id, carry);
   bagTrip.set(r.id, trip);
   tripBags.push({

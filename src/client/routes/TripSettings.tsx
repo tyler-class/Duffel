@@ -9,6 +9,7 @@ import { plural } from '../lib/format';
 import { Icon } from '../components/Icon';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
 import { NumberInput, OnePicker, PeoplePicker, TagPicker } from '../components/fields';
+import { useToast } from '../components/Toast';
 import {
   cx,
   DangerButton,
@@ -76,6 +77,8 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
   const [form, setForm] = useState<Form>(() => toForm(detail.trip));
   const [bagSheet, setBagSheet] = useState<TripBag | 'new' | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [fillCount, setFillCount] = useState(0);
+  const toast = useToast();
 
   const fits = useMemo(() => {
     const items = new Map(state.items.map((i) => [i.id, i]));
@@ -135,7 +138,12 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
           : api.patch(`/trip-bags/${(bagSheet as TripBag).id}`, b),
       [keys.trip(trip.id)],
     );
-    if (ok) setBagSheet(null);
+    if (ok) {
+      setBagSheet(null);
+      // A new or re-owned bag may be the home some waiting items were missing.
+      const { moves } = await api.get<{ moves: unknown[] }>(`/trips/${trip.id}/placements`);
+      if (moves.length) setFillCount(moves.length);
+    }
   }
 
   return (
@@ -182,7 +190,12 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
           </button>
         ))}
         {unassigned > 0 && (
-          <p className="pt-3 text-sm text-soft">{plural(unassigned, 'item')} still need a bag.</p>
+          <button
+            className="pt-3 text-left text-sm text-accent"
+            onClick={() => nav(`/trips/${trip.id}?select=waiting`)}
+          >
+            {plural(unassigned, 'item')} still need a bag. Sort them now →
+          </button>
         )}
         {missingDims > 0 && (
           <p className="pt-1 text-xs text-faint">
@@ -346,10 +359,12 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
                 role: bagSheet.role,
                 carry_on: bagSheet.carry_on,
                 notes: bagSheet.notes,
+                people: bagSheet.people,
               }
             : undefined
         }
         suitcases={state.suitcases}
+        people={state.people}
         roles={state.lookups.bagRole ?? []}
         error={error}
         onClose={() => setBagSheet(null)}
@@ -357,8 +372,18 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
         onDelete={
           bagSheet && bagSheet !== 'new'
             ? async () => {
-                if (await run(() => api.del(`/trip-bags/${bagSheet.id}`), [keys.trip(trip.id)]))
+                const res = await run(
+                  () => api.del<{ moved?: number }>(`/trip-bags/${bagSheet.id}`),
+                  [keys.trip(trip.id)],
+                );
+                if (res) {
                   setBagSheet(null);
+                  toast({
+                    text: res.moved
+                      ? `Bag removed. ${plural(res.moved, 'item')} moved to No bag yet.`
+                      : 'Bag removed.',
+                  });
+                }
               }
             : undefined
         }
@@ -384,6 +409,34 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
         <p className="py-2 text-sm text-soft">
           The trip, its bags and its {plural(detail.items.length, 'item')} are removed. Templates
           and the catalog stay.
+        </p>
+      </Sheet>
+      <Sheet
+        open={fillCount > 0}
+        onClose={() => setFillCount(0)}
+        title="Fill the bag?"
+        footer={
+          <>
+            <GhostButton onClick={() => setFillCount(0)}>Not now</GhostButton>
+            <PrimaryButton
+              disabled={busy}
+              onClick={async () => {
+                const res = await run(
+                  () => api.post<{ moved: number }>(`/trips/${trip.id}/placements/apply`),
+                  [keys.trip(trip.id)],
+                );
+                setFillCount(0);
+                if (res) toast({ text: `Moved ${plural(res.moved, 'item')} into their bags` });
+              }}
+            >
+              Move {plural(fillCount, 'item')}
+            </PrimaryButton>
+          </>
+        }
+      >
+        <p className="py-2 text-sm text-soft">
+          {plural(fillCount, 'item')} waiting in No bag yet now {fillCount === 1 ? 'has' : 'have'} a
+          matching bag. Move {fillCount === 1 ? 'it' : 'them'} in?
         </p>
       </Sheet>
     </div>

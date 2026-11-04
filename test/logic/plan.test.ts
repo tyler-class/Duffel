@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   defaultBagCarryOn,
-  pickCarryBag,
+  placeRow,
+  suggestPlacements,
+  unplacedSummary,
   planClone,
   planFromTemplate,
   planTemplateFromTrip,
@@ -11,12 +13,10 @@ import {
 } from '../../src/shared/logic';
 import { bag, item, row, seqIds, tItem } from './fixtures';
 
-const names: Record<string, string> = { p1: 'Sam', p2: 'Alex', p3: 'Mia' };
 const ctx = (over: Partial<Parameters<typeof planFromTemplate>[2]> = {}) => ({
   len: { days: 8, nights: 7 },
   travelers: [],
   bags: [],
-  personName: (id: string) => names[id] ?? null,
   ...over,
 });
 
@@ -109,30 +109,22 @@ describe('planFromTemplate', () => {
     expect(rows[0]).toMatchObject({ no_bag: true, trip_bag_id: null });
   });
 
-  it('places carry-on hints in the right carry-on bag', () => {
+  it('places each person’s items in their own bags by carry-on vs checked', () => {
     const bags = [
-      bag({ id: 'b1', label: 'Lisbon - Big checked' }),
-      bag({ id: 'b2', label: 'Lisbon - Sam carry-on', carry_on: true }),
-      bag({ id: 'b3', label: 'Lisbon - Alex backpack', carry_on: true }),
+      bag({ id: 'b1', label: 'Sam suitcase', people: ['p1'] }),
+      bag({ id: 'b2', label: 'Sam carry-on', carry_on: true, people: ['p1'] }),
+      bag({ id: 'b3', label: 'Kids', people: ['p3'], sort_order: 2 }),
     ];
     const rows = planFromTemplate(
-      [
-        tItem({ id: 'a', item_id: 'kindle' }),
-        tItem({ id: 'b', item_id: 'sun', carry_on: true, sort_order: 1 }),
-      ],
+      [tItem({ id: 'a', item_id: 'kindle' }), tItem({ id: 'b', item_id: 'shirt', sort_order: 1 })],
       items,
       ctx({ bags }),
     );
-    expect(rows.map((r) => r.trip_bag_id)).toEqual(['b2', null]);
-  });
-
-  it('uses the only carry-on bag when there is one', () => {
-    const rows = planFromTemplate(
-      [tItem({ id: 'b', item_id: 'sun', carry_on: true })],
-      items,
-      ctx({ bags: [bag({ id: 'b9', label: 'Backpack', carry_on: true })] }),
-    );
-    expect(rows[0]!.trip_bag_id).toBe('b9');
+    expect(rows.map((r) => [r.item_id, r.person_id, r.trip_bag_id, r.carry_hint])).toEqual([
+      ['kindle', 'p1', 'b2', true],
+      ['shirt', 'p1', 'b1', false],
+      ['shirt', 'p2', null, false],
+    ]);
   });
 
   it('leaves per-day qty empty when the trip has no dates', () => {
@@ -149,20 +141,91 @@ describe('planFromTemplate', () => {
   });
 });
 
-describe('pickCarryBag / defaultBagCarryOn / labels', () => {
-  it('matches the person name as a whole word', () => {
-    const bags = [
-      bag({ id: 'x', label: 'Samantha carry-on', carry_on: true }),
-      bag({ id: 'y', label: 'Alex backpack', carry_on: true }),
-    ];
-    expect(pickCarryBag(bags, 'Sam')).toBeNull();
-    expect(pickCarryBag(bags, 'alex')?.id).toBe('y');
+describe('placeRow', () => {
+  const mk = (id: string, carry: boolean, people: string[], sort_order = 0) => ({
+    id,
+    carry_on: carry,
+    people,
+    sort_order,
   });
-  it('defaults carry-on from suitcase type or role', () => {
-    expect(defaultBagCarryOn('Carry-on', null)).toBe(true);
-    expect(defaultBagCarryOn('Backpack', 'Checked')).toBe(true);
-    expect(defaultBagCarryOn('Checked', 'Personal item')).toBe(true);
-    expect(defaultBagCarryOn('Checked', 'Checked')).toBe(false);
+  it('uses the person’s bag of the right kind, first by order', () => {
+    const bags = [
+      mk('later', false, ['p1'], 5),
+      mk('first', false, ['p1'], 1),
+      mk('carry', true, ['p1']),
+    ];
+    expect(
+      placeRow({ person_id: 'p1', carry: false, not_in_suitcase: false }, bags).trip_bag_id,
+    ).toBe('first');
+    expect(
+      placeRow({ person_id: 'p1', carry: true, not_in_suitcase: false }, bags).trip_bag_id,
+    ).toBe('carry');
+  });
+  it('bags for several people work for each of them', () => {
+    const bags = [mk('kids', false, ['p3', 'p4'])];
+    expect(
+      placeRow({ person_id: 'p4', carry: false, not_in_suitcase: false }, bags).trip_bag_id,
+    ).toBe('kids');
+  });
+  it('falls back to the one shared bag of that kind', () => {
+    expect(
+      placeRow({ person_id: 'p2', carry: false, not_in_suitcase: false }, [mk('shared', false, [])])
+        .trip_bag_id,
+    ).toBe('shared');
+    expect(
+      placeRow({ person_id: 'p2', carry: false, not_in_suitcase: false }, [
+        mk('s1', false, []),
+        mk('s2', false, []),
+      ]).trip_bag_id,
+    ).toBeNull();
+  });
+  it('shared carry-on items use the only carry-on bag', () => {
+    expect(
+      placeRow({ person_id: null, carry: true, not_in_suitcase: false }, [mk('c', true, ['p1'])])
+        .trip_bag_id,
+    ).toBe('c');
+    expect(
+      placeRow({ person_id: null, carry: true, not_in_suitcase: false }, [
+        mk('c', true, ['p1']),
+        mk('d', true, ['p2']),
+      ]).trip_bag_id,
+    ).toBeNull();
+  });
+  it('never mixes carry-on and checked', () => {
+    expect(
+      placeRow({ person_id: 'p1', carry: false, not_in_suitcase: false }, [mk('c', true, ['p1'])]),
+    ).toEqual({ trip_bag_id: null, no_bag: false });
+  });
+  it('items that never go in a bag are No bag', () => {
+    expect(
+      placeRow({ person_id: 'p1', carry: true, not_in_suitcase: true }, [mk('c', true, ['p1'])]),
+    ).toEqual({ trip_bag_id: null, no_bag: true });
+  });
+  it('summarizes and re-places waiting rows', () => {
+    const rows = [
+      row({ id: 'r1', person_id: 'p1', carry_hint: true }),
+      row({ id: 'r2', person_id: 'p1', carry_hint: true }),
+      row({ id: 'r3', person_id: 'p2' }),
+      row({ id: 'r4', no_bag: true }),
+      row({ id: 'r5', person_id: 'p1', trip_bag_id: 'x' }),
+    ];
+    expect(unplacedSummary(rows)).toEqual([
+      { person_id: 'p1', carry: true, count: 2 },
+      { person_id: 'p2', carry: false, count: 1 },
+    ]);
+    expect(suggestPlacements(rows, [mk('c1', true, ['p1'])])).toEqual([
+      { id: 'r1', trip_bag_id: 'c1' },
+      { id: 'r2', trip_bag_id: 'c1' },
+    ]);
+  });
+});
+
+describe('defaultBagCarryOn / labels', () => {
+  it('defaults carry-on from the suitcase, else the role', () => {
+    expect(defaultBagCarryOn(true, 'Checked')).toBe(true);
+    expect(defaultBagCarryOn(false, 'Carry-on')).toBe(false);
+    expect(defaultBagCarryOn(undefined, 'Personal item')).toBe(true);
+    expect(defaultBagCarryOn(null, 'Checked')).toBe(false);
     expect(defaultBagCarryOn(null, null)).toBe(false);
   });
   it('rewrites only a matching trip-name prefix', () => {

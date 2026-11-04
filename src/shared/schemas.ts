@@ -69,6 +69,9 @@ export const suitcaseInput = z.object({
   capacity_l: num.optional(),
   max_weight_lb: num.optional(),
   notes: text(2000).optional(),
+  carry_on: z.boolean().default(false),
+  /** Who the bag is for. Empty = shared. */
+  people: z.array(id).max(50).default([]),
 });
 export const suitcasePatch = patchOf(suitcaseInput);
 
@@ -100,7 +103,11 @@ export const tripBagInput = z.object({
   carry_on: z.boolean().optional(),
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
+  /** Who the bag is for. Omitted = the suitcase's people. */
+  people: z.array(id).max(50).optional(),
 });
+export const templateBagInput = tripBagInput;
+export const templateBagPatch = patchOf(tripBagInput);
 export const tripBagPatch = patchOf(tripBagInput);
 
 export const tripInput = z.object({

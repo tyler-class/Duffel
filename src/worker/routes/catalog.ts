@@ -21,6 +21,7 @@ import {
   loadSuitcases,
   newId,
   nowIso,
+  setBagPeople,
   updateStmt,
 } from '../db';
 import { body, defined, notFound, type AppEnv } from './util';
@@ -148,10 +149,19 @@ catalog.delete('/items/:id', async (c) => {
 
 // ---------- suitcases ----------
 catalog.post('/suitcases', async (c) => {
-  const input = await body(c, suitcaseInput);
+  const { people, ...input } = await body(c, suitcaseInput);
   const id = newId();
   const now = nowIso();
-  await insertStmt(c.env.DB, 'suitcases', { id, ...input, created_at: now, updated_at: now }).run();
+  await c.env.DB.batch([
+    insertStmt(c.env.DB, 'suitcases', {
+      id,
+      ...input,
+      carry_on: b(input.carry_on),
+      created_at: now,
+      updated_at: now,
+    }),
+    ...(await setBagPeople(c.env.DB, 'suitcase_people', 'suitcase_id', id, people)),
+  ]);
   return c.json(
     (await loadSuitcases(c.env.DB)).find((s) => s.id === id),
     201,
@@ -160,10 +170,16 @@ catalog.post('/suitcases', async (c) => {
 
 catalog.patch('/suitcases/:id', async (c) => {
   const id = c.req.param('id');
-  const input = defined(await body(c, suitcasePatch));
+  const { people, ...rest } = await body(c, suitcasePatch);
+  const input: Record<string, unknown> = defined(rest);
+  if (rest.carry_on !== undefined) input.carry_on = b(rest.carry_on);
   if (!(await first(c.env.DB, 'SELECT id FROM suitcases WHERE id = ?', id)))
     throw notFound('Suitcase');
-  if (Object.keys(input).length) await updateStmt(c.env.DB, 'suitcases', id, input).run();
+  const stmts: D1PreparedStatement[] = [];
+  if (Object.keys(input).length) stmts.push(updateStmt(c.env.DB, 'suitcases', id, input));
+  if (people)
+    stmts.push(...(await setBagPeople(c.env.DB, 'suitcase_people', 'suitcase_id', id, people)));
+  if (stmts.length) await c.env.DB.batch(stmts);
   return c.json((await loadSuitcases(c.env.DB)).find((s) => s.id === id));
 });
 

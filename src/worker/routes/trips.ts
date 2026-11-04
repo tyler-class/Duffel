@@ -20,12 +20,15 @@ import {
   planTemplateFromTrip,
   recalcRows,
   resolveCalc,
+  rewriteLabelPrefix,
   suggestItems,
+  suggestPlacements,
+  unplacedSummary,
   tripLength,
   type LengthLike,
   type TripItemDraft,
 } from '@shared/logic';
-import type { Item, Trip, TripBag, TripDetail } from '@shared/types';
+import type { Item, Template, Trip, TripBag, TripDetail } from '@shared/types';
 import {
   b,
   existingIds,
@@ -40,6 +43,7 @@ import {
   loadTripBags,
   loadTripItems,
   newId,
+  setBagPeople,
   nowIso,
   updateStmt,
 } from '../db';
@@ -87,6 +91,7 @@ function tripItemStmt(
     qty_override: d.qty_override,
     packed: 0,
     packed_at: null,
+    carry_hint: b(d.carry_hint),
     notes: d.notes,
     sort_order: sortOrder,
     created_at: now,
@@ -103,20 +108,16 @@ async function nextSortOrder(db: D1Database, tripId: string): Promise<number> {
   return (r?.m ?? -1) + 1;
 }
 
-async function personNames(db: D1Database) {
-  const people = await loadPeople(db);
-  const m = new Map(people.map((p) => [p.id, p.name]));
-  return (id: string) => m.get(id) ?? null;
-}
-
 // ---------- trips ----------
 trips.get('/trips/:id', async (c) => c.json(await tripDetail(c.env.DB, c.req.param('id'))));
 
-trips.post('/trips', async (c) => {
-  const input = await body(c, tripCreate);
-  const db = c.env.DB;
-  const id = newId();
-  const now = nowIso();
+type TripCreateInput = ReturnType<typeof tripCreate.parse>;
+
+/**
+ * Works out everything a new trip needs (bags, rows, where each row goes) without
+ * writing anything. Used both to create the trip and to preview it.
+ */
+async function planTrip(db: D1Database, input: TripCreateInput, id: string, now: string) {
   const fromDates = tripLength(input.start_date, input.end_date);
   const days = input.days ?? fromDates?.days ?? null;
   const nights = input.nights ?? fromDates?.nights ?? null;
@@ -128,30 +129,32 @@ trips.post('/trips', async (c) => {
   let climate = input.climate ?? null;
   let activities = input.activities;
   let tripType = input.trip_type ?? null;
-  const stmts: D1PreparedStatement[] = [];
-  const bagRows: Pick<TripBag, 'id' | 'label' | 'carry_on'>[] = [];
+  const bags: (TripBag & { source?: string })[] = [];
   let drafts: (TripItemDraft & { sort_order?: number })[] = [];
+  const suitcases = new Map((await loadSuitcases(db)).map((s) => [s.id, s]));
 
-  const tripStmt = () =>
-    insertStmt(db, 'trips', {
-      id,
-      name: input.name,
-      template_id: templateId,
-      cloned_from_trip_id: clonedFrom,
-      trip_type: tripType,
-      start_date: input.start_date ?? null,
-      end_date: input.end_date ?? null,
-      days,
-      nights,
-      destination: input.destination ?? null,
-      climate,
-      activities: json(activities),
-      status: input.status ?? null,
-      notes: input.notes ?? null,
-      archived_at: input.archived ? now : null,
-      created_at: now,
-      updated_at: now,
+  const addBag = (bg: {
+    suitcase_id?: string | null;
+    label: string;
+    role?: string | null;
+    carry_on?: boolean;
+    notes?: string | null;
+    people?: string[];
+    sort_order?: number;
+  }) => {
+    const suitcase = bg.suitcase_id ? suitcases.get(bg.suitcase_id) : undefined;
+    bags.push({
+      id: newId(),
+      trip_id: id,
+      suitcase_id: suitcase?.id ?? null,
+      label: bg.label,
+      role: bg.role ?? null,
+      carry_on: bg.carry_on ?? defaultBagCarryOn(suitcase?.carry_on, bg.role),
+      notes: bg.notes ?? null,
+      sort_order: bg.sort_order ?? bags.length,
+      people: bg.people ?? suitcase?.people ?? [],
     });
+  };
 
   if (input.source.kind === 'clone') {
     const src = await getTrip(db, input.source.trip_id);
@@ -173,75 +176,108 @@ trips.post('/trips', async (c) => {
       travelers: travelers.length ? travelers : undefined,
       newId,
     });
-    for (const bg of plan.bags) {
-      stmts.push(
-        insertStmt(db, 'trip_bags', {
-          id: bg.id,
-          trip_id: id,
-          suitcase_id: bg.suitcase_id,
-          label: bg.label,
-          role: bg.role,
-          carry_on: b(bg.carry_on),
-          notes: bg.notes,
-          sort_order: bg.sort_order,
-          created_at: now,
-          updated_at: now,
-        }),
-      );
-    }
+    for (const bg of plan.bags) bags.push({ ...bg, trip_id: id });
     drafts = plan.items;
-    // Travelers default to the source trip's when none were chosen.
     if (!travelers.length) travelers.push(...src.travelers);
   }
 
-  // Bags passed in the request (template and blank trips, or extra bags on a clone).
-  const suitcases = new Map((await loadSuitcases(db)).map((s) => [s.id, s]));
-  input.bags.forEach((bg, i) => {
-    const suitcase = bg.suitcase_id ? suitcases.get(bg.suitcase_id) : undefined;
-    const bagId = newId();
-    const carry = bg.carry_on ?? defaultBagCarryOn(suitcase?.type, bg.role);
-    bagRows.push({ id: bagId, label: bg.label, carry_on: carry });
-    stmts.push(
-      insertStmt(db, 'trip_bags', {
-        id: bagId,
-        trip_id: id,
-        suitcase_id: suitcase ? suitcase.id : null,
-        label: bg.label,
-        role: bg.role ?? null,
-        carry_on: b(carry),
-        notes: bg.notes ?? null,
-        sort_order: bg.sort_order ?? 100 + i,
-        created_at: now,
-        updated_at: now,
-      }),
-    );
-  });
-
+  let tpl: Template | undefined;
   if (input.source.kind === 'template') {
-    const tpl = (await loadTemplates(db, input.source.template_id))[0];
+    tpl = (await loadTemplates(db, input.source.template_id))[0];
     if (!tpl) throw notFound('Template');
     templateId = tpl.id;
     climate ??= tpl.climate;
     if (!activities.length) activities = tpl.activities;
     tripType ??= tpl.trip_type;
-    const items = new Map((await loadItems(db)).map((i) => [i.id, i]));
-    drafts = planFromTemplate(tpl.items, items, {
-      len,
-      travelers,
-      bags: bagRows,
-      personName: await personNames(db),
-    });
+    // The template's bag setup comes first, so its order wins when placing items.
+    for (const tb of tpl.bags) {
+      addBag({
+        suitcase_id: tb.suitcase_id,
+        label: rewriteLabelPrefix(tb.label, tpl.name, input.name),
+        role: tb.role,
+        carry_on: tb.carry_on,
+        notes: tb.notes,
+        people: tb.people,
+      });
+    }
   }
 
-  const all = [
-    tripStmt(),
+  // Bags passed with the request (blank trips, or extra bags on any trip).
+  for (const bg of input.bags) addBag({ ...bg, sort_order: bags.length });
+
+  if (tpl) {
+    const items = new Map((await loadItems(db)).map((i) => [i.id, i]));
+    drafts = planFromTemplate(tpl.items, items, { len, travelers, bags });
+  }
+
+  const tripRow = {
+    id,
+    name: input.name,
+    template_id: templateId,
+    cloned_from_trip_id: clonedFrom,
+    trip_type: tripType,
+    start_date: input.start_date ?? null,
+    end_date: input.end_date ?? null,
+    days,
+    nights,
+    destination: input.destination ?? null,
+    climate,
+    activities: json(activities),
+    status: input.status ?? null,
+    notes: input.notes ?? null,
+    archived_at: input.archived ? now : null,
+    created_at: now,
+    updated_at: now,
+  };
+  return { tripRow, travelers, bags, drafts };
+}
+
+/** What a trip would look like: bags, and how many rows would have no bag yet. */
+trips.post('/trips/preview', async (c) => {
+  const input = await body(c, tripCreate);
+  const plan = await planTrip(c.env.DB, input, 'preview', nowIso());
+  return c.json({
+    bags: plan.bags.map((bg) => ({ label: bg.label, carry_on: bg.carry_on, people: bg.people })),
+    rows: plan.drafts.length,
+    unplaced: unplacedSummary(plan.drafts),
+  });
+});
+
+trips.post('/trips', async (c) => {
+  const input = await body(c, tripCreate);
+  const db = c.env.DB;
+  const id = newId();
+  const now = nowIso();
+  const { tripRow, travelers, bags, drafts } = await planTrip(db, input, id, now);
+  const stmts: D1PreparedStatement[] = [
+    insertStmt(db, 'trips', tripRow),
     ...travelers.map((p) =>
       db.prepare('INSERT INTO trip_travelers (trip_id, person_id) VALUES (?, ?)').bind(id, p),
     ),
-    ...stmts,
-    ...drafts.map((d, i) => tripItemStmt(db, id, d, d.sort_order ?? i, now)),
   ];
-  await db.batch(all);
+  for (const bg of bags) {
+    stmts.push(
+      insertStmt(db, 'trip_bags', {
+        id: bg.id,
+        trip_id: id,
+        suitcase_id: bg.suitcase_id,
+        label: bg.label,
+        role: bg.role,
+        carry_on: b(bg.carry_on),
+        notes: bg.notes,
+        sort_order: bg.sort_order,
+        created_at: now,
+        updated_at: now,
+      }),
+      ...bg.people.map((p) =>
+        db
+          .prepare('INSERT OR IGNORE INTO trip_bag_people (trip_bag_id, person_id) VALUES (?, ?)')
+          .bind(bg.id, p),
+      ),
+    );
+  }
+  stmts.push(...drafts.map((d, i) => tripItemStmt(db, id, d, d.sort_order ?? i, now)));
+  await db.batch(stmts);
   return c.json(await tripDetail(db, id), 201);
 });
 
@@ -361,7 +397,6 @@ trips.post('/trips/:id/items/from-catalog', async (c) => {
     len: lenOf(trip),
     travelers: trip.travelers,
     bags,
-    personName: await personNames(db),
   });
   const start = await nextSortOrder(db, id);
   const now = nowIso();
@@ -491,18 +526,28 @@ trips.post('/trips/:id/bags', async (c) => {
     id,
   );
   const now = nowIso();
-  await insertStmt(db, 'trip_bags', {
-    id: newId(),
-    trip_id: id,
-    suitcase_id: suitcase?.id ?? null,
-    label: input.label,
-    role: input.role ?? null,
-    carry_on: b(input.carry_on ?? defaultBagCarryOn(suitcase?.type, input.role)),
-    notes: input.notes ?? null,
-    sort_order: input.sort_order ?? (max?.m ?? -1) + 1,
-    created_at: now,
-    updated_at: now,
-  }).run();
+  const bagId = newId();
+  await db.batch([
+    insertStmt(db, 'trip_bags', {
+      id: bagId,
+      trip_id: id,
+      suitcase_id: suitcase?.id ?? null,
+      label: input.label,
+      role: input.role ?? null,
+      carry_on: b(input.carry_on ?? defaultBagCarryOn(suitcase?.carry_on, input.role)),
+      notes: input.notes ?? null,
+      sort_order: input.sort_order ?? (max?.m ?? -1) + 1,
+      created_at: now,
+      updated_at: now,
+    }),
+    ...(await setBagPeople(
+      db,
+      'trip_bag_people',
+      'trip_bag_id',
+      bagId,
+      input.people ?? suitcase?.people ?? [],
+    )),
+  ]);
   return c.json(await tripDetail(db, id), 201);
 });
 
@@ -529,7 +574,11 @@ trips.patch('/trip-bags/:id', async (c) => {
         : null;
   }
   if (input.carry_on !== undefined) f.carry_on = b(input.carry_on);
-  if (Object.keys(f).length) await updateStmt(db, 'trip_bags', id, f).run();
+  const stmts: D1PreparedStatement[] = [];
+  if (Object.keys(f).length) stmts.push(updateStmt(db, 'trip_bags', id, f));
+  if (input.people)
+    stmts.push(...(await setBagPeople(db, 'trip_bag_people', 'trip_bag_id', id, input.people)));
+  if (stmts.length) await db.batch(stmts);
   return c.json(await tripDetail(db, row.trip_id));
 });
 
@@ -541,11 +590,57 @@ trips.delete('/trip-bags/:id', async (c) => {
     id,
   );
   if (!row) return c.json({ ok: true });
+  const moved = await first<{ n: number }>(
+    c.env.DB,
+    'SELECT COUNT(*) AS n FROM trip_items WHERE trip_bag_id = ?',
+    id,
+  );
   await c.env.DB.prepare('DELETE FROM trip_bags WHERE id = ?').bind(id).run();
-  return c.json(await tripDetail(c.env.DB, row.trip_id));
+  // Its items fall back to "No bag yet" (ON DELETE SET NULL); say how many.
+  return c.json({ ...(await tripDetail(c.env.DB, row.trip_id)), moved: moved?.n ?? 0 });
+});
+
+/** Rows waiting in "No bag yet" that now have a matching bag. */
+trips.get('/trips/:id/placements', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  await getTrip(db, id);
+  const [bags, rows] = await Promise.all([loadTripBags(db, id), loadTripItems(db, id)]);
+  return c.json({ moves: suggestPlacements(rows, bags) });
+});
+
+/** Moves every waiting row that now has a matching bag into it. */
+trips.post('/trips/:id/placements/apply', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  await getTrip(db, id);
+  const [bags, rows] = await Promise.all([loadTripBags(db, id), loadTripItems(db, id)]);
+  const moves = suggestPlacements(rows, bags);
+  if (moves.length) {
+    const now = nowIso();
+    await db.batch(
+      moves.map((m) =>
+        db
+          .prepare(
+            'UPDATE trip_items SET trip_bag_id = ?, updated_at = ? WHERE id = ? AND trip_bag_id IS NULL AND no_bag = 0',
+          )
+          .bind(m.trip_bag_id, now, m.id),
+      ),
+    );
+  }
+  return c.json({ ...(await tripDetail(db, id)), moved: moves.length });
 });
 
 // ---------- trip items ----------
+/** A row moved into a bag takes that bag's carry-on-ness as its intent. */
+function syncCarryHint(db: D1Database, rowId: string) {
+  return db
+    .prepare(
+      'UPDATE trip_items SET carry_hint = (SELECT carry_on FROM trip_bags WHERE id = trip_items.trip_bag_id) WHERE id = ? AND trip_bag_id IS NOT NULL',
+    )
+    .bind(rowId);
+}
+
 async function checkPlacement(
   db: D1Database,
   tripId: string,
@@ -594,6 +689,17 @@ trips.post('/trips/:id/items', async (c) => {
     qty_override: input.qty_override ?? null,
     packed: b(input.packed),
     packed_at: input.packed ? now : null,
+    carry_hint: b(
+      bagId
+        ? ((
+            await first<{ c: number }>(
+              db,
+              'SELECT carry_on AS c FROM trip_bags WHERE id = ?',
+              bagId,
+            )
+          )?.c ?? 0) === 1
+        : (item?.usually_carry_on ?? false),
+    ),
     notes: input.notes ?? null,
     sort_order: input.sort_order ?? (await nextSortOrder(db, tripId)),
     created_at: now,
@@ -635,7 +741,12 @@ trips.patch('/trip-items/:id', async (c) => {
     f.packed = b(input.packed);
     if (input.packed !== (row.packed === 1)) f.packed_at = input.packed ? nowIso() : null;
   }
-  if (Object.keys(f).length) await updateStmt(db, 'trip_items', id, f).run();
+  if (Object.keys(f).length) {
+    await db.batch([
+      updateStmt(db, 'trip_items', id, f),
+      ...(f.trip_bag_id ? [syncCarryHint(db, id)] : []),
+    ]);
+  }
   return c.json((await loadTripItems(db, row.trip_id)).find((r) => r.id === id));
 });
 
@@ -688,6 +799,7 @@ trips.post('/trips/:id/items/bulk', async (c) => {
       ),
     );
   }
+  if (f.trip_bag_id) stmts.push(...ids.map((x) => syncCarryHint(db, x)));
   if (Object.keys(f).length || patch.packed !== undefined) await db.batch(stmts);
   return c.json(await tripDetail(db, tripId));
 });

@@ -1,14 +1,24 @@
 import { Hono } from 'hono';
-import { templateInput, templateItemPatch, templateItemsAdd, templatePatch } from '@shared/schemas';
+import {
+  templateBagInput,
+  templateBagPatch,
+  templateInput,
+  templateItemPatch,
+  templateItemsAdd,
+  templatePatch,
+} from '@shared/schemas';
+import { defaultBagCarryOn } from '@shared/logic';
 import {
   b,
   existingIds,
   first,
   insertStmt,
   json,
+  loadSuitcases,
   loadTemplates,
   newId,
   nowIso,
+  setBagPeople,
   updateStmt,
 } from '../db';
 import { body, defined, notFound, type AppEnv } from './util';
@@ -58,18 +68,17 @@ templates.delete('/templates/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Adds catalog items to a template (skipping ones already on it). */
+/** Adds catalog items to a template. Adding one that's already there is allowed. */
 templates.post('/templates/:id/items', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   const t = await one(db, id);
   const { item_ids } = await body(c, templateItemsAdd);
   const valid = await existingIds(db, 'items', item_ids);
-  const already = new Set(t.items.map((i) => i.item_id));
   let order = Math.max(-1, ...t.items.map((i) => i.sort_order)) + 1;
   const now = nowIso();
-  const stmts = [...new Set(item_ids)]
-    .filter((i) => valid.has(i) && !already.has(i))
+  const stmts = item_ids
+    .filter((i) => valid.has(i))
     .map((itemId) =>
       insertStmt(db, 'template_items', {
         id: newId(),
@@ -130,6 +139,86 @@ templates.delete('/template-items/:id', async (c) => {
     id,
   );
   await c.env.DB.prepare('DELETE FROM template_items WHERE id = ?').bind(id).run();
+  if (!row) return c.json({ ok: true });
+  return c.json(await one(c.env.DB, row.template_id));
+});
+
+// ---------- a template's bag setup ----------
+templates.post('/templates/:id/bags', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  const t = await one(db, id);
+  const input = await body(c, templateBagInput);
+  const suitcase = input.suitcase_id
+    ? (await loadSuitcases(db)).find((s) => s.id === input.suitcase_id)
+    : undefined;
+  const bagId = newId();
+  const now = nowIso();
+  await db.batch([
+    insertStmt(db, 'template_bags', {
+      id: bagId,
+      template_id: id,
+      suitcase_id: suitcase?.id ?? null,
+      label: input.label,
+      role: input.role ?? null,
+      carry_on: b(input.carry_on ?? defaultBagCarryOn(suitcase?.carry_on, input.role)),
+      notes: input.notes ?? null,
+      sort_order: input.sort_order ?? Math.max(-1, ...t.bags.map((x) => x.sort_order)) + 1,
+      created_at: now,
+      updated_at: now,
+    }),
+    ...(await setBagPeople(
+      db,
+      'template_bag_people',
+      'template_bag_id',
+      bagId,
+      input.people ?? suitcase?.people ?? [],
+    )),
+  ]);
+  return c.json(await one(db, id), 201);
+});
+
+templates.patch('/template-bags/:id', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  const row = await first<{ template_id: string }>(
+    db,
+    'SELECT template_id FROM template_bags WHERE id = ?',
+    id,
+  );
+  if (!row) throw notFound('Bag');
+  const input = await body(c, templateBagPatch);
+  const f: Record<string, unknown> = defined({
+    label: input.label,
+    role: input.role,
+    notes: input.notes,
+    sort_order: input.sort_order,
+  });
+  if (input.suitcase_id !== undefined) {
+    f.suitcase_id =
+      input.suitcase_id && (await existingIds(db, 'suitcases', [input.suitcase_id])).size
+        ? input.suitcase_id
+        : null;
+  }
+  if (input.carry_on !== undefined) f.carry_on = b(input.carry_on);
+  const stmts: D1PreparedStatement[] = [];
+  if (Object.keys(f).length) stmts.push(updateStmt(db, 'template_bags', id, f));
+  if (input.people)
+    stmts.push(
+      ...(await setBagPeople(db, 'template_bag_people', 'template_bag_id', id, input.people)),
+    );
+  if (stmts.length) await db.batch(stmts);
+  return c.json(await one(db, row.template_id));
+});
+
+templates.delete('/template-bags/:id', async (c) => {
+  const id = c.req.param('id');
+  const row = await first<{ template_id: string }>(
+    c.env.DB,
+    'SELECT template_id FROM template_bags WHERE id = ?',
+    id,
+  );
+  await c.env.DB.prepare('DELETE FROM template_bags WHERE id = ?').bind(id).run();
   if (!row) return c.json({ ok: true });
   return c.json(await one(c.env.DB, row.template_id));
 });

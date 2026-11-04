@@ -1,6 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useMemo, useState } from 'react';
-import { useNavigate, useParams } from 'react-router';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams, useSearchParams } from 'react-router';
 import { displayQty, isCarryOn, progress, shortBagLabel } from '@shared/logic';
 import type { Item, Person, Trip, TripBag, TripDetail, TripItem } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
@@ -92,6 +92,18 @@ function PackTrip(props: {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moveOpen, setMoveOpen] = useState(false);
+  const [params, setParams] = useSearchParams();
+  // "Sort them now" from trip details: open select mode with the waiting rows picked.
+  useEffect(() => {
+    if (params.get('select') !== 'waiting' || !detail) return;
+    const waiting = detail.items.filter((r) => !r.trip_bag_id && !r.no_bag).map((r) => r.id);
+    // Syncing from the URL once, then clearing it, so this runs a single time.
+    /* eslint-disable react-hooks/set-state-in-effect */
+    setSelecting(true);
+    setSelected(new Set(waiting));
+    /* eslint-enable react-hooks/set-state-in-effect */
+    setParams({}, { replace: true });
+  }, [params, detail, setParams]);
   const stopSelecting = () => {
     setSelecting(false);
     setSelected(new Set());
@@ -510,6 +522,12 @@ function PackTrip(props: {
                   />
                 )}
               </div>
+              {!isCollapsed && g.person?.notes && (
+                <p className="flex items-start gap-1.5 pt-2 text-[13px] text-soft">
+                  <Icon name="note" size={14} className="mt-0.5 flex-none text-faint" />
+                  {g.person.notes}
+                </p>
+              )}
               {!isCollapsed &&
                 g.rows.map((r) => (
                   <Row
@@ -867,7 +885,6 @@ function TripMenu(props: {
     }
   }
 
-  const onTrip = new Set(props.rows.map((r) => r.item_id).filter((x): x is string => !!x));
   return (
     <>
       <Menu open={open === 'menu'} onClose={close} anchor={props.anchor} title={trip.name}>
@@ -968,7 +985,11 @@ function TripMenu(props: {
         title={`Add to ${trip.name}`}
         items={props.catalog}
         suggested={suggested}
-        exclude={onTrip}
+        existing={props.rows.reduce(
+          (m, r) => (r.item_id ? m.set(r.item_id, (m.get(r.item_id) ?? 0) + 1) : m),
+          new Map<string, number>(),
+        )}
+        existingLabel="On trip"
         onClose={close}
         onAdd={async (ids) => {
           await api.post(`/trips/${trip.id}/items/from-catalog`, { item_ids: ids });

@@ -226,15 +226,18 @@ export function SelectSheet({
   allowNone?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  const [custom, setCustom] = useState('');
+  const [q, setQ] = useState('');
   const all =
     value && !options.some((o) => o.toLowerCase() === value.toLowerCase())
       ? [...options, value]
       : options;
+  const needle = q.trim().toLowerCase();
+  const shown = needle ? all.filter((o) => o.toLowerCase().includes(needle)) : all;
+  const exact = all.some((o) => o.toLowerCase() === needle);
   const pick = (v: string | null) => {
     onChange(v);
     setOpen(false);
-    setCustom('');
+    setQ('');
   };
   return (
     <>
@@ -242,19 +245,45 @@ export function SelectSheet({
         id={id}
         type="button"
         onClick={() => setOpen(true)}
-        className="flex w-full items-center justify-between gap-2 text-left text-base"
+        className="flex w-full items-center justify-between gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-left text-base"
       >
         <span className={value ? 'text-ink' : 'text-faint'}>{value || placeholder}</span>
         <Icon name="chevDown" size={16} className="text-soft" />
       </button>
-      <Sheet open={open} onClose={() => setOpen(false)} title={title}>
+      <Sheet
+        open={open}
+        onClose={() => {
+          setOpen(false);
+          setQ('');
+        }}
+        title={title}
+      >
+        <form
+          className="sticky top-0 z-10 bg-surface pb-1"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (shown.length === 1) pick(shown[0]!);
+            else if (needle && !exact) pick(q.trim());
+          }}
+        >
+          <div className="flex items-center gap-2 rounded-xl border border-line bg-bg px-3 py-2">
+            <Icon name="search" size={16} className="text-faint" />
+            <input
+              aria-label={`Search ${title.toLowerCase()}`}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search or add new"
+              className="flex-1 bg-transparent text-base focus:outline-none"
+            />
+          </div>
+        </form>
         <div className="flex flex-col">
-          {allowNone && (
+          {allowNone && !needle && (
             <OptionRow on={!value} onClick={() => pick(null)}>
               <span className="text-soft">None</span>
             </OptionRow>
           )}
-          {all.map((o) => (
+          {shown.map((o) => (
             <OptionRow
               key={o}
               on={value?.toLowerCase() === o.toLowerCase()}
@@ -263,27 +292,14 @@ export function SelectSheet({
               {o}
             </OptionRow>
           ))}
-          <form
-            className="flex items-center gap-3 border-b border-line py-3"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (custom.trim()) pick(custom.trim());
-            }}
-          >
-            <Icon name="plus" size={16} className="text-faint" />
-            <input
-              aria-label={`New ${title.toLowerCase()}`}
-              value={custom}
-              onChange={(e) => setCustom(e.target.value)}
-              placeholder="Add new…"
-              className="flex-1 bg-transparent text-base focus:outline-none"
-            />
-            {custom.trim() && (
-              <button type="submit" className="text-[15px] text-accent">
-                Add
-              </button>
-            )}
-          </form>
+          {needle && !exact && (
+            <OptionRow on={false} onClick={() => pick(q.trim())}>
+              <span className="inline-flex items-center gap-2 text-accent">
+                <Icon name="plus" size={16} />
+                Add “{q.trim()}”
+              </span>
+            </OptionRow>
+          )}
         </div>
       </Sheet>
     </>

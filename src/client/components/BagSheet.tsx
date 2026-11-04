@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { defaultBagCarryOn } from '@shared/logic';
-import type { Suitcase } from '@shared/types';
-import { OnePicker } from './fields';
+import type { Person, Suitcase } from '@shared/types';
+import { OnePicker, PeoplePicker } from './fields';
 import {
   DangerButton,
   ErrorText,
@@ -20,12 +20,15 @@ export interface BagDraft {
   role: string | null;
   carry_on: boolean;
   notes: string | null;
+  /** Who the bag is for. Empty = shared. */
+  people: string[];
 }
 
 type BagSheetProps = {
   open: boolean;
   initial?: BagDraft;
   suitcases: Suitcase[];
+  people: Person[];
   roles: string[];
   onClose: () => void;
   onSave: (b: BagDraft) => Promise<void> | void;
@@ -41,7 +44,14 @@ export function BagSheet(props: BagSheetProps) {
 function BagSheetBody(props: BagSheetProps) {
   const [d, setD] = useState<BagDraft>(
     () =>
-      props.initial ?? { label: '', suitcase_id: null, role: null, carry_on: false, notes: null },
+      props.initial ?? {
+        label: '',
+        suitcase_id: null,
+        role: null,
+        carry_on: false,
+        notes: null,
+        people: [],
+      },
   );
   const [carryTouched, setCarryTouched] = useState(!!props.initial);
   const [err, setErr] = useState('');
@@ -51,7 +61,7 @@ function BagSheetBody(props: BagSheetProps) {
       const next = { ...cur, ...patch };
       if (!carryTouched && ('suitcase_id' in patch || 'role' in patch)) {
         next.carry_on = defaultBagCarryOn(
-          props.suitcases.find((s) => s.id === next.suitcase_id)?.type,
+          props.suitcases.find((s) => s.id === next.suitcase_id)?.carry_on,
           next.role,
         );
       }
@@ -85,7 +95,11 @@ function BagSheetBody(props: BagSheetProps) {
               key={s.id}
               on={d.suitcase_id === s.id}
               onClick={() =>
-                set({ suitcase_id: d.suitcase_id === s.id ? null : s.id, label: d.label || s.name })
+                set(
+                  d.suitcase_id === s.id
+                    ? { suitcase_id: null }
+                    : { suitcase_id: s.id, label: d.label || s.name, people: s.people },
+                )
               }
             >
               {s.name}
@@ -93,10 +107,21 @@ function BagSheetBody(props: BagSheetProps) {
           ))}
           {!props.suitcases.length && (
             <span className="text-sm text-faint">
-              Add your bags under More → Suitcases to track how full they get.
+              Add your bags under Catalog → Bags to reuse them and track how full they get.
             </span>
           )}
         </div>
+      </FieldRow>
+      <FieldRow
+        icon="user"
+        label="Whose bag"
+        hint={d.people.length ? 'Their items go in it.' : 'Nobody picked: a shared bag.'}
+      >
+        <PeoplePicker
+          people={props.people}
+          value={d.people}
+          onChange={(people) => set({ people })}
+        />
       </FieldRow>
       <FieldRow icon="tag" label="Name on this trip" htmlFor="bag-label">
         <TextInput

@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
-import type { AppState, Item, Template, TemplateItem } from '@shared/types';
+import type { AppState, Item, Template, TemplateBag, TemplateItem } from '@shared/types';
+import { planFromTemplate, unplacedSummary } from '@shared/logic';
+import { BagSheet, type BagDraft } from '../components/BagSheet';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
@@ -19,6 +21,7 @@ import {
   ListRow,
   PageHeader,
   PersonDot,
+  SectionLabel,
   PrimaryButton,
   Segmented,
   Sheet,
@@ -149,8 +152,15 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   const [picker, setPicker] = useState(false);
   const [editing, setEditing] = useState<TemplateItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [bagSheet, setBagSheet] = useState<TemplateBag | 'new' | null>(null);
   const items = new Map(data.items.map((i) => [i.id, i]));
   const people = new Map(data.people.map((p) => [p.id, p]));
+  // Where this template's items would go with its bags (all people, any trip length).
+  const gaps = tpl.items.length
+    ? unplacedSummary(
+        planFromTemplate(tpl.items, items, { len: null, travelers: [], bags: tpl.bags }),
+      )
+    : [];
   const dirty =
     form.name !== tpl.name ||
     form.trip_type !== tpl.trip_type ||
@@ -169,6 +179,70 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
           </PrimaryButton>
         }
       />
+
+      <SectionLabel
+        icon="bag"
+        trailing={
+          <button className="text-sm text-accent" onClick={() => setBagSheet('new')}>
+            + Add bag
+          </button>
+        }
+      >
+        Bags
+      </SectionLabel>
+      {!tpl.bags.length && (
+        <p className="px-6 pt-2 text-sm text-soft">
+          Add the bags you usually take. Trips made from this template start with them, and each
+          person’s items go straight into their bags.
+        </p>
+      )}
+      {tpl.bags.map((bg) => (
+        <SwipeRow
+          key={bg.id}
+          id={bg.id}
+          onDelete={() => run(() => api.del(`/template-bags/${bg.id}`))}
+          className="mx-6 border-b border-line"
+        >
+          <button
+            onClick={() => setBagSheet(bg)}
+            className="flex w-full items-center gap-3 py-3 text-left"
+          >
+            <Icon name={bg.carry_on ? 'backpack' : 'bag'} className="text-soft" />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-base">{bg.label}</span>
+              <span className="flex items-center gap-2 text-[13px] text-soft">
+                {bg.people.length ? (
+                  <span className="inline-flex items-center gap-1">
+                    {bg.people.map((p) => (
+                      <PersonDot key={p} person={people.get(p)} />
+                    ))}
+                    {bg.people
+                      .map((p) => people.get(p)?.name)
+                      .filter(Boolean)
+                      .join(', ')}
+                  </span>
+                ) : (
+                  <span>Shared</span>
+                )}
+                {bg.carry_on && <span>· Carry-on</span>}
+              </span>
+            </span>
+          </button>
+        </SwipeRow>
+      ))}
+      {gaps.length > 0 && (
+        <div className="mx-6 mt-3 flex flex-col gap-1 rounded-2xl bg-chip px-4 py-3 text-sm text-soft">
+          <span className="font-medium text-ink">Some items won’t have a bag</span>
+          {gaps.map((g) => (
+            <span key={`${g.person_id}|${g.carry}`}>
+              {g.person_id ? (people.get(g.person_id)?.name ?? 'Someone') : 'Shared'}:{' '}
+              {plural(g.count, g.carry ? 'carry-on item' : 'item')} with no{' '}
+              {g.carry ? 'carry-on' : 'checked'} bag
+            </span>
+          ))}
+          <span className="text-xs text-faint">They’ll wait in No bag yet on new trips.</span>
+        </div>
+      )}
 
       <div className="flex items-center justify-between px-5 pt-5 pb-2">
         <span className="text-xs tracking-[0.08em] text-soft uppercase">
@@ -281,11 +355,50 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         open={picker}
         title={`Add to ${tpl.name}`}
         items={data.items}
-        exclude={new Set(tpl.items.map((i) => i.item_id))}
+        existing={tpl.items.reduce(
+          (m, i) => m.set(i.item_id, (m.get(i.item_id) ?? 0) + 1),
+          new Map<string, number>(),
+        )}
+        existingLabel="On template"
         onClose={() => setPicker(false)}
         onAdd={async (ids) => {
           await run(() => api.post(`/templates/${tpl.id}/items`, { item_ids: ids }));
         }}
+      />
+      <BagSheet
+        open={bagSheet !== null}
+        initial={
+          bagSheet && bagSheet !== 'new'
+            ? {
+                label: bagSheet.label,
+                suitcase_id: bagSheet.suitcase_id,
+                role: bagSheet.role,
+                carry_on: bagSheet.carry_on,
+                notes: bagSheet.notes,
+                people: bagSheet.people,
+              }
+            : undefined
+        }
+        suitcases={data.suitcases}
+        people={data.people}
+        roles={data.lookups.bagRole ?? []}
+        error={error}
+        onClose={() => setBagSheet(null)}
+        onSave={async (b: BagDraft) => {
+          const ok = await run(() =>
+            bagSheet === 'new'
+              ? api.post(`/templates/${tpl.id}/bags`, b)
+              : api.patch(`/template-bags/${(bagSheet as TemplateBag).id}`, b),
+          );
+          if (ok) setBagSheet(null);
+        }}
+        onDelete={
+          bagSheet && bagSheet !== 'new'
+            ? async () => {
+                if (await run(() => api.del(`/template-bags/${bagSheet.id}`))) setBagSheet(null);
+              }
+            : undefined
+        }
       />
       {editing && (
         <TemplateItemSheet
