@@ -89,6 +89,26 @@ function PackTrip(props: {
   const [error, setError] = useState('');
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
   const [filterAnchor, setFilterAnchor] = useState<DOMRect | null>(null);
+  const [selecting, setSelecting] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [moveOpen, setMoveOpen] = useState(false);
+  const stopSelecting = () => {
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  async function bulk(body: { patch?: Record<string, unknown>; delete?: boolean }, done: string) {
+    if (!props.tripId || !selected.size) return;
+    setError('');
+    try {
+      await api.post(`/trips/${props.tripId}/items/bulk`, { ids: [...selected], ...body });
+      toast({ text: done });
+      stopSelecting();
+      setMoveOpen(false);
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+    refresh();
+  }
   const patch = usePatchTripItem(props.tripId ?? 'none');
 
   const setStatus = (v: Status) => (setStatusRaw(v), save('status', v));
@@ -329,7 +349,17 @@ function PackTrip(props: {
           />
           <button
             className={cx(
-              'ml-auto inline-flex h-[38px] items-center gap-1.5 rounded-full px-3.5 text-sm',
+              'ml-auto inline-flex h-[38px] items-center rounded-full px-3.5 text-sm',
+              selecting ? 'bg-accent font-semibold text-accent-ink' : 'bg-chip text-soft',
+            )}
+            onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+            aria-pressed={selecting}
+          >
+            {selecting ? 'Done' : 'Select'}
+          </button>
+          <button
+            className={cx(
+              'inline-flex h-[38px] items-center gap-1.5 rounded-full px-3.5 text-sm',
               filtered ? 'bg-accent-tint font-semibold text-accent' : 'bg-chip text-soft',
             )}
             onClick={(e) => setFilterAnchor(e.currentTarget.getBoundingClientRect())}
@@ -431,13 +461,14 @@ function PackTrip(props: {
           const done = g.rows.filter((r) => r.packed).length;
           return (
             <section key={g.key} className="mt-5 px-5">
-              <div className="flex items-center gap-2 border-b border-line pb-2">
+              <div className="flex items-center gap-2 border-b border-line pb-2.5">
                 <button
-                  className="flex min-w-0 items-center gap-2 text-[13px] font-semibold tracking-[0.01em]"
+                  className="flex min-w-0 items-center gap-2 rounded-full py-0.5 text-base font-semibold"
                   aria-expanded={!isCollapsed}
                   onClick={() => toggleCollapsed(ck)}
                 >
                   <GroupMark g={g} />
+                  {g.person?.emoji && <span aria-hidden="true">{g.person.emoji}</span>}
                   <span className="truncate">{g.label}</span>
                   {g.bag?.carry_on && (
                     <span className="rounded bg-accent-tint px-1.5 py-px text-[11px] font-medium text-accent">
@@ -453,7 +484,25 @@ function PackTrip(props: {
                 <span className="ml-auto font-mono text-xs text-faint tnum">
                   {done}/{g.rows.length}
                 </span>
-                {g.kind !== 'undecided' && (
+                {selecting && g.rows.length > 0 && (
+                  <button
+                    className="ml-1 text-sm text-accent"
+                    onClick={() => {
+                      const all = g.rows.every((r) => selected.has(r.id));
+                      setSelected((cur) => {
+                        const n = new Set(cur);
+                        for (const r of g.rows) {
+                          if (all) n.delete(r.id);
+                          else n.add(r.id);
+                        }
+                        return n;
+                      });
+                    }}
+                  >
+                    {g.rows.every((r) => selected.has(r.id)) ? 'None' : 'All'}
+                  </button>
+                )}
+                {!selecting && g.kind !== 'undecided' && (
                   <IconButton
                     icon="plus"
                     label={`Add to ${g.label}`}
@@ -472,12 +521,103 @@ function PackTrip(props: {
                     onToggle={() => toggle(r)}
                     onEdit={() => setEditing(r)}
                     onDelete={() => remove(r)}
+                    selecting={selecting}
+                    selected={selected.has(r.id)}
+                    onSelect={() =>
+                      setSelected((cur) => {
+                        const n = new Set(cur);
+                        if (n.has(r.id)) n.delete(r.id);
+                        else n.add(r.id);
+                        return n;
+                      })
+                    }
                   />
                 ))}
             </section>
           );
         })}
-      <div className="h-8" />
+      <div className={selecting ? 'h-24' : 'h-8'} />
+
+      {selecting && (
+        <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-4 md:bottom-6 md:left-60">
+          <div className="flex w-full max-w-xl items-center gap-1 rounded-full bg-ink py-1.5 pr-1.5 pl-4 text-sm text-bg shadow-lg">
+            <span className="flex-1 font-medium tnum">
+              {selected.size ? `${selected.size} selected` : 'Tap items to select'}
+            </span>
+            <button
+              disabled={!selected.size}
+              onClick={() => setMoveOpen(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-accent px-3.5 py-2 font-medium text-accent-ink disabled:opacity-40"
+            >
+              <Icon name="bag" size={15} />
+              Move to bag
+            </button>
+            <button
+              disabled={!selected.size}
+              onClick={() => bulk({ patch: { packed: true } }, `Packed ${selected.size}`)}
+              className="rounded-full px-3 py-2 disabled:opacity-40"
+              aria-label="Mark packed"
+              title="Mark packed"
+            >
+              <Icon name="check" size={17} />
+            </button>
+            <button
+              disabled={!selected.size}
+              onClick={() => bulk({ delete: true }, `Deleted ${selected.size}`)}
+              className="rounded-full px-3 py-2 disabled:opacity-40"
+              aria-label="Delete selected"
+              title="Delete"
+            >
+              <Icon name="trash" size={17} />
+            </button>
+          </div>
+        </div>
+      )}
+      <Sheet open={moveOpen} onClose={() => setMoveOpen(false)} title={`Move ${selected.size} to…`}>
+        <div className="flex flex-col pb-2">
+          {bags.map((b) => (
+            <button
+              key={b.id}
+              onClick={() =>
+                bulk({ patch: { trip_bag_id: b.id } }, `Moved ${selected.size} to ${bagName(b)}`)
+              }
+              className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
+            >
+              <Icon name={b.carry_on ? 'backpack' : 'bag'} className="text-accent" />
+              <span className="flex-1">{bagName(b)}</span>
+              {b.carry_on && (
+                <span className="rounded-full bg-accent-tint px-2 py-0.5 text-[11px] font-medium text-accent">
+                  Carry-on
+                </span>
+              )}
+            </button>
+          ))}
+          <button
+            onClick={() => bulk({ patch: { no_bag: true } }, `Marked ${selected.size} as no bag`)}
+            className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
+          >
+            <Icon name="nobag" className="text-soft" />
+            No bag
+          </button>
+          <button
+            onClick={() =>
+              bulk(
+                { patch: { no_bag: false, trip_bag_id: null } },
+                `Moved ${selected.size} to No bag yet`,
+              )
+            }
+            className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
+          >
+            <Icon name="layers" className="text-soft" />
+            No bag yet
+          </button>
+          {!bags.length && (
+            <p className="pt-3 text-sm text-soft">
+              This trip has no bags yet. Add them in trip details.
+            </p>
+          )}
+        </div>
+      </Sheet>
 
       <ItemSheet
         open={!!editing}
@@ -596,6 +736,9 @@ function Row({
   onToggle,
   onEdit,
   onDelete,
+  selecting,
+  selected,
+  onSelect,
 }: {
   row: TripItem;
   sub: React.ReactNode[];
@@ -603,10 +746,23 @@ function Row({
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  selecting: boolean;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const qty = displayQty(row);
+  if (selecting) {
+    onToggle = onSelect;
+    onEdit = onSelect;
+  }
   return (
-    <SwipeRow id={row.id} onDelete={onDelete} className="border-b border-line">
+    <SwipeRow
+      id={row.id}
+      onDelete={onDelete}
+      disabled={selecting}
+      highlight={selecting && selected}
+      className="border-b border-line"
+    >
       <div className="flex items-center">
         <button
           className="flex h-full items-center py-3 pr-3.5"
@@ -616,11 +772,16 @@ function Row({
         >
           <span
             className={cx(
-              'grid h-5 w-5 place-items-center rounded-md border-[1.5px] transition-colors',
-              row.packed ? 'border-accent bg-accent text-accent-ink' : 'border-faint',
+              'grid h-5 w-5 place-items-center border-[1.5px] transition-colors',
+              selecting ? 'rounded-full' : 'rounded-md',
+              (selecting ? selected : row.packed)
+                ? 'border-accent bg-accent text-accent-ink'
+                : 'border-faint',
             )}
           >
-            {row.packed && <Icon name="check" size={14} strokeWidth={2.4} />}
+            {(selecting ? selected : row.packed) && (
+              <Icon name="check" size={14} strokeWidth={2.4} />
+            )}
           </span>
         </button>
         <button className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left" onClick={onEdit}>

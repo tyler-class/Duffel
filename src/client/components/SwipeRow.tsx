@@ -14,12 +14,18 @@ export function SwipeRow({
   children,
   className,
   label = 'Delete',
+  disabled,
+  highlight,
 }: {
   id: string;
   onDelete: () => void;
   children: ReactNode;
   className?: string;
   label?: string;
+  /** Turns swiping off (e.g. while selecting rows). */
+  disabled?: boolean;
+  /** Tints the row (e.g. when selected). */
+  highlight?: boolean;
 }) {
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
@@ -55,14 +61,14 @@ export function SwipeRow({
         {label}
       </button>
       <div
-        className="relative bg-bg"
+        className={cx('relative', highlight ? 'bg-accent-tint' : 'bg-bg')}
         style={{
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform .18s ease',
           touchAction: 'pan-y',
         }}
         onPointerDown={(e) => {
-          if (e.pointerType === 'mouse') return;
+          if (e.pointerType === 'mouse' || disabled) return;
           start.current = { x: e.clientX, y: e.clientY, swiping: false };
           moved.current = false;
         }}

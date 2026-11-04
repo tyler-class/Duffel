@@ -64,7 +64,13 @@ describe('people and catalog', () => {
 describe('catalog rules', () => {
   it('an item that never goes in a bag is never usually carry-on', async () => {
     const api = await session();
-    const i = (await api.post<Item>('/items', { name: 'Stroller', not_in_suitcase: true, usually_carry_on: true })).data;
+    const i = (
+      await api.post<Item>('/items', {
+        name: 'Stroller',
+        not_in_suitcase: true,
+        usually_carry_on: true,
+      })
+    ).data;
     expect(i).toMatchObject({ not_in_suitcase: true, usually_carry_on: false });
     const j = (await api.patch<Item>(`/items/${i.id}`, { usually_carry_on: true })).data;
     expect(j.usually_carry_on).toBe(false);
@@ -73,11 +79,27 @@ describe('catalog rules', () => {
   it('PATCH only changes the fields that were sent', async () => {
     const api = await session();
     const p = (await api.post<Person>('/people', { name: 'Pat' })).data;
-    const i = (await api.post<Item>('/items', { name: 'Wipes', qty_mode: 'per_day', qty: 3, climate_tags: ['Hot'], default_people: [p.id] })).data;
+    const i = (
+      await api.post<Item>('/items', {
+        name: 'Wipes',
+        qty_mode: 'per_day',
+        qty: 3,
+        climate_tags: ['Hot'],
+        default_people: [p.id],
+      })
+    ).data;
     const j = (await api.patch<Item>(`/items/${i.id}`, { notes: 'unscented' })).data;
-    expect(j).toMatchObject({ qty_mode: 'per_day', qty: 3, climate_tags: ['Hot'], default_people: [p.id], notes: 'unscented' });
+    expect(j).toMatchObject({
+      qty_mode: 'per_day',
+      qty: 3,
+      climate_tags: ['Hot'],
+      default_people: [p.id],
+      notes: 'unscented',
+    });
     const t = (await api.post<TripDetail>('/trips', { name: 'Keep', travelers: [p.id] })).data;
-    const row = (await api.post<TripItem>(`/trips/${t.trip.id}/items`, { name: 'Car seat', no_bag: true })).data;
+    const row = (
+      await api.post<TripItem>(`/trips/${t.trip.id}/items`, { name: 'Car seat', no_bag: true })
+    ).data;
     const packed = (await api.patch<TripItem>(`/trip-items/${row.id}`, { packed: true })).data;
     expect(packed).toMatchObject({ packed: true, no_bag: true });
     const renamed = (await api.patch<TripDetail>(`/trips/${t.trip.id}`, { name: 'Kept' })).data;
@@ -228,6 +250,41 @@ describe('key workflows', () => {
     await api.patch(`/trip-bags/${a.bags[0]!.id}`, { carry_on: true });
     const d = (await api.get<TripDetail>(`/trips/${a.trip.id}`)).data;
     expect(d.bags[0]!.carry_on).toBe(true);
+  });
+
+  it('moves, packs and deletes many rows at once', async () => {
+    const api = await session();
+    const t = (await api.post<TripDetail>('/trips', { name: 'Bulk', bags: [{ label: 'Duffel' }] }))
+      .data;
+    const other = (await api.post<TripDetail>('/trips', { name: 'Other' })).data;
+    const ids: string[] = [];
+    for (const n of ['A', 'B', 'C'])
+      ids.push(
+        (await api.post<TripItem>(`/trips/${t.trip.id}/items`, { name: n, no_bag: n === 'C' })).data
+          .id,
+      );
+    const stray = (await api.post<TripItem>(`/trips/${other.trip.id}/items`, { name: 'X' })).data
+      .id;
+    let d = (
+      await api.post<TripDetail>(`/trips/${t.trip.id}/items/bulk`, {
+        ids,
+        patch: { trip_bag_id: t.bags[0]!.id },
+      })
+    ).data;
+    expect(d.items.every((r) => r.trip_bag_id === t.bags[0]!.id && !r.no_bag)).toBe(true);
+    d = (
+      await api.post<TripDetail>(`/trips/${t.trip.id}/items/bulk`, {
+        ids: ids.slice(0, 2),
+        patch: { packed: true },
+      })
+    ).data;
+    expect(d.items.filter((r) => r.packed && r.packed_at).length).toBe(2);
+    expect(
+      (await api.post(`/trips/${t.trip.id}/items/bulk`, { ids: [stray], patch: { packed: true } }))
+        .status,
+    ).toBe(400);
+    d = (await api.post<TripDetail>(`/trips/${t.trip.id}/items/bulk`, { ids, delete: true })).data;
+    expect(d.items).toHaveLength(0);
   });
 
   it('deletes and restores a row with the same id (undo)', async () => {

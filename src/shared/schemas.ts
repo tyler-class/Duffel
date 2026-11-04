@@ -147,6 +147,19 @@ export const tripItemsAdd = z.object({
   item_ids: z.array(id).min(1).max(500),
   person_id: id.nullable().optional(),
 });
+export const tripItemsBulk = z.object({
+  ids: z.array(id).min(1).max(500),
+  /** Applied to every row. Omit to delete the rows instead (with delete: true). */
+  patch: z
+    .object({
+      trip_bag_id: id.nullable().optional(),
+      no_bag: z.boolean().optional(),
+      packed: z.boolean().optional(),
+      person_id: id.nullable().optional(),
+    })
+    .optional(),
+  delete: z.boolean().optional(),
+});
 export const saveAsTemplate = z.object({ name: name() });
 
 export const settingsPatch = z.object({ instance_name: name(60) });

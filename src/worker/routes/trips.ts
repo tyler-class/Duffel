@@ -7,6 +7,7 @@ import {
   tripItemInput,
   tripItemPatch,
   tripItemsAdd,
+  tripItemsBulk,
   tripPatch,
 } from '@shared/schemas';
 import {
@@ -636,6 +637,59 @@ trips.patch('/trip-items/:id', async (c) => {
   }
   if (Object.keys(f).length) await updateStmt(db, 'trip_items', id, f).run();
   return c.json((await loadTripItems(db, row.trip_id)).find((r) => r.id === id));
+});
+
+/** Change or delete many rows of one trip at once (multi-select). */
+trips.post('/trips/:id/items/bulk', async (c) => {
+  const tripId = c.req.param('id');
+  const db = c.env.DB;
+  await getTrip(db, tripId);
+  const input = await body(c, tripItemsBulk);
+  const ids = [...new Set(input.ids)];
+  const onTrip = new Set(
+    (await loadTripItems(db, tripId)).map((r) => r.id).filter((x) => ids.includes(x)),
+  );
+  const missing = ids.filter((x) => !onTrip.has(x));
+  if (missing.length)
+    throw new ApiError(400, 'invalid', 'Some of those items are not on this trip.');
+  if (input.delete) {
+    await db.batch(ids.map((x) => db.prepare('DELETE FROM trip_items WHERE id = ?').bind(x)));
+    return c.json(await tripDetail(db, tripId));
+  }
+  const patch = input.patch ?? {};
+  await checkPlacement(db, tripId, patch);
+  const f: Record<string, unknown> = defined({
+    person_id: patch.person_id,
+    trip_bag_id: patch.trip_bag_id,
+  });
+  if (patch.no_bag !== undefined) {
+    f.no_bag = b(patch.no_bag);
+    if (patch.no_bag) f.trip_bag_id = null;
+  } else if (patch.trip_bag_id) {
+    f.no_bag = 0;
+  }
+  const now = nowIso();
+  const stmts = ids.map((x) => {
+    const g: Record<string, unknown> = { ...f };
+    if (patch.packed !== undefined) g.packed = b(patch.packed);
+    return updateStmt(db, 'trip_items', x, g);
+  });
+  if (patch.packed !== undefined) {
+    // packed_at only changes for rows whose packed state actually flips.
+    stmts.push(
+      ...ids.map((x) =>
+        db
+          .prepare(
+            patch.packed
+              ? 'UPDATE trip_items SET packed_at = COALESCE(packed_at, ?) WHERE id = ?'
+              : 'UPDATE trip_items SET packed_at = NULL WHERE id = ? AND ? IS NOT NULL',
+          )
+          .bind(...(patch.packed ? [now, x] : [x, now])),
+      ),
+    );
+  }
+  if (Object.keys(f).length || patch.packed !== undefined) await db.batch(stmts);
+  return c.json(await tripDetail(db, tripId));
 });
 
 trips.delete('/trip-items/:id', async (c) => {
