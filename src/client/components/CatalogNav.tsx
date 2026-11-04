@@ -18,7 +18,7 @@ export function CatalogHeader({ addLabel, onAdd }: { addLabel: string; onAdd: ()
   );
   return (
     <>
-      <PageHeader title="Catalog" />
+      <PageHeader title="Catalog" icon="grid" />
       <div className="flex items-center gap-2 px-5 pt-1 pb-2">
         <div
           role="tablist"

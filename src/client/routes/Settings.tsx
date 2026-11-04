@@ -43,7 +43,7 @@ export function Settings() {
 
   return (
     <div className="pb-12">
-      <PageHeader title="Settings" />
+      <PageHeader title="Settings" icon="settings" />
 
       <SectionLabel icon="users">Household</SectionLabel>
       <div className="px-6">

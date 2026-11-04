@@ -385,8 +385,11 @@ export function PageHeader({
   back,
   action,
   sub,
+  icon,
 }: {
   title: ReactNode;
+  /** The tab's icon, shown before the title on top-level pages. */
+  icon?: IconName;
   back?: string | true;
   action?: ReactNode;
   sub?: ReactNode;
@@ -403,7 +406,8 @@ export function PageHeader({
         </button>
       )}
       <div className="flex items-center justify-between gap-3">
-        <h1 className="min-w-0 text-[28px] leading-tight font-semibold tracking-[-0.025em] text-balance">
+        <h1 className="flex min-w-0 items-center gap-2.5 text-[28px] leading-tight font-semibold tracking-[-0.025em] text-balance">
+          {icon && <Icon name={icon} size={26} className="text-accent" />}
           {title}
         </h1>
         {action}

@@ -36,6 +36,7 @@ export function Templates() {
     <div className="pb-10">
       <PageHeader
         title="Templates"
+        icon="tmpl"
         action={
           <PrimaryButton icon="plus" onClick={() => (setName(''), setCreating(true))}>
             New

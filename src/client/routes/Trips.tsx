@@ -65,6 +65,7 @@ export function Trips() {
     <div>
       <PageHeader
         title="Trips"
+        icon="map"
         action={
           <PrimaryButton icon="plus" onClick={() => nav('/trips/new')}>
             New trip
