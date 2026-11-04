@@ -542,3 +542,8 @@ export function Menu({
     </div>
   );
 }
+
+/** A subheading inside a section: plain bold text, aligned with the section's content. */
+export function SubHeading({ children }: { children: ReactNode }) {
+  return <h3 className="px-6 pt-5 pb-2 text-sm font-semibold text-ink">{children}</h3>;
+}

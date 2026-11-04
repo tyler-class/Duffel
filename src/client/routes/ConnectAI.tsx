@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, errorMessage } from '../lib/api';
 import { Icon } from '../components/Icon';
-import { ErrorText, GhostButton, SectionLabel } from '../components/ui';
+import { ErrorText, GhostButton, SectionLabel, SubHeading } from '../components/ui';
 
 function Copy({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -60,14 +60,14 @@ export function ConnectAISection() {
         </p>
       </div>
 
-      <SectionLabel>Claude (web, desktop, mobile)</SectionLabel>
+      <SubHeading>Claude (web, desktop, mobile)</SubHeading>
       <ol className="flex list-decimal flex-col gap-1.5 pr-6 pl-11 text-sm text-ink">
         <li>Open Settings → Connectors and choose “Add custom connector”.</li>
         <li>Name it Duffel and paste the URL above.</li>
         <li>Choose Connect, then enter your household password on the Duffel page.</li>
       </ol>
 
-      <SectionLabel>ChatGPT</SectionLabel>
+      <SubHeading>ChatGPT</SubHeading>
       <ol className="flex list-decimal flex-col gap-1.5 pr-6 pl-11 text-sm text-ink">
         <li>
           In Settings, add a custom connector (MCP server). Your plan may need developer mode turned
@@ -77,7 +77,7 @@ export function ConnectAISection() {
         <li>Enter your household password on the Duffel page.</li>
       </ol>
 
-      <SectionLabel>Claude Code</SectionLabel>
+      <SubHeading>Claude Code</SubHeading>
       <div className="flex flex-col gap-2 px-6 text-sm text-ink">
         <div className="flex items-center gap-1">
           <div className="min-w-0 flex-1">
@@ -88,13 +88,13 @@ export function ConnectAISection() {
         <p className="text-soft">Then run /mcp in Claude Code and choose Authenticate.</p>
       </div>
 
-      <SectionLabel>Other apps</SectionLabel>
+      <SubHeading>Other apps</SubHeading>
       <p className="px-6 text-sm text-ink">
         Cursor, VS Code and other MCP apps: add a remote (HTTP) MCP server with the URL above. They
         open the Duffel sign-in page the first time.
       </p>
 
-      <SectionLabel>Connected</SectionLabel>
+      <SubHeading>Connected</SubHeading>
       <Connections />
     </div>
   );
