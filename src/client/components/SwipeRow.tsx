@@ -47,21 +47,23 @@ export function SwipeRow({
 
   return (
     <div className={cx('relative overflow-hidden', className)}>
-      <button
-        type="button"
-        className="absolute inset-y-0 right-0 flex items-center justify-center bg-danger text-sm font-medium text-white"
-        style={{ width: REVEAL }}
-        aria-hidden={!open}
-        tabIndex={open ? 0 : -1}
-        onClick={() => {
-          setOpen(false);
-          onDelete();
-        }}
-      >
-        {label}
-      </button>
+      {!disabled && (
+        <button
+          type="button"
+          className="absolute inset-y-0 right-0 flex items-center justify-center bg-danger text-sm font-medium text-white"
+          style={{ width: REVEAL }}
+          aria-hidden={!open}
+          tabIndex={open ? 0 : -1}
+          onClick={() => {
+            setOpen(false);
+            onDelete();
+          }}
+        >
+          {label}
+        </button>
+      )}
       <div
-        className={cx('relative', highlight ? 'bg-accent-tint' : 'bg-bg')}
+        className={cx('relative', highlight ? 'my-1 rounded-xl bg-accent-tint' : 'bg-bg')}
         style={{
           transform: `translateX(${offset}px)`,
           transition: dragging ? 'none' : 'transform .18s ease',
