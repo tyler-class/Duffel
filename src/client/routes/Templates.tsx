@@ -9,6 +9,7 @@ import { plural } from '../lib/format';
 import { Icon } from '../components/Icon';
 import { CatalogPicker } from '../components/CatalogPicker';
 import { NumberInput, OnePicker, PeoplePicker, TagPicker } from '../components/fields';
+import { SwipeRow } from '../components/SwipeRow';
 import {
   DangerButton,
   Empty,
@@ -31,6 +32,7 @@ export function Templates() {
   const { run, busy, error } = useSave();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [toDelete, setToDelete] = useState<Template | null>(null);
   if (!data) return null;
   return (
     <div className="pb-10">
@@ -50,7 +52,11 @@ export function Templates() {
         </Empty>
       )}
       {data.templates.map((t) => (
-        <ListRow key={t.id} onClick={() => nav(`/templates/${t.id}`)}>
+        <ListRow
+          key={t.id}
+          onClick={() => nav(`/templates/${t.id}`)}
+          swipeDelete={{ id: t.id, onDelete: () => setToDelete(t) }}
+        >
           <span className="text-base">{t.name}</span>
           <span className="text-[13px] text-soft">
             {[plural(t.items.length, 'item'), t.trip_type, t.climate].filter(Boolean).join(' · ')}
@@ -88,6 +94,28 @@ export function Templates() {
             onChange={(e) => setName(e.target.value)}
           />
         </FieldRow>
+      </Sheet>
+      <Sheet
+        open={!!toDelete}
+        onClose={() => setToDelete(null)}
+        title={`Delete ${toDelete?.name ?? 'template'}?`}
+        footer={
+          <>
+            <GhostButton onClick={() => setToDelete(null)}>Cancel</GhostButton>
+            <PrimaryButton
+              tone="danger"
+              disabled={busy}
+              onClick={async () => {
+                if (toDelete && (await run(() => api.del(`/templates/${toDelete.id}`))))
+                  setToDelete(null);
+              }}
+            >
+              Delete
+            </PrimaryButton>
+          </>
+        }
+      >
+        <p className="py-2 text-sm text-soft">Trips made from it keep their lists.</p>
       </Sheet>
     </div>
   );
@@ -154,40 +182,46 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         const item = items.get(ti.item_id);
         const who = ti.assignees.length ? ti.assignees : (item?.default_people ?? []);
         return (
-          <button
+          <SwipeRow
             key={ti.id}
-            onClick={() => setEditing(ti)}
-            className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3 text-left"
+            id={ti.id}
+            onDelete={() => run(() => api.del(`/template-items/${ti.id}`))}
+            className="mx-6 border-b border-line"
           >
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-base">{item?.name ?? 'Removed item'}</span>
-              <span className="flex items-center gap-2.5 text-[13px] text-soft">
-                {who.length ? (
-                  <span className="inline-flex items-center gap-1">
-                    {who.map((p) => (
-                      <PersonDot key={p} color={people.get(p)?.color} />
-                    ))}
-                    {!ti.assignees.length && <span className="text-faint">default</span>}
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1">
-                    <Icon name="users" size={13} />
-                    Shared
-                  </span>
-                )}
-                {ti.carry_on && (
-                  <span className="inline-flex items-center gap-1">
-                    <Icon name="backpack" size={13} />
-                    Carry-on
-                  </span>
-                )}
-                {ti.notes && <span className="truncate">{ti.notes}</span>}
+            <button
+              onClick={() => setEditing(ti)}
+              className="flex w-full items-center gap-3 py-3 text-left"
+            >
+              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                <span className="text-base">{item?.name ?? 'Removed item'}</span>
+                <span className="flex items-center gap-2.5 text-[13px] text-soft">
+                  {who.length ? (
+                    <span className="inline-flex items-center gap-1">
+                      {who.map((p) => (
+                        <PersonDot key={p} color={people.get(p)?.color} />
+                      ))}
+                      {!ti.assignees.length && <span className="text-faint">default</span>}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name="users" size={13} />
+                      Shared
+                    </span>
+                  )}
+                  {ti.carry_on && (
+                    <span className="inline-flex items-center gap-1">
+                      <Icon name="backpack" size={13} />
+                      Carry-on
+                    </span>
+                  )}
+                  {ti.notes && <span className="truncate">{ti.notes}</span>}
+                </span>
               </span>
-            </span>
-            <span className="font-mono text-[13px] text-soft tnum">
-              {overrideSummary(ti, item)}
-            </span>
-          </button>
+              <span className="font-mono text-[13px] text-soft tnum">
+                {overrideSummary(ti, item)}
+              </span>
+            </button>
+          </SwipeRow>
         );
       })}
 

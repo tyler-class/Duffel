@@ -6,6 +6,7 @@ import { useSave } from '../lib/useSave';
 import { Icon } from '../components/Icon';
 import { NumberInput, OnePicker } from '../components/fields';
 import { CatalogHeader } from '../components/CatalogNav';
+import { SwipeRow } from '../components/SwipeRow';
 import {
   DangerButton,
   Empty,
@@ -67,23 +68,29 @@ export function Suitcases() {
         </Empty>
       )}
       {data.suitcases.map((s) => (
-        <button
+        <SwipeRow
           key={s.id}
-          onClick={() => open(s)}
-          className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3.5 text-left"
+          id={s.id}
+          onDelete={() => run(() => api.del(`/suitcases/${s.id}`))}
+          className="mx-6 border-b border-line"
         >
-          <Icon
-            name={/carry|back|diaper/i.test(s.type ?? '') ? 'backpack' : 'bag'}
-            className="text-soft"
-          />
-          <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-base">{s.name}</span>
-            {s.type && <span className="text-[13px] text-soft">{s.type}</span>}
-          </span>
-          {s.capacity_l !== null && (
-            <span className="font-mono text-[13px] text-soft tnum">{s.capacity_l} L</span>
-          )}
-        </button>
+          <button
+            onClick={() => open(s)}
+            className="flex w-full items-center gap-3 py-3.5 text-left"
+          >
+            <Icon
+              name={/carry|back|diaper/i.test(s.type ?? '') ? 'backpack' : 'bag'}
+              className="text-soft"
+            />
+            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+              <span className="text-base">{s.name}</span>
+              {s.type && <span className="text-[13px] text-soft">{s.type}</span>}
+            </span>
+            {s.capacity_l !== null && (
+              <span className="font-mono text-[13px] text-soft tnum">{s.capacity_l} L</span>
+            )}
+          </button>
+        </SwipeRow>
       ))}
       <Sheet
         open={editing !== null}

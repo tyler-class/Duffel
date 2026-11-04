@@ -9,6 +9,7 @@ import {
 } from 'react';
 import { useNavigate } from 'react-router';
 import { Icon, type IconName } from './Icon';
+import { SwipeRow } from './SwipeRow';
 
 export function cx(...c: (string | false | null | undefined)[]) {
   return c.filter(Boolean).join(' ');
@@ -468,19 +469,35 @@ export function ListRow({
   onClick,
   children,
   trailing,
+  swipeDelete,
 }: {
   onClick: () => void;
   children: ReactNode;
   trailing?: ReactNode;
+  /** Enables swipe-left-to-reveal Delete. */
+  swipeDelete?: { id: string; onDelete: () => void };
 }) {
-  return (
+  const row = (
     <button
       onClick={onClick}
-      className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3.5 border-b border-line py-3.5 text-left"
+      className={cx(
+        'flex items-center gap-3.5 py-3.5 text-left',
+        swipeDelete ? 'w-full' : 'mx-6 w-[calc(100%-3rem)] border-b border-line',
+      )}
     >
       <span className="flex min-w-0 flex-1 flex-col gap-0.5">{children}</span>
       {trailing ?? <Icon name="chevRight" className="text-faint" />}
     </button>
+  );
+  if (!swipeDelete) return row;
+  return (
+    <SwipeRow
+      id={swipeDelete.id}
+      onDelete={swipeDelete.onDelete}
+      className="mx-6 border-b border-line"
+    >
+      {row}
+    </SwipeRow>
   );
 }
 

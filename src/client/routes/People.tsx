@@ -6,6 +6,7 @@ import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { OnePicker } from '../components/fields';
 import { CatalogHeader } from '../components/CatalogNav';
+import { SwipeRow } from '../components/SwipeRow';
 import {
   cx,
   DangerButton,
@@ -72,18 +73,24 @@ export function People() {
         </Empty>
       )}
       {data.people.map((p) => (
-        <button
+        <SwipeRow
           key={p.id}
-          onClick={() => open(p)}
-          className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3.5 text-left"
+          id={p.id}
+          onDelete={() => run(() => api.del(`/people/${p.id}`))}
+          className="mx-6 border-b border-line"
         >
-          <PersonDot color={p.color} size={10} />
-          <span className="flex-1 text-base">
-            {p.emoji ? `${p.emoji} ` : ''}
-            {p.name}
-          </span>
-          {p.role && <span className="text-[13px] text-soft">{p.role}</span>}
-        </button>
+          <button
+            onClick={() => open(p)}
+            className="flex w-full items-center gap-3 py-3.5 text-left"
+          >
+            <PersonDot color={p.color} size={10} />
+            <span className="flex-1 text-base">
+              {p.emoji ? `${p.emoji} ` : ''}
+              {p.name}
+            </span>
+            {p.role && <span className="text-[13px] text-soft">{p.role}</span>}
+          </button>
+        </SwipeRow>
       ))}
       <Sheet
         open={editing !== null}

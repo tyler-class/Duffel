@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { displayQty, isCarryOn, progress, shortBagLabel } from '@shared/logic';
 import type { Item, Person, Trip, TripBag, TripDetail, TripItem } from '@shared/types';
@@ -11,6 +11,7 @@ import { isOffline } from '../lib/offline';
 import { Icon } from '../components/Icon';
 import { ItemSheet, type ItemDraft, type SaveResult } from '../components/ItemSheet';
 import { CatalogPicker } from '../components/CatalogPicker';
+import { SwipeRow } from '../components/SwipeRow';
 import { useToast } from '../components/Toast';
 import {
   ActionList,
@@ -587,9 +588,6 @@ function FilterChip({ children, onClear }: { children: React.ReactNode; onClear:
   );
 }
 
-const REVEAL = 88;
-const ROW_OPEN_EVENT = 'duffel:row-open';
-
 /** One row: check to pack, tap to edit, swipe left to reveal Delete. */
 function Row({
   row,
@@ -606,92 +604,15 @@ function Row({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const [dx, setDx] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [open, setOpen] = useState(false);
-  const start = useRef<{ x: number; y: number; swiping: boolean } | null>(null);
-  const moved = useRef(false);
   const qty = displayQty(row);
-
-  // Only one row shows its Delete button at a time.
-  useEffect(() => {
-    const onOtherOpen = (e: Event) => {
-      if ((e as CustomEvent<string>).detail !== row.id) setOpen(false);
-    };
-    window.addEventListener(ROW_OPEN_EVENT, onOtherOpen);
-    return () => window.removeEventListener(ROW_OPEN_EVENT, onOtherOpen);
-  }, [row.id]);
-
-  const base = open ? -REVEAL : 0;
-  const offset = dragging ? Math.min(0, Math.max(-REVEAL - 32, base + dx)) : base;
-  /** A tap on an open row just closes it. */
-  const tap = (fn: () => void) => () => {
-    if (moved.current) return;
-    if (open) setOpen(false);
-    else fn();
-  };
-
   return (
-    <div className="relative overflow-hidden border-b border-line">
-      <button
-        className="absolute inset-y-0 right-0 flex items-center justify-center bg-danger text-sm font-medium text-white"
-        style={{ width: REVEAL }}
-        aria-hidden={!open}
-        tabIndex={open ? 0 : -1}
-        onClick={() => {
-          setOpen(false);
-          onDelete();
-        }}
-      >
-        Delete
-      </button>
-      <div
-        className="relative flex items-center bg-bg"
-        style={{
-          transform: `translateX(${offset}px)`,
-          transition: dragging ? 'none' : 'transform .18s ease',
-          touchAction: 'pan-y',
-        }}
-        onPointerDown={(e) => {
-          if (e.pointerType === 'mouse') return;
-          start.current = { x: e.clientX, y: e.clientY, swiping: false };
-          moved.current = false;
-        }}
-        onPointerMove={(e) => {
-          const s = start.current;
-          if (!s) return;
-          const ddx = e.clientX - s.x;
-          const ddy = e.clientY - s.y;
-          if (!s.swiping && Math.abs(ddx) > 10 && Math.abs(ddx) > Math.abs(ddy)) {
-            s.swiping = true;
-            setDragging(true);
-          }
-          if (s.swiping) {
-            moved.current = true;
-            setDx(ddx);
-          }
-        }}
-        onPointerUp={() => {
-          if (start.current?.swiping) {
-            const reveal = base + dx < -REVEAL / 2;
-            setOpen(reveal);
-            if (reveal) window.dispatchEvent(new CustomEvent(ROW_OPEN_EVENT, { detail: row.id }));
-          }
-          start.current = null;
-          setDragging(false);
-          setDx(0);
-        }}
-        onPointerCancel={() => {
-          start.current = null;
-          setDragging(false);
-          setDx(0);
-        }}
-      >
+    <SwipeRow id={row.id} onDelete={onDelete} className="border-b border-line">
+      <div className="flex items-center">
         <button
           className="flex h-full items-center py-3 pr-3.5"
           aria-label={row.packed ? `Mark ${row.name} not packed` : `Mark ${row.name} packed`}
           aria-pressed={row.packed}
-          onClick={tap(onToggle)}
+          onClick={onToggle}
         >
           <span
             className={cx(
@@ -702,10 +623,7 @@ function Row({
             {row.packed && <Icon name="check" size={14} strokeWidth={2.4} />}
           </span>
         </button>
-        <button
-          className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left"
-          onClick={tap(onEdit)}
-        >
+        <button className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left" onClick={onEdit}>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
             <span
               className={cx(
@@ -742,7 +660,7 @@ function Row({
           </span>
         </button>
       </div>
-    </div>
+    </SwipeRow>
   );
 }
 

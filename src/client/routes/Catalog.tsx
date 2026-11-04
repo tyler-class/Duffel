@@ -9,6 +9,8 @@ import { load, save } from '../lib/storage';
 import { Icon } from '../components/Icon';
 import { NumberInput, PeoplePicker, SelectSheet, TagPicker } from '../components/fields';
 import { CatalogHeader } from '../components/CatalogNav';
+import { SwipeRow } from '../components/SwipeRow';
+import { useToast } from '../components/Toast';
 import {
   DangerButton,
   Empty,
@@ -32,6 +34,11 @@ function qtySummary(i: Item): string {
 export function Catalog() {
   const nav = useNavigate();
   const { data } = useAppState();
+  const { run } = useSave();
+  const toast = useToast();
+  const removeItem = async (i: Item) => {
+    if (await run(() => api.del(`/items/${i.id}`))) toast({ text: `Deleted ${i.name}` });
+  };
   const [q, setQ] = useState('');
   const [showArchived, setShowArchived] = useState(() => load('showArchived', false));
   const groups = useMemo(() => {
@@ -85,38 +92,44 @@ export function Catalog() {
             {cat}
           </SectionLabel>
           {items.map((i) => (
-            <button
+            <SwipeRow
               key={i.id}
-              onClick={() => nav(`/catalog/item/${i.id}`)}
-              className="mx-6 flex w-[calc(100%-3rem)] items-center gap-3 border-b border-line py-3 text-left"
+              id={i.id}
+              onDelete={() => removeItem(i)}
+              className="mx-6 border-b border-line"
             >
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className={i.archived ? 'text-faint' : 'text-base'}>{i.name}</span>
-                <span className="flex items-center gap-2.5 text-[13px] text-soft">
-                  {i.default_people.length > 0 && (
-                    <span className="inline-flex items-center gap-1">
-                      {i.default_people.map((p) => (
-                        <PersonDot key={p} color={people.get(p)?.color} />
-                      ))}
-                    </span>
-                  )}
-                  {i.not_in_suitcase && (
-                    <span className="inline-flex items-center gap-1">
-                      <Icon name="nobag" size={13} />
-                      No bag
-                    </span>
-                  )}
-                  {i.usually_carry_on && (
-                    <span className="inline-flex items-center gap-1">
-                      <Icon name="backpack" size={13} />
-                      Carry-on
-                    </span>
-                  )}
-                  {i.archived && <span>Archived</span>}
+              <button
+                onClick={() => nav(`/catalog/item/${i.id}`)}
+                className="flex w-full items-center gap-3 py-3 text-left"
+              >
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className={i.archived ? 'text-faint' : 'text-base'}>{i.name}</span>
+                  <span className="flex items-center gap-2.5 text-[13px] text-soft">
+                    {i.default_people.length > 0 && (
+                      <span className="inline-flex items-center gap-1">
+                        {i.default_people.map((p) => (
+                          <PersonDot key={p} color={people.get(p)?.color} />
+                        ))}
+                      </span>
+                    )}
+                    {i.not_in_suitcase && (
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="nobag" size={13} />
+                        No bag
+                      </span>
+                    )}
+                    {i.usually_carry_on && (
+                      <span className="inline-flex items-center gap-1">
+                        <Icon name="backpack" size={13} />
+                        Carry-on
+                      </span>
+                    )}
+                    {i.archived && <span>Archived</span>}
+                  </span>
                 </span>
-              </span>
-              <span className="font-mono text-[13px] text-soft tnum">{qtySummary(i)}</span>
-            </button>
+                <span className="font-mono text-[13px] text-soft tnum">{qtySummary(i)}</span>
+              </button>
+            </SwipeRow>
           ))}
         </section>
       ))}
