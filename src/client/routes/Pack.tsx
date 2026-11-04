@@ -237,7 +237,12 @@ function PackTrip(props: {
   }
 
   async function saveNew(r: SaveResult) {
-    await api.post(`/trips/${props.tripId}/items`, r);
+    const { person_ids, ...row } = r;
+    const owners: (string | null)[] = person_ids?.length ? person_ids : [null];
+    // One row per person, so each person checks off their own.
+    for (const person_id of owners) {
+      await api.post(`/trips/${props.tripId}/items`, { ...row, person_id });
+    }
     refresh();
   }
 
@@ -482,6 +487,7 @@ function PackTrip(props: {
       <ItemSheet
         open={!!adding}
         mode="add"
+        travelers={trip.travelers}
         initial={adding ?? undefined}
         people={people}
         bags={bags}

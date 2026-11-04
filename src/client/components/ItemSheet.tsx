@@ -21,6 +21,8 @@ export type Placement = { trip_bag_id: string | null; no_bag: boolean };
 export interface ItemDraft {
   name: string;
   person_id: string | null;
+  /** Add mode: everyone the new item is for. One row is created per person; empty means Shared. */
+  people: string[];
   trip_bag_id: string | null;
   no_bag: boolean;
   notes: string;
@@ -32,6 +34,8 @@ export interface SaveResult {
   item_id?: string | null;
   name: string;
   person_id: string | null;
+  /** Add mode only: create one row per person (empty = one Shared row). */
+  person_ids?: string[];
   trip_bag_id: string | null;
   no_bag: boolean;
   notes: string | null;
@@ -51,6 +55,7 @@ function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | und
     return {
       name: row.name,
       person_id: row.person_id,
+      people: row.person_id ? [row.person_id] : [],
       trip_bag_id: row.trip_bag_id,
       no_bag: row.no_bag,
       notes: row.notes ?? '',
@@ -61,6 +66,7 @@ function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | und
   return {
     name: '',
     person_id: null,
+    people: initial?.person_id ? [initial.person_id] : [],
     trip_bag_id: null,
     no_bag: false,
     notes: '',
@@ -71,6 +77,8 @@ function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | und
 }
 
 type ItemSheetProps = {
+  /** The trip's travelers: what “Everyone” selects. */
+  travelers?: string[];
   open: boolean;
   mode: 'add' | 'edit';
   row?: TripItem;
@@ -93,6 +101,9 @@ export function ItemSheet(props: ItemSheetProps) {
 
 function ItemSheetBody(props: ItemSheetProps) {
   const { open, mode, row, people, bags, catalog, len } = props;
+  const everyone = props.travelers?.length
+    ? people.filter((p) => props.travelers!.includes(p.id)).map((p) => p.id)
+    : people.map((p) => p.id);
   const listId = useId();
   const [draft, setDraft] = useState<ItemDraft>(() => blankDraft(row, props.initial));
   const [error, setError] = useState('');
@@ -126,6 +137,7 @@ function ItemSheetBody(props: ItemSheetProps) {
     const base = {
       name,
       person_id: draft.person_id,
+      ...(mode === 'add' ? { person_ids: draft.people } : {}),
       trip_bag_id: draft.no_bag ? null : draft.trip_bag_id,
       no_bag: draft.no_bag,
       notes: draft.notes.trim() || null,
@@ -242,25 +254,76 @@ function ItemSheetBody(props: ItemSheetProps) {
             <Stepper value={shownQty} onChange={(v) => set({ qty: v, qtyTouched: true })} />
           </div>
         </FieldRow>
-        <FieldRow icon="user" label="For">
-          <div className="flex flex-wrap gap-1.5">
-            {people.map((p) => (
-              <Pick
-                key={p.id}
-                on={draft.person_id === p.id}
-                onClick={() => set({ person_id: p.id })}
-              >
-                <PersonDot color={p.color} />
-                {p.emoji ? `${p.emoji} ` : ''}
-                {p.name}
+        {mode === 'add' ? (
+          <FieldRow
+            icon="user"
+            label="For"
+            hint={
+              draft.people.length > 1
+                ? `Adds ${draft.people.length} rows, one for each person.`
+                : undefined
+            }
+          >
+            <div className="flex flex-wrap gap-1.5">
+              {everyone.length > 1 && (
+                <Pick
+                  on={everyone.every((id) => draft.people.includes(id))}
+                  onClick={() =>
+                    set({
+                      people: everyone.every((id) => draft.people.includes(id)) ? [] : everyone,
+                    })
+                  }
+                >
+                  <Icon name="users" size={13} />
+                  Everyone
+                </Pick>
+              )}
+              {people.map((p) => {
+                const on = draft.people.includes(p.id);
+                return (
+                  <Pick
+                    key={p.id}
+                    on={on}
+                    onClick={() =>
+                      set({
+                        people: on
+                          ? draft.people.filter((x) => x !== p.id)
+                          : [...draft.people, p.id],
+                      })
+                    }
+                  >
+                    <PersonDot color={p.color} />
+                    {p.emoji ? `${p.emoji} ` : ''}
+                    {p.name}
+                  </Pick>
+                );
+              })}
+              <Pick on={draft.people.length === 0} onClick={() => set({ people: [] })}>
+                Shared
               </Pick>
-            ))}
-            <Pick on={draft.person_id === null} onClick={() => set({ person_id: null })}>
-              <Icon name="users" size={13} />
-              Shared
-            </Pick>
-          </div>
-        </FieldRow>
+            </div>
+          </FieldRow>
+        ) : (
+          <FieldRow icon="user" label="For">
+            <div className="flex flex-wrap gap-1.5">
+              {people.map((p) => (
+                <Pick
+                  key={p.id}
+                  on={draft.person_id === p.id}
+                  onClick={() => set({ person_id: p.id })}
+                >
+                  <PersonDot color={p.color} />
+                  {p.emoji ? `${p.emoji} ` : ''}
+                  {p.name}
+                </Pick>
+              ))}
+              <Pick on={draft.person_id === null} onClick={() => set({ person_id: null })}>
+                <Icon name="users" size={13} />
+                Shared
+              </Pick>
+            </div>
+          </FieldRow>
+        )}
         <FieldRow icon="bag" label="Bag" hint={bagHint(bags, draft)}>
           <div className="flex flex-wrap gap-1.5">
             {bags.map((b) => (
