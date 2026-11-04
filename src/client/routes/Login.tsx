@@ -1,8 +1,7 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { api, errorMessage } from '../lib/api';
-import { ErrorText, PrimaryButton } from '../components/ui';
-import { Icon } from '../components/Icon';
+import { ErrorText, PrimaryButton, TextInput } from '../components/ui';
 
 export function Login() {
   const qc = useQueryClient();
@@ -30,9 +29,7 @@ export function Login() {
     <main className="flex min-h-full items-center justify-center px-6 pt-safe pb-safe">
       <form onSubmit={submit} className="flex w-full max-w-sm flex-col gap-6">
         <div className="flex flex-col items-start gap-3">
-          <span className="grid h-12 w-12 place-items-center rounded-2xl bg-accent-tint text-accent">
-            <Icon name="bag" size={24} />
-          </span>
+          <img src="/favicon.svg" alt="" className="h-12 w-12 rounded-2xl" />
           <h1 className="text-[28px] font-semibold tracking-[-0.025em]">Duffel</h1>
           <p className="text-sm text-soft">Enter your household password.</p>
         </div>
@@ -40,14 +37,13 @@ export function Login() {
           <label htmlFor="password" className="text-xs text-soft">
             Password
           </label>
-          <input
+          <TextInput
             id="password"
             type="password"
             autoComplete="current-password"
             autoFocus
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full border-b border-line bg-transparent py-2 text-base focus:border-ink focus:outline-none"
           />
         </div>
         <ErrorText>{error}</ErrorText>
