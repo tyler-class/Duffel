@@ -1,0 +1,21 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "duffel",
+  "main": "./src/worker/index.ts",
+  "compatibility_date": "2026-10-19",
+  "observability": { "enabled": true },
+  "upload_source_maps": true,
+  "assets": {
+    // Static SPA. Unknown paths fall back to index.html; /api/* always reaches the Worker.
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "d1_databases": [
+    {
+      // No database_id: the Deploy button and `wrangler deploy` provision it automatically.
+      "binding": "DB",
+      "database_name": "duffel",
+      "migrations_dir": "migrations",
+    },
+  ],
+}
