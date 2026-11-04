@@ -42,7 +42,7 @@ export function Onboarding() {
             key={p.id}
             className="flex items-center gap-2.5 border-b border-line py-2.5 text-base"
           >
-            <PersonDot color={p.color} />
+            <PersonDot person={p} />
             {p.name}
           </div>
         ))}

@@ -468,7 +468,6 @@ function PackTrip(props: {
                   onClick={() => toggleCollapsed(ck)}
                 >
                   <GroupMark g={g} />
-                  {g.person?.emoji && <span aria-hidden="true">{g.person.emoji}</span>}
                   <span className="truncate">{g.label}</span>
                   {g.bag?.carry_on && (
                     <span className="rounded bg-accent-tint px-1.5 py-px text-[11px] font-medium text-accent">
@@ -686,7 +685,7 @@ function rowSub(
     const p = r.person_id ? people.get(r.person_id) : undefined;
     parts.push(
       <span key="p" className="inline-flex items-center gap-1.5">
-        {p ? <PersonDot color={p.color} /> : <Icon name="users" size={13} />}
+        {p ? <PersonDot person={p} /> : <Icon name="users" size={13} />}
         {p ? p.name : 'Shared'}
       </span>,
     );
@@ -701,7 +700,7 @@ function rowSub(
 }
 
 function GroupMark({ g }: { g: Group }) {
-  if (g.kind === 'person') return <PersonDot color={g.person?.color} />;
+  if (g.kind === 'person') return <PersonDot person={g.person} size={18} />;
   const icon =
     g.kind === 'shared'
       ? 'users'

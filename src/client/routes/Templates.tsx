@@ -198,7 +198,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
                   {who.length ? (
                     <span className="inline-flex items-center gap-1">
                       {who.map((p) => (
-                        <PersonDot key={p} color={people.get(p)?.color} />
+                        <PersonDot key={p} person={people.get(p)} />
                       ))}
                       {!ti.assignees.length && <span className="text-faint">default</span>}
                     </span>

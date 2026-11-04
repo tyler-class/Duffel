@@ -292,8 +292,7 @@ function ItemSheetBody(props: ItemSheetProps) {
                       })
                     }
                   >
-                    <PersonDot color={p.color} />
-                    {p.emoji ? `${p.emoji} ` : ''}
+                    <PersonDot person={p} />
                     {p.name}
                   </Pick>
                 );
@@ -312,8 +311,7 @@ function ItemSheetBody(props: ItemSheetProps) {
                   on={draft.person_id === p.id}
                   onClick={() => set({ person_id: p.id })}
                 >
-                  <PersonDot color={p.color} />
-                  {p.emoji ? `${p.emoji} ` : ''}
+                  <PersonDot person={p} />
                   {p.name}
                 </Pick>
               ))}

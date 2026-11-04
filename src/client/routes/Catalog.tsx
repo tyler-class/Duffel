@@ -108,7 +108,7 @@ export function Catalog() {
                     {i.default_people.length > 0 && (
                       <span className="inline-flex items-center gap-1">
                         {i.default_people.map((p) => (
-                          <PersonDot key={p} color={people.get(p)?.color} />
+                          <PersonDot key={p} person={people.get(p)} />
                         ))}
                       </span>
                     )}

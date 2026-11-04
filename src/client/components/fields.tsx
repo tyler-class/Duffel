@@ -167,8 +167,7 @@ export function PeoplePicker({
             on={on}
             onClick={() => onChange(on ? value.filter((v) => v !== p.id) : [...value, p.id])}
           >
-            <PersonDot color={p.color} />
-            {p.emoji ? `${p.emoji} ` : ''}
+            <PersonDot person={p} />
             {p.name}
           </Pick>
         );

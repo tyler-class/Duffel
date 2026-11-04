@@ -272,16 +272,33 @@ export function Segmented<T extends string>({
   );
 }
 
-export function PersonDot({ color, size = 8 }: { color?: string | null; size?: number }) {
+/** A person's marker: their emoji, or their initial in a small circle. */
+export function PersonDot({
+  person,
+  size = 15,
+}: {
+  person?: { name: string; emoji: string | null } | null;
+  size?: number;
+}) {
+  if (person?.emoji) {
+    return (
+      <span
+        aria-hidden="true"
+        className="inline-block flex-none leading-none"
+        style={{ fontSize: size }}
+      >
+        {person.emoji}
+      </span>
+    );
+  }
   return (
     <span
-      className="inline-block flex-none rounded-full"
-      style={{
-        width: size,
-        height: size,
-        background: `var(--person-${color ?? 'mist'}, var(--person-mist))`,
-      }}
-    />
+      aria-hidden="true"
+      className="inline-grid flex-none place-items-center rounded-full bg-chip font-semibold text-soft"
+      style={{ width: size + 3, height: size + 3, fontSize: Math.round(size * 0.6) }}
+    >
+      {person?.name.trim()[0]?.toUpperCase() ?? '?'}
+    </span>
   );
 }
 

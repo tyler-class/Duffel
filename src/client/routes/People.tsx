@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { PERSON_COLORS } from '@shared/lookups';
 import type { Person } from '@shared/types';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
@@ -7,8 +6,8 @@ import { useSave } from '../lib/useSave';
 import { OnePicker } from '../components/fields';
 import { CatalogHeader } from '../components/CatalogNav';
 import { SwipeRow } from '../components/SwipeRow';
+import { EmojiPicker } from '../components/EmojiPicker';
 import {
-  cx,
   DangerButton,
   Empty,
   ErrorText,
@@ -69,7 +68,7 @@ export function People() {
       <CatalogHeader addLabel="Person" onAdd={() => open('new')} />
       {!data.people.length && (
         <Empty title="No one yet">
-          Add everyone you pack for. Each person gets a color so their things are easy to spot.
+          Add everyone you pack for. Give each person an emoji so their things are easy to spot.
         </Empty>
       )}
       {data.people.map((p) => (
@@ -83,11 +82,8 @@ export function People() {
             onClick={() => open(p)}
             className="flex w-full items-center gap-3 py-3.5 text-left"
           >
-            <PersonDot color={p.color} size={10} />
-            <span className="flex-1 text-base">
-              {p.emoji ? `${p.emoji} ` : ''}
-              {p.name}
-            </span>
+            <PersonDot person={p} size={20} />
+            <span className="flex-1 text-base">{p.name}</span>
             {p.role && <span className="text-[13px] text-soft">{p.role}</span>}
           </button>
         </SwipeRow>
@@ -133,31 +129,12 @@ export function People() {
             options={data.lookups.role ?? []}
           />
         </FieldRow>
-        <FieldRow icon="palette" label="Color">
-          <div className="flex flex-wrap gap-2.5">
-            {PERSON_COLORS.map((c) => (
-              <button
-                key={c}
-                type="button"
-                aria-label={c}
-                aria-pressed={d.color === c}
-                onClick={() => setD({ ...d, color: c })}
-                className={cx(
-                  'grid h-8 w-8 place-items-center rounded-full border',
-                  d.color === c ? 'border-ink' : 'border-transparent',
-                )}
-              >
-                <PersonDot color={c} size={18} />
-              </button>
-            ))}
-          </div>
-        </FieldRow>
-        <FieldRow icon="smile" label="Emoji (optional)" htmlFor="p-emoji">
-          <TextInput
+        <FieldRow icon="smile" label="Emoji" htmlFor="p-emoji">
+          <EmojiPicker
             id="p-emoji"
             value={d.emoji}
-            maxLength={8}
-            onChange={(e) => setD({ ...d, emoji: e.target.value })}
+            name={d.name}
+            onChange={(emoji) => setD({ ...d, emoji })}
           />
         </FieldRow>
         <FieldRow icon="note" label="Notes" htmlFor="p-notes">
