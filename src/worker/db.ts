@@ -1,0 +1,325 @@
+import type {
+  Item,
+  Person,
+  Suitcase,
+  Template,
+  TemplateItem,
+  Trip,
+  TripBag,
+  TripItem,
+} from '@shared/types';
+import type { QtyMode } from '@shared/lookups';
+
+export type Row = Record<string, unknown>;
+
+export const nowIso = () => new Date().toISOString();
+export const newId = () => crypto.randomUUID();
+
+export async function all<T = Row>(db: D1Database, sql: string, ...binds: unknown[]): Promise<T[]> {
+  const res = await db
+    .prepare(sql)
+    .bind(...binds)
+    .all<T>();
+  return res.results;
+}
+
+export async function first<T = Row>(
+  db: D1Database,
+  sql: string,
+  ...binds: unknown[]
+): Promise<T | null> {
+  return db
+    .prepare(sql)
+    .bind(...binds)
+    .first<T>();
+}
+
+/** UPDATE helper: only the given columns, plus updated_at. */
+export function updateStmt(
+  db: D1Database,
+  table: string,
+  id: string,
+  fields: Record<string, unknown>,
+) {
+  const cols = Object.keys(fields);
+  const sets = [...cols.map((c) => `${c} = ?`), 'updated_at = ?'].join(', ');
+  return db
+    .prepare(`UPDATE ${table} SET ${sets} WHERE id = ?`)
+    .bind(...cols.map((c) => fields[c]), nowIso(), id);
+}
+
+export function insertStmt(db: D1Database, table: string, fields: Record<string, unknown>) {
+  const cols = Object.keys(fields);
+  return db
+    .prepare(`INSERT INTO ${table} (${cols.join(', ')}) VALUES (${cols.map(() => '?').join(', ')})`)
+    .bind(...cols.map((c) => fields[c]));
+}
+
+const bool = (v: unknown) => v === 1 || v === true;
+const n = (v: unknown) => (v === null || v === undefined ? null : Number(v));
+const s = (v: unknown) => (v === null || v === undefined ? null : String(v));
+const arr = (v: unknown): string[] => {
+  try {
+    const p = JSON.parse(String(v ?? '[]'));
+    return Array.isArray(p) ? p.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+export const b = (v: boolean | undefined | null) => (v ? 1 : 0);
+export const json = (v: string[] | undefined) => JSON.stringify(v ?? []);
+
+export function toPerson(r: Row): Person {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    role: s(r.role),
+    color: String(r.color),
+    emoji: s(r.emoji),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+  };
+}
+
+export function toItem(r: Row, defaultPeople: string[] = []): Item {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    category: s(r.category),
+    qty_mode: r.qty_mode as QtyMode,
+    qty: Number(r.qty),
+    max_qty: n(r.max_qty),
+    climate_tags: arr(r.climate_tags),
+    activity_tags: arr(r.activity_tags),
+    length_in: n(r.length_in),
+    width_in: n(r.width_in),
+    height_in: n(r.height_in),
+    dimensions_source: s(r.dimensions_source),
+    not_in_suitcase: bool(r.not_in_suitcase),
+    usually_carry_on: bool(r.usually_carry_on),
+    notes: s(r.notes),
+    archived: bool(r.archived),
+    default_people: defaultPeople,
+  };
+}
+
+export function toSuitcase(r: Row): Suitcase {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    type: s(r.type),
+    length_in: n(r.length_in),
+    width_in: n(r.width_in),
+    height_in: n(r.height_in),
+    capacity_l: n(r.capacity_l),
+    max_weight_lb: n(r.max_weight_lb),
+    notes: s(r.notes),
+  };
+}
+
+export function toTemplateItem(r: Row, assignees: string[] = []): TemplateItem {
+  return {
+    id: String(r.id),
+    template_id: String(r.template_id),
+    item_id: String(r.item_id),
+    qty_mode_override: (r.qty_mode_override as QtyMode | null) ?? null,
+    qty_override: n(r.qty_override),
+    carry_on: bool(r.carry_on),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+    assignees,
+  };
+}
+
+export function toTemplate(r: Row, items: TemplateItem[] = []): Template {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    trip_type: s(r.trip_type),
+    climate: s(r.climate),
+    activities: arr(r.activities),
+    notes: s(r.notes),
+    items,
+  };
+}
+
+export function toTrip(r: Row, travelers: string[] = []): Trip {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    template_id: s(r.template_id),
+    cloned_from_trip_id: s(r.cloned_from_trip_id),
+    trip_type: s(r.trip_type),
+    start_date: s(r.start_date),
+    end_date: s(r.end_date),
+    days: n(r.days),
+    nights: n(r.nights),
+    destination: s(r.destination),
+    climate: s(r.climate),
+    activities: arr(r.activities),
+    status: s(r.status),
+    notes: s(r.notes),
+    archived_at: s(r.archived_at),
+    travelers,
+    item_count: Number(r.item_count ?? 0),
+    packed_count: Number(r.packed_count ?? 0),
+  };
+}
+
+export function toTripBag(r: Row): TripBag {
+  return {
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    suitcase_id: s(r.suitcase_id),
+    label: String(r.label),
+    role: s(r.role),
+    carry_on: bool(r.carry_on),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+  };
+}
+
+export function toTripItem(r: Row): TripItem {
+  return {
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    item_id: s(r.item_id),
+    name: String(r.name),
+    person_id: s(r.person_id),
+    trip_bag_id: s(r.trip_bag_id),
+    no_bag: bool(r.no_bag),
+    calc_mode: (r.calc_mode as QtyMode | null) ?? null,
+    calc_unit_qty: n(r.calc_unit_qty),
+    calc_max: n(r.calc_max),
+    qty: n(r.qty),
+    qty_override: n(r.qty_override),
+    packed: bool(r.packed),
+    packed_at: s(r.packed_at),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+  };
+}
+
+function groupPairs(rows: Row[], key: string, val: string): Map<string, string[]> {
+  const m = new Map<string, string[]>();
+  for (const r of rows) {
+    const k = String(r[key]);
+    if (!m.has(k)) m.set(k, []);
+    m.get(k)!.push(String(r[val]));
+  }
+  return m;
+}
+
+export async function loadPeople(db: D1Database): Promise<Person[]> {
+  return (await all(db, 'SELECT * FROM people ORDER BY sort_order, name')).map(toPerson);
+}
+
+export async function loadItems(db: D1Database): Promise<Item[]> {
+  const [rows, links] = await Promise.all([
+    all(db, 'SELECT * FROM items ORDER BY name COLLATE NOCASE'),
+    all(db, 'SELECT item_id, person_id FROM item_default_people'),
+  ]);
+  const byItem = groupPairs(links, 'item_id', 'person_id');
+  return rows.map((r) => toItem(r, byItem.get(String(r.id)) ?? []));
+}
+
+export async function loadSuitcases(db: D1Database): Promise<Suitcase[]> {
+  return (await all(db, 'SELECT * FROM suitcases ORDER BY name COLLATE NOCASE')).map(toSuitcase);
+}
+
+export async function loadTemplates(db: D1Database, templateId?: string): Promise<Template[]> {
+  const where = templateId ? ' WHERE id = ?' : '';
+  const tWhere = templateId ? ' WHERE template_id = ?' : '';
+  const binds = templateId ? [templateId] : [];
+  const [rows, items, assignees] = await Promise.all([
+    all(db, `SELECT * FROM templates${where} ORDER BY name COLLATE NOCASE`, ...binds),
+    all(db, `SELECT * FROM template_items${tWhere} ORDER BY sort_order, created_at`, ...binds),
+    all(
+      db,
+      `SELECT a.template_item_id, a.person_id FROM template_item_assignees a
+       JOIN template_items ti ON ti.id = a.template_item_id${templateId ? ' WHERE ti.template_id = ?' : ''}`,
+      ...binds,
+    ),
+  ]);
+  const byTi = groupPairs(assignees, 'template_item_id', 'person_id');
+  const byTemplate = new Map<string, TemplateItem[]>();
+  for (const r of items) {
+    const ti = toTemplateItem(r, byTi.get(String(r.id)) ?? []);
+    if (!byTemplate.has(ti.template_id)) byTemplate.set(ti.template_id, []);
+    byTemplate.get(ti.template_id)!.push(ti);
+  }
+  return rows.map((r) => toTemplate(r, byTemplate.get(String(r.id)) ?? []));
+}
+
+const TRIP_SELECT = `SELECT t.*,
+  (SELECT COUNT(*) FROM trip_items i WHERE i.trip_id = t.id) AS item_count,
+  (SELECT COUNT(*) FROM trip_items i WHERE i.trip_id = t.id AND i.packed = 1) AS packed_count
+  FROM trips t`;
+
+export async function loadTrips(db: D1Database, tripId?: string): Promise<Trip[]> {
+  const [rows, travelers] = await Promise.all([
+    all(
+      db,
+      `${TRIP_SELECT}${tripId ? ' WHERE t.id = ?' : ''} ORDER BY t.start_date`,
+      ...(tripId ? [tripId] : []),
+    ),
+    all(
+      db,
+      `SELECT trip_id, person_id FROM trip_travelers${tripId ? ' WHERE trip_id = ?' : ''}`,
+      ...(tripId ? [tripId] : []),
+    ),
+  ]);
+  const byTrip = groupPairs(travelers, 'trip_id', 'person_id');
+  return rows.map((r) => toTrip(r, byTrip.get(String(r.id)) ?? []));
+}
+
+export async function loadTrip(db: D1Database, tripId: string): Promise<Trip | null> {
+  return (await loadTrips(db, tripId))[0] ?? null;
+}
+
+export async function loadTripBags(db: D1Database, tripId: string): Promise<TripBag[]> {
+  return (
+    await all(
+      db,
+      'SELECT * FROM trip_bags WHERE trip_id = ? ORDER BY sort_order, created_at',
+      tripId,
+    )
+  ).map(toTripBag);
+}
+
+export async function loadTripItems(db: D1Database, tripId: string): Promise<TripItem[]> {
+  return (
+    await all(
+      db,
+      'SELECT * FROM trip_items WHERE trip_id = ? ORDER BY sort_order, created_at',
+      tripId,
+    )
+  ).map(toTripItem);
+}
+
+export async function getSetting(db: D1Database, key: string): Promise<string | null> {
+  return (
+    (await first<{ value: string }>(db, 'SELECT value FROM settings WHERE key = ?', key))?.value ??
+    null
+  );
+}
+
+export async function existingIds(
+  db: D1Database,
+  table: string,
+  ids: string[],
+): Promise<Set<string>> {
+  if (!ids.length) return new Set();
+  const out = new Set<string>();
+  // D1 allows 100 bound parameters per statement.
+  for (let i = 0; i < ids.length; i += 90) {
+    const chunk = ids.slice(i, i + 90);
+    const rows = await all<{ id: string }>(
+      db,
+      `SELECT id FROM ${table} WHERE id IN (${chunk.map(() => '?').join(',')})`,
+      ...chunk,
+    );
+    rows.forEach((r) => out.add(r.id));
+  }
+  return out;
+}
