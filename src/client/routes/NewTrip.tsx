@@ -82,7 +82,7 @@ export function NewTrip() {
       'tmpl',
     ],
     ['clone', 'Copy a past trip', 'Same list and bags, all unpacked', 'copy'],
-    ['blank', 'Start blank', 'Add items as you go', 'sparkle'],
+    ['blank', 'Start blank', 'Add items as you go', 'compose'],
   ];
 
   async function create() {

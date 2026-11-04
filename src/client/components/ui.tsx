@@ -547,3 +547,62 @@ export function Menu({
 export function SubHeading({ children }: { children: ReactNode }) {
   return <h3 className="px-6 pt-5 pb-2 text-sm font-semibold text-ink">{children}</h3>;
 }
+
+/** A pill switch with a sliding thumb (2–4 options). */
+export function SlideToggle<T extends string>({
+  value,
+  options,
+  onChange,
+  label,
+  className,
+}: {
+  value: T;
+  options: [T, ReactNode][];
+  onChange: (v: T) => void;
+  label: string;
+  className?: string;
+}) {
+  const index = Math.max(
+    0,
+    options.findIndex(([v]) => v === value),
+  );
+  const n = options.length;
+  return (
+    <div
+      role="tablist"
+      aria-label={label}
+      className={cx('relative grid rounded-full bg-chip p-1', className)}
+      style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
+    >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-1 left-1 rounded-full bg-surface shadow-[0_1px_3px_rgba(0,0,0,.12)] transition-transform duration-200 ease-out"
+        style={{ width: `calc((100% - 0.5rem) / ${n})`, transform: `translateX(${index * 100}%)` }}
+      />
+      {options.map(([v, text], i) => (
+        <button
+          key={v}
+          role="tab"
+          aria-selected={i === index}
+          onClick={() => onChange(v)}
+          className={cx(
+            'relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors',
+            i === index ? 'font-semibold text-accent' : 'text-soft',
+          )}
+        >
+          {text}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** A small rounded info pill (icon + text). */
+export function InfoPill({ icon, children }: { icon: IconName; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-chip px-2.5 py-1 text-[13px] text-soft">
+      <Icon name={icon} size={13} className="text-faint" />
+      {children}
+    </span>
+  );
+}

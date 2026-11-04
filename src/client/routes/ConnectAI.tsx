@@ -39,7 +39,7 @@ export function ConnectAISection() {
   const cli = `claude mcp add --transport http duffel ${url}`;
   return (
     <div>
-      <SectionLabel icon="ai">Connect an AI assistant</SectionLabel>
+      <SectionLabel icon="sparkle">Connect an AI assistant</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 text-sm text-soft">
         <p>
           Let Claude, ChatGPT or any assistant that supports MCP read and update your packing lists.

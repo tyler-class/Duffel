@@ -20,7 +20,9 @@ import {
   FieldRow,
   GhostButton,
   IconButton,
+  InfoPill,
   Menu,
+  SlideToggle,
   PersonDot,
   PrimaryButton,
   Segmented,
@@ -85,6 +87,7 @@ function PackTrip(props: {
   const [menu, setMenu] = useState<null | 'menu' | 'reset' | 'template' | 'catalog'>(null);
   const [error, setError] = useState('');
   const [menuAnchor, setMenuAnchor] = useState<DOMRect | null>(null);
+  const [filterAnchor, setFilterAnchor] = useState<DOMRect | null>(null);
   const patch = usePatchTripItem(props.tripId ?? 'none');
 
   const setStatus = (v: Status) => (setStatusRaw(v), save('status', v));
@@ -284,35 +287,17 @@ function PackTrip(props: {
             }}
           />
         </div>
-        <div className="flex flex-wrap gap-x-3.5 gap-y-1.5 text-sm text-soft">
+        <div className="flex flex-wrap gap-1.5">
           {(trip.start_date || trip.end_date) && (
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="cal" size={13} />
-              {formatRange(trip.start_date, trip.end_date)}
-            </span>
+            <InfoPill icon="cal">{formatRange(trip.start_date, trip.end_date)}</InfoPill>
           )}
-          {trip.nights !== null && (
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="moon" size={13} />
-              {plural(trip.nights, 'night')}
-            </span>
-          )}
-          {travelers > 0 && (
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="users" size={13} />
-              {travelers}
-            </span>
-          )}
-          {trip.destination && (
-            <span className="inline-flex items-center gap-1.5">
-              <Icon name="pin" size={13} />
-              {trip.destination}
-            </span>
-          )}
+          {trip.nights !== null && <InfoPill icon="moon">{plural(trip.nights, 'night')}</InfoPill>}
+          {travelers > 0 && <InfoPill icon="users">{plural(travelers, 'traveler')}</InfoPill>}
+          {trip.destination && <InfoPill icon="pin">{trip.destination}</InfoPill>}
         </div>
-        <div className="mt-1.5 flex items-center gap-3">
+        <div className="mt-2 flex flex-col gap-1.5">
           <div
-            className="h-[3px] flex-1 overflow-hidden rounded-full bg-track"
+            className="h-1.5 overflow-hidden rounded-full bg-track"
             role="progressbar"
             aria-valuenow={pct}
             aria-valuemin={0}
@@ -320,75 +305,97 @@ function PackTrip(props: {
             aria-label="Packed"
           >
             <div
-              className="h-full bg-accent transition-[width] duration-200"
+              className="h-full rounded-full bg-accent transition-[width] duration-200"
               style={{ width: `${pct}%` }}
             />
           </div>
-          <span className="inline-flex gap-2.5 font-mono text-xs text-soft tnum">
-            <span className="inline-flex items-center gap-1" title="Packed">
-              <Icon name="check" size={13} />
-              {prog.done}/{prog.total}
-            </span>
-            {prog.carryTotal > 0 && (
-              <span className="inline-flex items-center gap-1" title="Carry-on packed">
-                <Icon name="backpack" size={13} />
-                {prog.carryDone}/{prog.carryTotal}
-              </span>
-            )}
+          <span className="text-[13px] text-soft tnum">
+            <span className="font-semibold text-ink">{prog.done}</span> of {prog.total} packed
           </span>
         </div>
       </header>
 
-      <div className="flex flex-col gap-2.5 px-5 pt-3.5 pb-1">
-        <div className="grid grid-cols-2 gap-2">
-          <Segmented<Status>
-            label="Packed status"
-            value={status}
-            onChange={setStatus}
+      <div className="flex flex-col gap-2 px-5 pt-3 pb-1">
+        <div className="flex items-center gap-2">
+          <SlideToggle<GroupBy>
+            label="Group by"
+            value={groupBy}
+            onChange={setGroupBy}
             options={[
-              ['all', 'All'],
-              ['packed', 'Packed'],
-              ['todo', 'To pack'],
+              ['person', 'By person'],
+              ['bag', 'By bag'],
             ]}
           />
-          <Segmented<Where>
-            label="Where"
-            value={where}
-            onChange={setWhere}
-            options={[
-              ['all', 'All'],
-              ['carry', 'Carry-on'],
-              ['luggage', 'Luggage'],
-            ]}
-          />
+          <button
+            className={cx(
+              'ml-auto inline-flex h-[38px] items-center gap-1.5 rounded-full px-3.5 text-sm',
+              filtered ? 'bg-accent-tint font-semibold text-accent' : 'bg-chip text-soft',
+            )}
+            onClick={(e) => setFilterAnchor(e.currentTarget.getBoundingClientRect())}
+            aria-haspopup="menu"
+          >
+            <Icon name="filter" size={15} />
+            Filter{filtered ? ` (${(status !== 'all' ? 1 : 0) + (where !== 'all' ? 1 : 0)})` : ''}
+          </button>
         </div>
-        <div className="flex items-center gap-3 text-[13px] text-faint">
-          <span>Group by</span>
-          {(['person', 'bag'] as GroupBy[]).map((g) => (
-            <button
-              key={g}
-              aria-pressed={groupBy === g}
-              onClick={() => setGroupBy(g)}
-              className={cx(
-                'border-b-[1.5px] py-0.5',
-                groupBy === g
-                  ? 'border-accent font-medium text-ink'
-                  : 'border-transparent text-soft',
-              )}
-            >
-              {g === 'person' ? 'Person' : 'Bag'}
-            </button>
-          ))}
+        {filtered && (
+          <div className="flex flex-wrap gap-1.5">
+            {status !== 'all' && (
+              <FilterChip onClear={() => setStatus('all')}>
+                {status === 'packed' ? 'Packed' : 'To pack'}
+              </FilterChip>
+            )}
+            {where !== 'all' && (
+              <FilterChip onClear={() => setWhere('all')}>
+                {where === 'carry' ? 'Carry-on' : 'Luggage'}
+              </FilterChip>
+            )}
+          </div>
+        )}
+      </div>
+      <Menu
+        open={!!filterAnchor}
+        onClose={() => setFilterAnchor(null)}
+        anchor={filterAnchor}
+        title="Filter"
+      >
+        <div className="flex flex-col gap-4 py-3">
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-soft">Show</span>
+            <Segmented<Status>
+              label="Packed status"
+              value={status}
+              onChange={setStatus}
+              options={[
+                ['all', 'All'],
+                ['packed', 'Packed'],
+                ['todo', 'To pack'],
+              ]}
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="text-xs text-soft">Where</span>
+            <Segmented<Where>
+              label="Where"
+              value={where}
+              onChange={setWhere}
+              options={[
+                ['all', 'All'],
+                ['carry', 'Carry-on'],
+                ['luggage', 'Luggage'],
+              ]}
+            />
+          </div>
           {filtered && (
             <button
-              className="ml-auto text-accent"
+              className="self-start text-sm text-accent"
               onClick={() => (setStatus('all'), setWhere('all'))}
             >
               Clear filters
             </button>
           )}
         </div>
-      </div>
+      </Menu>
 
       <div className="px-5">
         <ErrorText>{error}</ErrorText>
@@ -565,6 +572,19 @@ function GroupMark({ g }: { g: Group }) {
             ? 'backpack'
             : 'bag';
   return <Icon name={icon} size={15} className="text-soft" />;
+}
+
+function FilterChip({ children, onClear }: { children: React.ReactNode; onClear: () => void }) {
+  return (
+    <button
+      onClick={onClear}
+      className="inline-flex items-center gap-1 rounded-full bg-accent-tint py-1 pr-2 pl-3 text-[13px] font-medium text-accent"
+      aria-label={`Remove filter ${String(children)}`}
+    >
+      {children}
+      <Icon name="x" size={13} />
+    </button>
+  );
 }
 
 const REVEAL = 88;
