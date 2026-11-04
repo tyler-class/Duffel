@@ -12,13 +12,14 @@
     "deploy": "npm run build && wrangler d1 migrations apply DB --remote && wrangler deploy",
     "db:migrate:local": "wrangler d1 migrations apply DB --local",
     "db:migrate:remote": "wrangler d1 migrations apply DB --remote",
-    "db:seed:sample:local": "wrangler d1 execute DB --local --file seed/sample.sql",
+    "db:seed:sample:local": "tsx scripts/export-to-sql.ts seed/sample.json .wrangler/sample.sql && wrangler d1 execute DB --local --file .wrangler/sample.sql",
     "cf-typegen": "wrangler types src/worker/worker-configuration.d.ts",
     "typecheck": "tsc -p tsconfig.app.json --noEmit && tsc -p tsconfig.worker.json --noEmit && tsc -p tsconfig.node.json --noEmit",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write .",
     "test": "vitest run",
-    "icons": "tsx scripts/generate-icons.ts"
+    "icons": "tsx scripts/generate-icons.ts",
+    "sample:build": "tsx scripts/build-sample.ts"
   },
   "cloudflare": {
     "bindings": {
