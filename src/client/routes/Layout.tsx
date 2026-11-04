@@ -47,6 +47,18 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        <div className="mt-auto flex flex-col gap-2 px-3 text-xs text-faint">
+          <a
+            href="https://github.com/tyler-class/Duffel"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex items-center gap-1.5 text-soft hover:text-ink"
+          >
+            <Icon name="github" size={15} />
+            Duffel on GitHub
+          </a>
+          <span>Duffel {__APP_VERSION__}</span>
+        </div>
       </aside>
 
       <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-3xl md:px-6 md:pt-4 md:pb-10">

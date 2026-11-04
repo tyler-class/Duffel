@@ -132,7 +132,7 @@ export function Settings() {
         </button>
       </div>
 
-      <div className="flex items-center justify-between px-6 pt-8 text-xs text-faint">
+      <div className="flex items-center justify-between px-6 pt-8 text-xs text-faint md:hidden">
         <span>Duffel {__APP_VERSION__}</span>
         <a
           href="https://github.com/tyler-class/Duffel"
