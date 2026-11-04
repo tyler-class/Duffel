@@ -132,3 +132,17 @@
 @utility pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+@media (max-width: 639px) {
+  .sheet-in {
+    animation: sheet-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+}

@@ -295,14 +295,23 @@ export function ErrorText({ children }: { children: ReactNode }) {
 }
 
 // ---------- sheet ----------
-export function Sheet({
-  open,
+export function Sheet(props: {
+  open: boolean;
+  onClose: () => void;
+  title: ReactNode;
+  children: ReactNode;
+  footer?: ReactNode;
+}) {
+  // Mounting fresh on each open resets drag and expand state.
+  return props.open ? <SheetBody {...props} /> : null;
+}
+
+function SheetBody({
   onClose,
   title,
   children,
   footer,
 }: {
-  open: boolean;
   onClose: () => void;
   title: ReactNode;
   children: ReactNode;
@@ -310,8 +319,11 @@ export function Sheet({
 }) {
   const titleId = useId();
   const ref = useRef<HTMLDivElement>(null);
+  const drag = useRef<{ y: number; t: number } | null>(null);
+  const [dy, setDy] = useState(0);
+  const [dragging, setDragging] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   useEffect(() => {
-    if (!open) return;
     const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -320,23 +332,77 @@ export function Sheet({
       document.removeEventListener('keydown', onKey);
       document.body.style.overflow = prev;
     };
-  }, [open, onClose]);
-  if (!open) return null;
+  }, [onClose]);
+
+  // Drag the handle/title: down to dismiss, up to expand to full height.
+  const dragHandlers = {
+    onPointerDown: (e: React.PointerEvent) => {
+      if (window.matchMedia('(min-width: 640px)').matches) return;
+      drag.current = { y: e.clientY, t: performance.now() };
+      setDragging(true);
+      try {
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      } catch {
+        /* capture is best-effort */
+      }
+    },
+    onPointerMove: (e: React.PointerEvent) => {
+      if (!drag.current) return;
+      const d = e.clientY - drag.current.y;
+      // Downward follows the finger; upward resists (rubber band).
+      setDy(d > 0 ? d : -Math.sqrt(-d) * 4);
+    },
+    onPointerUp: (e: React.PointerEvent) => {
+      if (!drag.current) return;
+      const d = e.clientY - drag.current.y;
+      const speed = d / Math.max(1, performance.now() - drag.current.t); // px per ms
+      drag.current = null;
+      setDragging(false);
+      setDy(0);
+      if (d > 120 || speed > 0.6) {
+        if (expanded && d < 260 && speed <= 0.6) setExpanded(false);
+        else onClose();
+      } else if (d < -40) {
+        setExpanded(true);
+      }
+    },
+    onPointerCancel: () => {
+      drag.current = null;
+      setDragging(false);
+      setDy(0);
+    },
+  };
+
   return (
     <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center sm:p-6">
-      <div className="absolute inset-0 bg-[var(--scrim)]" onClick={onClose} />
+      <div
+        className="absolute inset-0 bg-[var(--scrim)]"
+        style={{ opacity: dy > 0 ? Math.max(0.2, 1 - dy / 500) : 1 }}
+        onClick={onClose}
+      />
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-[18px] bg-surface pb-safe sm:rounded-[18px] sm:shadow-xl"
+        className={cx(
+          'sheet-in relative flex max-h-[92dvh] w-full max-w-xl flex-col rounded-t-[18px] bg-surface pb-safe sm:rounded-[18px] sm:shadow-xl',
+          expanded && 'h-[92dvh]',
+        )}
+        style={{
+          transform: dy ? `translateY(${dy}px)` : undefined,
+          transition: dragging ? 'none' : 'transform .22s ease, height .22s ease',
+        }}
       >
-        <div className="mx-auto mt-2.5 mb-2 h-1 w-9 flex-none rounded-full bg-line" />
-        <h2 id={titleId} className="flex-none px-5 pb-1.5 text-lg font-semibold tracking-tight">
-          {title}
-        </h2>
-        <div className="min-h-0 flex-1 overflow-y-auto px-5 pb-2">{children}</div>
+        <div className="flex-none cursor-grab touch-none select-none" {...dragHandlers}>
+          <div className="mx-auto mt-2.5 mb-2 h-1 w-9 rounded-full bg-line" />
+          <h2 id={titleId} className="px-5 pb-1.5 text-lg font-semibold tracking-tight">
+            {title}
+          </h2>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-2">
+          {children}
+        </div>
         {footer && (
           <div className="flex flex-none items-center justify-between gap-2 border-t border-line px-5 py-3">
             {footer}
