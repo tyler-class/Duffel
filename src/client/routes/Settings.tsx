@@ -4,6 +4,7 @@ import type { AutoPackFallback } from '@shared/lookups';
 import { api, errorMessage } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
+import { useTheme, type Theme } from '../lib/theme';
 import { Icon } from '../components/Icon';
 import {
   ErrorText,
@@ -23,6 +24,7 @@ export function Settings() {
   const toast = useToast();
   const { data } = useAppState();
   const { run, busy, error } = useSave();
+  const [theme, setTheme] = useTheme();
   const [restore, setRestore] = useState<{ file: File; data: unknown } | null>(null);
   const [restoreError, setRestoreError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
@@ -42,6 +44,20 @@ export function Settings() {
   return (
     <div className="pb-12">
       <PageHeader title="Settings" icon="settings" />
+
+      <SectionLabel icon="palette">Appearance</SectionLabel>
+      <div className="px-6 pt-4 pb-2">
+        <Segmented<Theme>
+          label="Appearance"
+          value={theme}
+          onChange={setTheme}
+          options={[
+            ['light', 'Light'],
+            ['dark', 'Dark'],
+            ['system', 'System'],
+          ]}
+        />
+      </div>
 
       <SectionLabel icon="bag">Auto pack</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 pb-2">

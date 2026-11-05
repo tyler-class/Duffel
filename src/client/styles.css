@@ -34,8 +34,9 @@
   color-scheme: light;
 }
 
+/* Dark: follows the device unless Settings → Appearance picks one (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #181818;
     --surface: #212121;
     --ink: #dedede;
@@ -64,6 +65,35 @@
     --person-mist: #9a9a9a;
     color-scheme: dark;
   }
+}
+:root[data-theme='dark'] {
+  --bg: #181818;
+  --surface: #212121;
+  --ink: #dedede;
+  --soft: #cdcdcd;
+  --faint: #9a9a9a;
+  --line: #2e2e2e;
+  --accent: #fb923c;
+  --accent-ink: #181818;
+  --accent-tint: color-mix(in srgb, #fb923c 14%, #181818);
+  --track: #313131;
+  --todo: #60a5fa;
+  --todo-tint: color-mix(in srgb, #60a5fa 14%, #181818);
+  --chip: #212121;
+  --seg: #313131;
+  --danger: #ef4444;
+  --scrim: rgb(0 0 0 / 0.55);
+
+  --person-blue: #60a5fa;
+  --person-violet: #a78bfa;
+  --person-coral: #f87171;
+  --person-amber: #fbbf24;
+  --person-green: #4ade80;
+  --person-rose: #f472b6;
+  --person-teal: #22d3ee;
+  --person-slate: #94a3b8;
+  --person-mist: #9a9a9a;
+  color-scheme: dark;
 }
 
 @theme {
