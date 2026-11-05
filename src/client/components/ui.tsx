@@ -323,6 +323,8 @@ export function Sheet(props: {
   title: ReactNode;
   /** A line under the title, e.g. a version. */
   sub?: ReactNode;
+  /** Show a close (✕) button, for sheets without a footer. */
+  closeButton?: boolean;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -334,12 +336,14 @@ function SheetBody({
   onClose,
   title,
   sub,
+  closeButton,
   children,
   footer,
 }: {
   onClose: () => void;
   title: ReactNode;
   sub?: ReactNode;
+  closeButton?: boolean;
   children: ReactNode;
   footer?: ReactNode;
 }) {
@@ -427,6 +431,14 @@ function SheetBody({
           </h2>
           {sub && <p className="-mt-1 px-5 pb-1.5 text-sm text-soft">{sub}</p>}
         </div>
+        {closeButton && (
+          <IconButton
+            icon="x"
+            label="Close"
+            onClick={onClose}
+            className="absolute top-4 right-4 h-9 w-9 rounded-full bg-chip"
+          />
+        )}
         <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-2">
           {children}
         </div>

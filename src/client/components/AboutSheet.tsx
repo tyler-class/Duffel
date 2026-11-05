@@ -4,25 +4,32 @@ import { cx, Sheet } from './ui';
 
 const LINKS: [string, string, IconName][] = [
   ['https://github.com/tyler-class/Duffel', 'Duffel on GitHub', 'github'],
+  ['mailto:duffel@tylerclass.net', 'Questions or help? duffel@tylerclass.net', 'mail'],
   [
     'https://ko-fi.com/tylerclass',
-    'If you want to say thank you, coffee is my love language',
-    'coffee',
+    'Duffel is free, no baggage fees. Buy me a coffee to keep it that way ☕',
+    'dollar',
   ],
   ['https://tylerclass.net', 'tylerclass.net', 'link'],
-  ['mailto:duffel@tylerclass.net', 'Questions or help? duffel@tylerclass.net', 'mail'],
 ];
 
 /** About Duffel: version, what it is, who built it, and links. */
 export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   return (
-    <Sheet open={open} onClose={onClose} title="About Duffel" sub={`Version ${__APP_VERSION__}`}>
-      <div className="flex flex-col gap-3 pt-1 text-sm text-soft">
-        <p>
-          Duffel is a free, open-source packing list for families. It runs on your own Cloudflare
-          account, so your lists stay yours.
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="About Duffel"
+      sub={`Version ${__APP_VERSION__}`}
+      closeButton
+    >
+      <div className="flex flex-col gap-3 pt-1">
+        <p className="text-base text-ink">
+          Duffel is a free, open-source packing list for families: who packs what, which bag it goes
+          in, and the to-dos around every trip. It runs on your own Cloudflare account, so your data
+          stays yours.
         </p>
-        <p>Built by Tyler Class.</p>
+        <p className="text-sm text-soft">Built by Tyler Class.</p>
       </div>
       <div className="pt-3 pb-2">
         {LINKS.map(([href, label, icon]) => (
