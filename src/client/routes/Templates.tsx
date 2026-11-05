@@ -174,7 +174,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   const [editing, setEditing] = useState<TemplateItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [bagSheet, setBagSheet] = useState<TemplateBag | 'new' | null>(null);
-  const [tab, setTab] = useState<'items' | 'todos' | 'details'>('items');
+  const [tab, setTab] = useState<'details' | 'items' | 'todos'>('details');
   const [moveError, setMoveError] = useState('');
   const qc = useQueryClient();
   const sorted = useMemo(
@@ -261,14 +261,14 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         }
       />
       <div className="px-5 pb-1">
-        <SlideToggle<'items' | 'todos' | 'details'>
+        <SlideToggle<'details' | 'items' | 'todos'>
           label="Template sections"
           value={tab}
           onChange={setTab}
           options={[
+            ['details', 'Details'],
             ['items', 'Packing'],
             ['todos', 'To-dos'],
-            ['details', 'Details'],
           ]}
         />
       </div>
@@ -496,7 +496,6 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         }
         suitcases={data.suitcases}
         people={data.people}
-        roles={data.lookups.bagRole ?? []}
         error={error}
         onClose={() => setBagSheet(null)}
         onSave={async (b: BagDraft) => {

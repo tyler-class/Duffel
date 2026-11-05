@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { defaultBagCarryOn } from '@shared/logic';
 import type { Person, Suitcase } from '@shared/types';
-import { OnePicker, PeoplePicker } from './fields';
+import { PeoplePicker } from './fields';
 import {
   DangerButton,
   ErrorText,
@@ -29,7 +29,6 @@ type BagSheetProps = {
   initial?: BagDraft;
   suitcases: Suitcase[];
   people: Person[];
-  roles: string[];
   onClose: () => void;
   onSave: (b: BagDraft) => Promise<void> | void;
   onDelete?: () => void;
@@ -56,13 +55,14 @@ function BagSheetBody(props: BagSheetProps) {
   const [carryTouched, setCarryTouched] = useState(!!props.initial);
   const [err, setErr] = useState('');
 
+  // Carry-on starts from the catalog bag until it's switched by hand.
   const set = (patch: Partial<BagDraft>) =>
     setD((cur) => {
       const next = { ...cur, ...patch };
-      if (!carryTouched && ('suitcase_id' in patch || 'role' in patch)) {
+      if (!carryTouched && 'suitcase_id' in patch) {
         next.carry_on = defaultBagCarryOn(
           props.suitcases.find((s) => s.id === next.suitcase_id)?.carry_on,
-          next.role,
+          null,
         );
       }
       return next;
@@ -112,6 +112,14 @@ function BagSheetBody(props: BagSheetProps) {
           )}
         </div>
       </FieldRow>
+      <FieldRow icon="tag" label="Name" htmlFor="bag-label">
+        <TextInput
+          id="bag-label"
+          value={d.label}
+          placeholder="e.g. Kids’ suitcase"
+          onChange={(e) => set({ label: e.target.value })}
+        />
+      </FieldRow>
       <FieldRow
         icon="user"
         label="Whose bag"
@@ -123,18 +131,14 @@ function BagSheetBody(props: BagSheetProps) {
           onChange={(people) => set({ people })}
         />
       </FieldRow>
-      <FieldRow icon="tag" label="Name on this trip" htmlFor="bag-label">
-        <TextInput
-          id="bag-label"
-          value={d.label}
-          placeholder="e.g. Kids’ suitcase"
-          onChange={(e) => set({ label: e.target.value })}
-        />
-      </FieldRow>
-      <FieldRow icon="layers" label="Used as">
-        <OnePicker value={d.role} onChange={(role) => set({ role })} options={props.roles} />
-      </FieldRow>
-      <FieldRow icon="backpack" hint="Items in a carry-on bag count as carry-on.">
+      <FieldRow
+        icon="backpack"
+        hint={
+          d.suitcase_id
+            ? 'From the catalog bag. Changing it here doesn’t change the catalog.'
+            : 'Its items count as carry-on.'
+        }
+      >
         <div className="flex items-center justify-between gap-3">
           <span className="text-base">Carry-on</span>
           <Switch

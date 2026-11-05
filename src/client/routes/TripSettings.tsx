@@ -354,7 +354,8 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
         initial={
           bagSheet && bagSheet !== 'new'
             ? {
-                label: bagSheet.label,
+                // Show the name without the trip's name in front ("Lisbon - Sam carry-on").
+                label: shortBagLabel(bagSheet.label, trip.name),
                 suitcase_id: bagSheet.suitcase_id,
                 role: bagSheet.role,
                 carry_on: bagSheet.carry_on,
@@ -365,7 +366,6 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
         }
         suitcases={state.suitcases}
         people={state.people}
-        roles={state.lookups.bagRole ?? []}
         error={error}
         onClose={() => setBagSheet(null)}
         onSave={saveBag}

@@ -314,7 +314,6 @@ export function NewTrip() {
         initial={typeof bagSheet === 'number' ? bags[bagSheet] : undefined}
         suitcases={data.suitcases}
         people={data.people}
-        roles={data.lookups.bagRole ?? []}
         onClose={() => setBagSheet(null)}
         onSave={(b) => {
           setBags((cur) =>
