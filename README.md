@@ -51,6 +51,14 @@ It opens full screen like a regular app.
 
 Duffel includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-duffel>/mcp`. In Duffel, open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, Duffel shows a sign-in page; enter your household password to approve it. **Settings → Connect an AI assistant → Disconnect all** revokes every connected assistant.
 
+Assistants can read and change trips, packing lists, groups, templates and to-dos. Ask one “what can you do with Duffel?” and it calls `get_started`, which looks at your trips and suggests things to ask, such as:
+
+- “Make a packing list for our trip to \<place>, \<start date> to \<end date>, from our \<template> template.”
+- “What’s still not packed for \<trip>? Group it by person.”
+- “Add to-dos for \<trip>: book the pet sitter two weeks before, hold the mail, and check in online the day before we leave.”
+
+Ready-made prompts for longer jobs appear in the assistant’s prompt menu (the + menu in Claude): **Plan a trip**, **What’s left to pack**, **Add the usual to-dos** and **Organize into groups**. Settings lists more examples under **Try asking**, tap one to copy it.
+
 ## Change the password
 
 Set a new `APP_PASSWORD`, either in the Cloudflare dashboard under **Workers & Pages → duffel → Settings → Variables and Secrets**, or with:

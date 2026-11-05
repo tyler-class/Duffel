@@ -1,7 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api, errorMessage } from '../lib/api';
+import { EXAMPLE_PROMPTS } from '@shared/examples';
 import { Icon } from '../components/Icon';
+import { useToast } from '../components/Toast';
 import { ErrorText, GhostButton, SectionLabel, SubHeading } from '../components/ui';
 
 function Copy({ text, label = 'Copy' }: { text: string; label?: string }) {
@@ -94,6 +96,8 @@ export function ConnectAISection() {
         open the Duffel sign-in page the first time.
       </p>
 
+      <TryAsking />
+
       <SubHeading>Connected</SubHeading>
       <Connections />
     </div>
@@ -145,5 +149,37 @@ function Connections() {
       )}
       <ErrorText>{error || (q.error ? errorMessage(q.error) : '')}</ErrorText>
     </div>
+  );
+}
+
+/** Example requests, tap to copy. */
+function TryAsking() {
+  const toast = useToast();
+  return (
+    <>
+      <SubHeading>Try asking</SubHeading>
+      <div className="px-6">
+        {EXAMPLE_PROMPTS.slice(0, 6).map((e) => (
+          <button
+            key={e.prompt}
+            type="button"
+            title="Copy"
+            className="flex w-full items-start gap-3 border-b border-line py-3 text-left text-sm text-ink"
+            onClick={() =>
+              void navigator.clipboard
+                ?.writeText(e.prompt)
+                .then(() => toast({ text: 'Copied.' }))
+                .catch(() => {})
+            }
+          >
+            <span className="flex-1">“{e.prompt}”</span>
+            <Icon name="copy" size={15} className="mt-0.5 flex-none text-faint" />
+          </button>
+        ))}
+        <p className="pt-2.5 text-xs text-faint">
+          Claude also lists ready-made Duffel prompts in its + menu.
+        </p>
+      </div>
+    </>
   );
 }

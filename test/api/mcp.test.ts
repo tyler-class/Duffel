@@ -1,6 +1,7 @@
 import { SELF } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { ORIGIN, PASSWORD, session } from './helpers';
+import { EXAMPLE_PROMPTS, MCP_PROMPTS } from '../../src/shared/examples';
 
 const REDIRECT = 'https://client.example/callback';
 
@@ -149,6 +150,9 @@ describe('MCP', () => {
       clientInfo: { name: 'test', version: '1' },
     });
     expect(init.status).toBe(200);
+    const instructions = (init.data.result as { instructions?: string }).instructions ?? '';
+    expect(instructions).toContain('call get_started');
+    expect(instructions).toContain(EXAMPLE_PROMPTS[0]!.prompt);
     const tools = await rpc(token!, 'tools/list');
     expect(tools.data.result!.tools!.map((t) => t.name)).toEqual(
       expect.arrayContaining([
@@ -167,6 +171,7 @@ describe('MCP', () => {
         'get_template',
         'update_template_item',
         'set_group_order',
+        'get_started',
       ]),
     );
 
@@ -317,6 +322,30 @@ describe('MCP', () => {
     expect(
       (await call('update_template_item', { template_item_id: 'nope', group: 'x' })).error,
     ).toBe(true);
+
+    // Orientation: ready-made prompts and get_started.
+    const prompts = (await rpc(token!, 'prompts/list')).data.result as unknown as {
+      prompts: { name: string; arguments?: { name: string; description?: string }[] }[];
+    };
+    expect(prompts.prompts.map((p) => p.name).sort()).toEqual(
+      MCP_PROMPTS.map((p) => p.name).sort(),
+    );
+    expect(prompts.prompts.every((p) => (p.arguments ?? []).every((a) => !!a.description))).toBe(
+      true,
+    );
+    const got = await rpc(token!, 'prompts/get', {
+      name: 'plan_trip',
+      arguments: { where: 'Kyoto', dates: 'April 2 to 9' },
+    });
+    expect(JSON.stringify(got.data.result)).toContain('Kyoto, April 2 to 9');
+    const left = await rpc(token!, 'prompts/get', { name: 'whats_left', arguments: {} });
+    expect(JSON.stringify(left.data.result)).toContain('our next trip');
+    const started = await call('get_started', {});
+    expect(started.error).toBe(false);
+    expect(started.text).toContain('Household: Sam');
+    expect(started.text).toContain('Next trip: Lisbon');
+    for (const e of EXAMPLE_PROMPTS) expect(started.text).toContain(e.prompt);
+    for (const p of MCP_PROMPTS) expect(started.text).toContain(p.name);
 
     // The app lists the connection and can revoke it.
     const conns = (await api.get<{ connections: { name: string }[] }>('/connections')).data;

@@ -37,6 +37,7 @@ import type {
   TripDetail,
   TripItem,
 } from '@shared/types';
+import { EXAMPLE_PROMPTS, MCP_PROMPTS } from '@shared/examples';
 import { app } from './app';
 import { INTERNAL } from './auth';
 
@@ -190,8 +191,22 @@ function summarizeTrip(d: TripDetail, people: Person[]) {
   };
 }
 
+const INSTRUCTIONS = `Duffel is a household's packing list. Each trip has a packing list (one entry per person per item, placed in bags and sorted into groups like Clothing or Documents) and to-dos before, during and after the trip. Templates are reusable lists; the catalog is everything the household packs.
+
+How to work with it:
+- Refer to trips, templates, people and bags by name. Item and to-do ids come from get_packing_list, get_template and list_todos.
+- Build trips with create_trip from a template or by copying a past trip: quantities scale with the trip's length, each person gets their own entries, and items go into their bags.
+- Give to-dos relative dates (days before, on or after the start, middle or end of the trip) so they move with the trip.
+- Ask before removing items or changing many entries at once.
+
+When someone asks what you can do with Duffel (or seems unsure where to start), call get_started: it returns their trips and lists as they stand now, and example requests to offer. Suggest two or three that fit, phrased for their trips, rather than listing tools. Examples:
+${EXAMPLE_PROMPTS.map((e) => `- "${e.prompt}"`).join('\n')}`;
+
 function buildServer(call: Call) {
-  const server = new McpServer({ name: 'duffel', version: '1.0.0' });
+  const server = new McpServer(
+    { name: 'duffel', version: '1.0.0' },
+    { instructions: INSTRUCTIONS },
+  );
   const state = () => call<AppState>('GET', '/state');
   const trip = (id: string) => call<TripDetail>('GET', `/trips/${encodeURIComponent(id)}`);
   async function resolveTrip(key?: string) {
@@ -274,7 +289,8 @@ function buildServer(call: Call) {
   server.registerTool(
     'search_catalog',
     {
-      description: 'Search the catalog of things this household packs.',
+      description:
+        'Search the catalog of things this household packs, with each item’s group, quantity rule, who packs it, and the weather and activities it’s for.',
       inputSchema: z.object({ query: z.string().optional() }),
     },
     async ({ query }) => {
@@ -299,6 +315,8 @@ function buildServer(call: Call) {
                 ? i.qty
                 : `${i.qty} ${i.qty_mode.replace('_', ' ')}${i.qty_offset ? ` ${i.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(i.qty_offset)}` : ''}${i.max_qty !== null ? `, max ${i.max_qty}` : ''}`,
             who_packs: i.default_people.map((p) => names.get(p) ?? p),
+            weather: i.climate_tags,
+            activities: i.activity_tags,
             auto_pack: packLabel(packChoice(i)),
           })),
         );
@@ -659,6 +677,159 @@ function buildServer(call: Call) {
       } catch (e) {
         return fail(e);
       }
+    },
+  );
+
+  // ---------- orientation ----------
+  server.registerTool(
+    'get_started',
+    {
+      title: 'What can I do here?',
+      description:
+        'Call when someone asks what you can do with Duffel or how to start. Returns their household, trips and lists as they stand, example requests that fit, and the ready-made prompts.',
+      inputSchema: z.object({}),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async () => {
+      try {
+        const s = await state();
+        const today = localToday();
+        const { active } = splitTrips(s.trips, today);
+        const lines = [
+          `Household: ${s.people.map((p) => p.name).join(', ') || 'no people yet'}.`,
+          `${s.items.filter((i) => !i.archived).length} items in the catalog, ${s.templates.length} template${s.templates.length === 1 ? '' : 's'}${s.templates.length ? ` (${s.templates.map((t) => t.name).join(', ')})` : ''}.`,
+        ];
+        const next = active[0];
+        if (next) {
+          const d = await trip(next.id);
+          const open = d.todos.filter((t) => !t.done);
+          const late = open.filter((t) => {
+            const due = todoDueDate(t, d.trip);
+            return !!due && due < today;
+          });
+          lines.push(
+            `Next trip: ${d.trip.name}${d.trip.start_date ? `, ${d.trip.start_date} to ${d.trip.end_date ?? d.trip.start_date}` : ''}. ${d.items.filter((r) => r.packed).length} of ${d.items.length} packed, ${open.length} to-do${open.length === 1 ? '' : 's'} open${late.length ? ` (${late.length} overdue)` : ''}.`,
+          );
+          if (active.length > 1)
+            lines.push(
+              `Also coming up: ${active
+                .slice(1, 5)
+                .map((t) => t.name)
+                .join(', ')}.`,
+            );
+        } else {
+          lines.push(
+            s.trips.length
+              ? 'No upcoming trips. Copying a past trip or starting from a template is a good first step.'
+              : 'No trips yet. Creating one from a template (or from scratch) is a good first step.',
+          );
+        }
+        const examples = EXAMPLE_PROMPTS.map((e) => `- "${e.prompt}" — ${e.why}`).join('\n');
+        const prompts = MCP_PROMPTS.map((p) => `- ${p.title} (${p.name}): ${p.does}`).join('\n');
+        return text(
+          `${lines.join('\n')}\n\nThings to offer (fill in <…> from the above, and suggest the two or three that fit best):\n${examples}\n\nReady-made prompts the person can pick in their app's prompt menu:\n${prompts}`,
+        );
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  // ---------- prompts ----------
+  const ask = (t: string) => ({
+    messages: [{ role: 'user' as const, content: { type: 'text' as const, text: t } }],
+  });
+  const tripArg = z
+    .string()
+    .optional()
+    .describe('Trip name. Leave empty for the next upcoming trip.');
+
+  server.registerPrompt(
+    'plan_trip',
+    {
+      title: 'Plan a trip',
+      description:
+        'Build a trip’s packing list from a template or a past trip, then suggest extras and to-dos.',
+      argsSchema: z.object({
+        where: z.string().describe('Where you’re going, e.g. "Lisbon".'),
+        dates: z.string().describe('When, e.g. "June 3 to 10".'),
+        start_from: z
+          .string()
+          .optional()
+          .describe('A template or past trip to start from. Leave empty to choose together.'),
+      }),
+    },
+    ({ where, dates, start_from }) =>
+      ask(`Plan our Duffel trip to ${where}, ${dates}.
+
+1. ${start_from ? `Start from "${start_from}": find it with list_templates or list_trips.` : 'Use list_templates and list_trips to find the best template or past trip to start from, and tell me which you picked.'} Ask who's going if it isn't clear.
+2. create_trip with the name, dates (YYYY-MM-DD), destination and travelers, from that template or as a copy of that trip.
+3. get_packing_list and search_catalog: suggest catalog items the weather or activities call for that aren't on the list yet. Add only the ones I say yes to (add_items).
+4. Suggest a few to-dos with relative dates (for example 14 days before the start). Add the ones I want with add_todos.
+5. Finish with a short summary: entries per person, anything in No bag, and the to-dos.`),
+  );
+
+  server.registerPrompt(
+    'whats_left',
+    {
+      title: 'What’s left to pack',
+      description: 'What isn’t packed yet, by person and bag, plus open and overdue to-dos.',
+      argsSchema: z.object({ trip: tripArg }),
+    },
+    ({ trip: t }) =>
+      ask(`What's left to do for ${t ? `"${t}"` : 'our next trip'} in Duffel?
+
+1. get_packing_list${t ? ` for "${t}"` : ''}.
+2. List what isn't packed, grouped by person, then by bag, with quantities. Point out anything in No bag.
+3. list_todos: show open to-dos, overdue ones first.
+4. End with how close we are (packed out of total) and the three things to do next. Don't change anything unless I ask.`),
+  );
+
+  server.registerPrompt(
+    'add_trip_todos',
+    {
+      title: 'Add the usual to-dos',
+      description:
+        'Propose to-dos for before, during and after a trip, with dates that move with it.',
+      argsSchema: z.object({
+        trip: tripArg,
+        notes: z
+          .string()
+          .optional()
+          .describe('Anything special, e.g. "flying, with a dog" or "renting a car".'),
+      }),
+    },
+    ({ trip: t, notes }) =>
+      ask(`Suggest to-dos for ${t ? `"${t}"` : 'our next trip'} in Duffel${notes ? ` (${notes})` : ''}.
+
+1. get_packing_list and list_todos${t ? ` for "${t}"` : ''} to see the trip's dates, destination, who's going and the to-dos already there.
+2. Propose a short list for Pre-trip, During trip and After trip. Give each a relative date (days before, on or after the start, middle or end of the trip) where timing matters. Skip anything already there.
+3. Wait for me to pick, then add the ones I choose with add_todos and show the final list with dates.`),
+  );
+
+  server.registerPrompt(
+    'organize_groups',
+    {
+      title: 'Organize into groups',
+      description:
+        'Propose groups (Clothing, Toiletries, Documents…) and their order for a trip or template, then apply them.',
+      argsSchema: z.object({
+        trip: z.string().optional().describe('Trip name. Leave empty if organizing a template.'),
+        template: z.string().optional().describe('Template name, to organize a template instead.'),
+      }),
+    },
+    ({ trip: t, template }) => {
+      const target = template ? `the template "${template}"` : t ? `"${t}"` : 'our next trip';
+      const read = template
+        ? `get_template "${template}"`
+        : `get_packing_list${t ? ` "${t}"` : ''}`;
+      const write = template ? 'update_template_item' : 'update_item';
+      return ask(`Organize ${target} in Duffel into groups.
+
+1. ${read} to see each item and its current group.
+2. Propose a short set of groups (reuse existing ones like Clothing, Toiletries, Documents, Electronics) and which items go in each, plus the order to show them in, the way we'd pack.
+3. Don't change anything until I agree. Then set each item's group with ${write} and the order with set_group_order.
+4. Show the result as group → items.`);
     },
   );
 
