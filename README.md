@@ -22,7 +22,7 @@ One deployment is one household.
 2. Cloudflare copies this repo to your GitHub or GitLab account, creates the database and storage, and asks for **APP_PASSWORD**. That’s the password everyone in your household will use. Pick something long.
 3. When the deploy finishes, open the `*.workers.dev` link. Sign in, add the people you pack for, or load the sample data to look around.
 
-The deploy runs the database migrations for you (`npm run deploy`).
+Cloudflare runs the database migrations on every deploy (`npm run deploy`), before the new version goes live.
 
 ### By hand
 
@@ -34,7 +34,7 @@ npx wrangler secret put APP_PASSWORD
 npm run deploy
 ```
 
-`npm run deploy` builds the app, deploys the Worker and applies migrations to the remote database. Wrangler creates the D1 database and KV namespace on the first deploy and writes their ids into `wrangler.jsonc`. If your Wrangler version asks you to create them yourself, run `npx wrangler d1 create duffel` and `npx wrangler kv namespace create OAUTH_KV`, then add the ids it prints.
+`npm run deploy` builds the app, applies migrations to the remote database and deploys the Worker. Wrangler creates the D1 database and KV namespace on the first deploy and writes their ids into `wrangler.jsonc`. If your Wrangler version asks you to create them yourself, run `npx wrangler d1 create duffel` and `npx wrangler kv namespace create OAUTH_KV`, then add the ids it prints.
 
 ## Use it on your phone
 
@@ -65,7 +65,13 @@ Everyone is signed out and signs in again with the new password. Connected AI as
 
 ## Update your copy
 
-If you deployed with the button, your copy lives in your own GitHub account. To get new versions, open it on GitHub and click **Sync fork** (or merge from `tyler-class/Duffel`). Cloudflare redeploys automatically and runs any new migrations.
+If you deployed with the button, your copy lives in your own GitHub account and updates itself: every Monday a GitHub Action takes the latest Duffel and pushes it to your copy, and Cloudflare migrates the database and redeploys. To update right away, open your copy on GitHub, go to **Actions → Update Duffel** and click **Run workflow**. Your household’s data is in the database, not the repo, so updates don’t touch it.
+
+The update replaces the app’s code with Duffel’s, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let an Action change them, so if Duffel’s workflows change you copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
+
+If you deployed by hand, `git pull` and `npm run deploy`.
+
+If your copy was made before this update existed, copy [`.github/workflows/update.yml`](.github/workflows/update.yml) into it once.
 
 ## Local development
 
@@ -83,7 +89,7 @@ npm run dev
 | `npm run build` / `preview`  | Production build / serve the build locally         |
 | `npm test`                   | Unit tests and Workers-runtime API tests (Vitest)  |
 | `npm run typecheck` / `lint` | TypeScript, ESLint and Prettier                    |
-| `npm run deploy`             | Build, deploy, migrate the remote database         |
+| `npm run deploy`             | Build, migrate the remote database, deploy         |
 | `npm run db:migrate:local`   | Apply migrations to the local database             |
 | `npm run db:migrate:remote`  | Apply migrations to the deployed database          |
 
