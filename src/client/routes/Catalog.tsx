@@ -2,12 +2,19 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
 import type { AppState, Item } from '@shared/types';
+import { calcSummary, resolveCalc } from '@shared/logic';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { load, save } from '../lib/storage';
 import { Icon } from '../components/Icon';
-import { NumberInput, PeoplePicker, SelectSheet, TagPicker } from '../components/fields';
+import {
+  NumberInput,
+  OffsetStepper,
+  PeoplePicker,
+  SelectSheet,
+  TagPicker,
+} from '../components/fields';
 import { CatalogHeader } from '../components/CatalogNav';
 import { SwipeRow } from '../components/SwipeRow';
 import { useToast } from '../components/Toast';
@@ -26,9 +33,8 @@ import {
 } from '../components/ui';
 
 function qtySummary(i: Item): string {
-  if (i.qty_mode === 'fixed') return `×${i.qty}`;
-  const unit = i.qty_mode === 'per_day' ? '/day' : '/night';
-  return `${i.qty}${unit}${i.max_qty !== null ? ` · max ${i.max_qty}` : ''}`;
+  const s = calcSummary(resolveCalc(i));
+  return i.qty_mode !== 'fixed' && i.max_qty !== null ? `${s} · max ${i.max_qty}` : s;
 }
 
 export function Catalog() {
@@ -151,6 +157,7 @@ const emptyItem = (): Omit<Item, 'id'> => ({
   qty_mode: 'fixed',
   qty: 1,
   max_qty: null,
+  qty_offset: 0,
   climate_tags: [],
   activity_tags: [],
   length_in: null,
@@ -223,7 +230,7 @@ function ItemForm({
           hint={
             f.qty_mode === 'fixed'
               ? 'The same count on every trip.'
-              : `Scales with trip length: ${f.qty} ${QTY_MODE_LABELS[f.qty_mode].toLowerCase()}.`
+              : `Scales with trip length: ${f.qty} ${QTY_MODE_LABELS[f.qty_mode].toLowerCase()}${f.qty_offset ? `, ${f.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(f.qty_offset)}` : ''}.`
           }
         >
           <Segmented<QtyMode>
@@ -259,6 +266,18 @@ function ItemForm({
               </div>
             )}
           </div>
+          {f.qty_mode !== 'fixed' && (
+            <div className="flex flex-col gap-1">
+              <label htmlFor="i-offset" className="text-xs text-soft">
+                Plus or minus
+              </label>
+              <OffsetStepper
+                id="i-offset"
+                value={f.qty_offset}
+                onChange={(qty_offset) => set({ qty_offset })}
+              />
+            </div>
+          )}
         </FieldRow>
         <FieldRow
           icon="user"

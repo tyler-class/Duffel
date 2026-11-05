@@ -7,6 +7,7 @@ const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? 
 const text = (max: number) => z.preprocess(blankToNull, z.string().trim().max(max).nullable());
 const name = (max = 120) => z.string().trim().min(1, 'Name is required').max(max);
 const num = z.number().finite().nonnegative().nullable();
+const offset = z.number().finite().min(-999).max(999);
 const int = z.number().int().nonnegative().nullable();
 const id = z.string().min(1).max(64);
 const date = z.preprocess(
@@ -46,6 +47,7 @@ export const itemInput = z.object({
   qty_mode: qtyModeSchema.default('fixed'),
   qty: z.number().finite().nonnegative().default(1),
   max_qty: num.optional(),
+  qty_offset: offset.default(0),
   climate_tags: tags.default([]),
   activity_tags: tags.default([]),
   length_in: num.optional(),
@@ -88,6 +90,7 @@ export const templateItemInput = z.object({
   item_id: id,
   qty_mode_override: qtyModeSchema.nullable().optional(),
   qty_override: num.optional(),
+  qty_offset_override: offset.nullable().optional(),
   carry_on: z.boolean().default(false),
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),

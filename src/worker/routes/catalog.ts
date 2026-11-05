@@ -77,6 +77,7 @@ function itemFields(input: Partial<ReturnType<typeof itemInput.parse>>) {
     'qty_mode',
     'qty',
     'max_qty',
+    'qty_offset',
     'length_in',
     'width_in',
     'height_in',

@@ -2,7 +2,7 @@
 import type { QtyMode } from '../lookups';
 import type { Item, TemplateItem, TripBag, TripItem } from '../types';
 import { placeRow, rewriteLabelPrefix, type PlaceableBag } from './bags';
-import { calcQty, resolveCalc, type LengthLike } from './quantity';
+import { calcQty, resolveCalc, rowCalc, type LengthLike } from './quantity';
 
 /** A trip-item row before it has an id, trip, timestamps or sort order. */
 export interface TripItemDraft {
@@ -14,6 +14,7 @@ export interface TripItemDraft {
   calc_mode: QtyMode | null;
   calc_unit_qty: number | null;
   calc_max: number | null;
+  calc_offset: number | null;
   qty: number | null;
   qty_override: number | null;
   notes: string | null;
@@ -30,7 +31,10 @@ export interface PlanContext {
 
 export interface PlanEntry {
   item: Item;
-  override?: Pick<TemplateItem, 'qty_mode_override' | 'qty_override'> | null;
+  override?: Pick<
+    TemplateItem,
+    'qty_mode_override' | 'qty_override' | 'qty_offset_override'
+  > | null;
   /** Explicit people. Empty = fall back to the item's default people. */
   assignees: string[];
   carryHint: boolean;
@@ -68,6 +72,7 @@ export function planRows(entries: PlanEntry[], ctx: PlanContext): TripItemDraft[
         calc_mode: calc.mode,
         calc_unit_qty: calc.unitQty,
         calc_max: calc.max,
+        calc_offset: calc.offset ?? 0,
         qty,
         qty_override: null,
         notes: e.notes,
@@ -139,10 +144,7 @@ export function planClone(input: {
     .sort((a, b) => a.sort_order - b.sort_order)
     .filter((r) => !keep || r.person_id === null || keep.has(r.person_id))
     .map((r) => {
-      const qty =
-        r.calc_mode && r.calc_unit_qty !== null
-          ? calcQty({ mode: r.calc_mode, unitQty: r.calc_unit_qty, max: r.calc_max }, input.len)
-          : r.qty;
+      const qty = r.calc_mode && r.calc_unit_qty !== null ? calcQty(rowCalc(r), input.len) : r.qty;
       return {
         item_id: r.item_id,
         name: r.name,
@@ -152,6 +154,7 @@ export function planClone(input: {
         calc_mode: r.calc_mode,
         calc_unit_qty: r.calc_unit_qty,
         calc_max: r.calc_max,
+        calc_offset: r.calc_offset,
         qty,
         qty_override: r.qty_override,
         notes: r.notes,
@@ -167,6 +170,7 @@ export interface TemplatePlanItem {
   item_id: string;
   qty_mode_override: QtyMode | null;
   qty_override: number | null;
+  qty_offset_override: number | null;
   carry_on: boolean;
   notes: string | null;
   assignees: string[];
@@ -189,7 +193,7 @@ export interface NewCatalogItem {
 export function planTemplateFromTrip(input: {
   rows: TripItem[];
   bags: Map<string, Pick<TripBag, 'carry_on'>>;
-  items: Map<string, Pick<Item, 'id' | 'qty_mode' | 'qty'>>;
+  items: Map<string, Pick<Item, 'id' | 'qty_mode' | 'qty'> & { qty_offset?: number }>;
   newId: () => string;
 }): { newCatalogItems: NewCatalogItem[]; templateItems: TemplatePlanItem[] } {
   const newCatalogItems: NewCatalogItem[] = [];
@@ -216,10 +220,17 @@ export function planTemplateFromTrip(input: {
     const mode = item && r.calc_mode && r.calc_mode !== item.qty_mode ? r.calc_mode : null;
     const unit =
       item && r.calc_unit_qty !== null && r.calc_unit_qty !== item.qty ? r.calc_unit_qty : null;
+    const off =
+      item &&
+      r.calc_mode &&
+      r.calc_mode !== 'fixed' &&
+      (r.calc_offset ?? 0) !== (item.qty_offset ?? 0)
+        ? (r.calc_offset ?? 0)
+        : null;
     const carry =
       (r.trip_bag_id ? (input.bags.get(r.trip_bag_id)?.carry_on ?? false) : false) || r.carry_hint;
     const notes = r.notes?.trim() || null;
-    const key = JSON.stringify([itemId, mode, unit, carry, notes, r.person_id === null]);
+    const key = JSON.stringify([itemId, mode, unit, off, carry, notes, r.person_id === null]);
     const g = groups.get(key);
     if (g && r.person_id && !g.assignees.includes(r.person_id)) {
       g.assignees.push(r.person_id);
@@ -228,6 +239,7 @@ export function planTemplateFromTrip(input: {
         item_id: itemId,
         qty_mode_override: mode,
         qty_override: unit,
+        qty_offset_override: off,
         carry_on: carry,
         notes,
         assignees: r.person_id ? [r.person_id] : [],

@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react';
 import type { Person } from '@shared/types';
 import { Icon } from './Icon';
-import { Pick, PersonDot, Sheet, TextInput } from './ui';
+import { Pick, PersonDot, Sheet, TextInput, cx } from './ui';
 
 /** Free text with suggestions. */
 export function Combo({
@@ -203,6 +203,51 @@ export function NumberInput({
     />
   );
 }
+
+/**
+ * A whole number that can go below zero, with − and + buttons: the iPhone number pad has no
+ * minus key. Null shows `placeholder` (a default being inherited) until a button is tapped.
+ */
+export function OffsetStepper({
+  id,
+  value,
+  onChange,
+  placeholder,
+  base = 0,
+}: {
+  id?: string;
+  value: number | null;
+  onChange: (v: number) => void;
+  placeholder?: string;
+  /** Where the first tap starts from when the value is null. */
+  base?: number;
+}) {
+  const cur = value ?? base;
+  const btn =
+    'flex h-10 w-10 flex-none items-center justify-center rounded-full border border-line bg-surface text-soft active:bg-chip';
+  return (
+    <div className="flex items-center gap-3">
+      <button type="button" className={btn} aria-label="Less" onClick={() => onChange(cur - 1)}>
+        <Icon name="minus" size={16} />
+      </button>
+      <output
+        id={id}
+        aria-live="polite"
+        className={cx(
+          'min-w-12 text-center font-mono text-base tnum',
+          value === null ? 'text-faint' : 'text-ink',
+        )}
+      >
+        {value === null ? (placeholder ?? signed(base)) : signed(value)}
+      </output>
+      <button type="button" className={btn} aria-label="More" onClick={() => onChange(cur + 1)}>
+        <Icon name="plus" size={16} />
+      </button>
+    </div>
+  );
+}
+
+const signed = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
 
 /**
  * A tap-to-open picker: shows the current value like a select, opens a sheet

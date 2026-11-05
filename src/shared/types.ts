@@ -17,6 +17,8 @@ export interface Item {
   qty_mode: QtyMode;
   qty: number;
   max_qty: number | null;
+  /** Added to a per-day or per-night count: 1 per day plus 2. Can be negative. */
+  qty_offset: number;
   climate_tags: string[];
   activity_tags: string[];
   length_in: number | null;
@@ -52,6 +54,8 @@ export interface TemplateItem {
   item_id: string;
   qty_mode_override: QtyMode | null;
   qty_override: number | null;
+  /** Null = the catalog item's offset. */
+  qty_offset_override: number | null;
   carry_on: boolean;
   notes: string | null;
   sort_order: number;
@@ -127,6 +131,7 @@ export interface TripItem {
   calc_mode: QtyMode | null;
   calc_unit_qty: number | null;
   calc_max: number | null;
+  calc_offset: number | null;
   qty: number | null;
   qty_override: number | null;
   packed: boolean;

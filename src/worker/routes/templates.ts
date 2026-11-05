@@ -107,6 +107,7 @@ templates.patch('/template-items/:id', async (c) => {
   const f: Record<string, unknown> = defined({
     qty_mode_override: input.qty_mode_override,
     qty_override: input.qty_override,
+    qty_offset_override: input.qty_offset_override,
     notes: input.notes,
     sort_order: input.sort_order,
   });

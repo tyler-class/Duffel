@@ -205,7 +205,7 @@ function buildServer(call: Call) {
             quantity:
               i.qty_mode === 'fixed'
                 ? i.qty
-                : `${i.qty} ${i.qty_mode.replace('_', ' ')}${i.max_qty !== null ? `, max ${i.max_qty}` : ''}`,
+                : `${i.qty} ${i.qty_mode.replace('_', ' ')}${i.qty_offset ? ` ${i.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(i.qty_offset)}` : ''}${i.max_qty !== null ? `, max ${i.max_qty}` : ''}`,
             usually_for: i.default_people.map((p) => names.get(p) ?? p),
           })),
         );

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
 import type { AppState, Item, Template, TemplateBag, TemplateItem } from '@shared/types';
-import { planFromTemplate, unplacedSummary } from '@shared/logic';
+import { calcSummary, planFromTemplate, resolveCalc, unplacedSummary } from '@shared/logic';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
@@ -10,7 +10,13 @@ import { useSave } from '../lib/useSave';
 import { plural } from '../lib/format';
 import { Icon } from '../components/Icon';
 import { CatalogPicker } from '../components/CatalogPicker';
-import { NumberInput, OnePicker, PeoplePicker, TagPicker } from '../components/fields';
+import {
+  NumberInput,
+  OffsetStepper,
+  OnePicker,
+  PeoplePicker,
+  TagPicker,
+} from '../components/fields';
 import { SwipeRow } from '../components/SwipeRow';
 import {
   DangerButton,
@@ -125,9 +131,7 @@ export function Templates() {
 }
 
 function overrideSummary(ti: TemplateItem, item?: Item): string {
-  const mode = ti.qty_mode_override ?? item?.qty_mode ?? 'fixed';
-  const qty = ti.qty_override ?? item?.qty ?? 1;
-  return mode === 'fixed' ? `×${qty}` : `${qty}${mode === 'per_day' ? '/day' : '/night'}`;
+  return calcSummary(resolveCalc(item ?? { qty_mode: 'fixed', qty: 1, max_qty: null }, ti));
 }
 
 export function TemplateEditor() {
@@ -434,6 +438,8 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
 
 type ModeChoice = 'default' | QtyMode;
 
+const signedText = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}` : '0');
+
 function TemplateItemSheet({
   ti,
   item,
@@ -447,6 +453,7 @@ function TemplateItemSheet({
   const { run, busy, error } = useSave();
   const [mode, setMode] = useState<ModeChoice>(ti.qty_mode_override ?? 'default');
   const [qty, setQty] = useState<number | null>(ti.qty_override);
+  const [offset, setOffset] = useState<number | null>(ti.qty_offset_override);
   const [assignees, setAssignees] = useState<string[]>(ti.assignees);
   const [carry, setCarry] = useState(ti.carry_on);
   const [notes, setNotes] = useState(ti.notes ?? '');
@@ -475,6 +482,7 @@ function TemplateItemSheet({
                   api.patch(`/template-items/${ti.id}`, {
                     qty_mode_override: mode === 'default' ? null : mode,
                     qty_override: qty,
+                    qty_offset_override: effMode === 'fixed' ? null : offset,
                     assignees,
                     carry_on: carry,
                     notes,
@@ -494,7 +502,7 @@ function TemplateItemSheet({
         label="How many"
         hint={
           item
-            ? `Catalog default: ${item.qty} ${QTY_MODE_LABELS[item.qty_mode].toLowerCase()}${item.max_qty !== null ? `, at most ${item.max_qty}` : ''}.`
+            ? `Catalog default: ${item.qty} ${QTY_MODE_LABELS[item.qty_mode].toLowerCase()}${item.qty_mode !== 'fixed' && item.qty_offset ? `, ${item.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(item.qty_offset)}` : ''}${item.max_qty !== null ? `, at most ${item.max_qty}` : ''}.`
             : undefined
         }
       >
@@ -515,6 +523,28 @@ function TemplateItemSheet({
             ? 'Total per person.'
             : `Per person, ${QTY_MODE_LABELS[effMode].toLowerCase()}.`}
         </span>
+        {effMode !== 'fixed' && (
+          <div className="flex flex-col gap-1">
+            <span className="text-xs text-soft">Plus or minus</span>
+            <div className="flex items-center justify-between gap-3">
+              <OffsetStepper
+                value={offset}
+                base={item?.qty_offset ?? 0}
+                placeholder={`Default (${signedText(item?.qty_offset ?? 0)})`}
+                onChange={setOffset}
+              />
+              {offset !== null && (
+                <button
+                  type="button"
+                  className="text-sm text-soft underline"
+                  onClick={() => setOffset(null)}
+                >
+                  Use default
+                </button>
+              )}
+            </div>
+          </div>
+        )}
       </FieldRow>
       <FieldRow
         icon="user"

@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from 'react';
 import type { Item, Person, TripBag, TripItem } from '@shared/types';
-import { calcQty, displayQty, resolveCalc } from '@shared/logic';
+import { calcQty, displayQty, resolveCalc, rowCalc } from '@shared/logic';
 import { QTY_MODE_LABELS } from '@shared/lookups';
 import { Icon } from './Icon';
 import {
@@ -120,7 +120,7 @@ function ItemSheetBody(props: ItemSheetProps) {
   // What the calculation would give: the row's snapshot when editing, or the catalog item when adding.
   const calc =
     row?.calc_mode && row.calc_unit_qty !== null
-      ? { mode: row.calc_mode, unitQty: row.calc_unit_qty, max: row.calc_max }
+      ? rowCalc(row)
       : !row && match
         ? resolveCalc(match)
         : null;
@@ -175,7 +175,7 @@ function ItemSheetBody(props: ItemSheetProps) {
   const ruleText = calc
     ? calc.mode === 'fixed'
       ? `${calc.unitQty}`
-      : `${calc.unitQty} ${QTY_MODE_LABELS[calc.mode].toLowerCase()}${calc.max ? `, max ${calc.max}` : ''}`
+      : `${calc.unitQty} ${QTY_MODE_LABELS[calc.mode].toLowerCase()}${calc.offset ? ` ${calc.offset > 0 ? '+' : '−'}${Math.abs(calc.offset)}` : ''}${calc.max ? `, max ${calc.max}` : ''}`
     : '';
   const qtyHint = !calc
     ? null
