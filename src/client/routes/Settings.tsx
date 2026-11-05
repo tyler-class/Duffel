@@ -18,6 +18,7 @@ import {
 import { useToast } from '../components/Toast';
 import { ConnectAISection } from './ConnectAI';
 import { InstallHint } from '../components/InstallHint';
+import { AboutButton } from '../components/AboutSheet';
 
 export function Settings() {
   const qc = useQueryClient();
@@ -43,7 +44,11 @@ export function Settings() {
 
   return (
     <div className="pb-12">
-      <PageHeader title="Settings" icon="settings" />
+      <PageHeader
+        title="Settings"
+        icon="settings"
+        action={<AboutButton variant="header" className="md:hidden" />}
+      />
 
       <SectionLabel icon="palette">Appearance</SectionLabel>
       <div className="px-6 pt-4 pb-2">
@@ -123,18 +128,7 @@ export function Settings() {
 
       <ConnectAISection />
 
-      <SectionLabel icon="settings">Password and sign-in</SectionLabel>
-      <div className="flex flex-col gap-3 px-6 pt-4 text-sm text-soft">
-        <p>
-          To change the password, edit the{' '}
-          <span className="font-medium text-ink">APP_PASSWORD</span> secret in Cloudflare (Workers →
-          duffel → Settings → Variables and Secrets), or run:
-        </p>
-        <code className="block overflow-x-auto rounded-lg bg-chip px-3 py-2.5 font-mono text-[13px] whitespace-nowrap text-ink select-all">
-          npx wrangler secret put APP_PASSWORD
-        </code>
-        <p>Everyone is signed out when it changes.</p>
-      </div>
+      <SectionLabel icon="user">Account</SectionLabel>
       <div className="px-6 pt-2">
         <button
           className="flex w-full items-center gap-3 border-y border-line py-3.5 text-left text-base text-ink"
@@ -150,51 +144,6 @@ export function Settings() {
           <Icon name="logout" size={18} className="text-accent" />
           <span className="flex-1">Sign out of this device</span>
         </button>
-      </div>
-
-      <SectionLabel icon="info">About</SectionLabel>
-      <div className="flex flex-col gap-3 px-6 pt-4 text-sm text-soft">
-        <p>
-          Duffel is a free, open-source packing list for families. It runs on your own Cloudflare
-          account, so your lists stay yours.
-        </p>
-        <p>
-          Built by{' '}
-          <a
-            href="https://tylerclass.net"
-            target="_blank"
-            rel="noreferrer"
-            className="font-medium text-accent"
-          >
-            Tyler Class
-          </a>
-          .
-        </p>
-      </div>
-      <div className="px-6 pt-2">
-        <a
-          href="https://ko-fi.com/tylerclass"
-          target="_blank"
-          rel="noreferrer"
-          className="flex w-full items-center gap-3 border-y border-line py-3.5 text-base text-ink"
-        >
-          <Icon name="coffee" size={18} className="text-accent" />
-          <span className="flex-1">If you want to say thank you, coffee is my love language</span>
-          <Icon name="chevRight" size={16} className="text-faint" />
-        </a>
-      </div>
-
-      <div className="flex items-center justify-between px-6 pt-8 text-xs text-faint md:hidden">
-        <span>Duffel {__APP_VERSION__}</span>
-        <a
-          href="https://github.com/tyler-class/Duffel"
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center gap-1.5 text-soft"
-        >
-          <Icon name="github" size={16} />
-          Duffel on GitHub
-        </a>
       </div>
 
       <Sheet
