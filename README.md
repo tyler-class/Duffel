@@ -11,7 +11,7 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 - **Templates and past trips.** Start a trip from a template, copy last year’s trip (everything starts unpacked and undone), or save any trip as a new template. Lists, groups, bags and to-dos come along.
 - **Built for phones.** Install it to your home screen. The last trip you opened works offline, and check-offs sync when you’re back online.
 - **Pack together.** Everyone in the household signs in with one shared password and sees changes within seconds.
-- **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant and ask it to build or update your lists and to-dos.
+- **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant and ask it to build or update your lists, groups and to-dos.
 - **Yours.** It runs on your own Cloudflare account. The free plan is plenty. Your data stays in your database.
 
 One deployment is one household.

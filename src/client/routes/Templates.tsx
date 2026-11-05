@@ -677,13 +677,13 @@ function TemplateItemSheet({
       </FieldRow>
       <FieldRow
         icon="user"
-        label="For"
+        label="Who packs this"
         hint={
           assignees.length > 1
-            ? 'Each person gets their own row on the trip, with this quantity each.'
+            ? 'Each person gets their own entry on the trip, with this quantity each.'
             : assignees.length
               ? undefined
-              : 'Nobody picked: uses the catalog item’s people, or one shared row.'
+              : 'Nobody picked: uses the catalog item’s, or one shared entry.'
         }
       >
         <PeoplePicker people={data.people} value={assignees} onChange={setAssignees} />

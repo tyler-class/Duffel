@@ -4,19 +4,28 @@
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
+  calcSummary,
   describeRelative,
   displayQty,
   isCarryOn,
   localToday,
+  orderCategories,
   packChoice,
   packLabel,
+  resolveCalc,
   shortBagLabel,
   sortTemplateTodos,
   sortTripTodos,
   splitTrips,
   todoDueDate,
 } from '@shared/logic';
-import { REL_ANCHORS, REL_DIRS, TODO_PHASE_LABELS, TODO_PHASES } from '@shared/lookups';
+import {
+  DEFAULT_LOOKUPS,
+  REL_ANCHORS,
+  REL_DIRS,
+  TODO_PHASE_LABELS,
+  TODO_PHASES,
+} from '@shared/lookups';
 import type {
   AppState,
   Item,
@@ -133,6 +142,18 @@ function whenFrom(a: {
   return {};
 }
 
+/** The groups on a list, in the order they're shown. */
+function groupOrder(rows: { category: string | null }[], saved: string[]) {
+  const present = rows.map((r) => r.category?.trim()).filter((c): c is string => !!c);
+  return orderCategories(present, saved, DEFAULT_LOOKUPS.category);
+}
+
+const groupInput = z
+  .string()
+  .nullable()
+  .optional()
+  .describe('Item group, e.g. "Clothing" or "Documents". null takes it out of its group.');
+
 function summarizeTrip(d: TripDetail, people: Person[]) {
   const bags = new Map(d.bags.map((b) => [b.id, b]));
   const names = new Map(people.map((p) => [p.id, p.name]));
@@ -146,6 +167,7 @@ function summarizeTrip(d: TripDetail, people: Person[]) {
     destination: d.trip.destination,
     travelers: d.trip.travelers.map((p) => names.get(p) ?? p),
     packed: `${d.items.filter((r) => r.packed).length} of ${d.items.length}`,
+    group_order: groupOrder(d.items, d.trip.category_order),
     bags: d.bags.map((b) => ({
       id: b.id,
       name: shortBagLabel(b.label, d.trip.name),
@@ -154,6 +176,7 @@ function summarizeTrip(d: TripDetail, people: Person[]) {
     items: d.items.map((r) => ({
       id: r.id,
       name: r.name,
+      group: r.category,
       for: r.person_id ? (names.get(r.person_id) ?? 'Shared') : 'Shared',
       bag: r.trip_bag_id
         ? shortBagLabel(bags.get(r.trip_bag_id)?.label ?? '', d.trip.name)
@@ -235,7 +258,7 @@ function buildServer(call: Call) {
     'get_packing_list',
     {
       description:
-        'Show a trip’s packing list: every item with who it’s for, which bag, carry-on, quantity and packed state, plus its to-dos. Defaults to the next upcoming trip.',
+        'Show a trip’s packing list: every item with its group, who it’s for, which bag, carry-on, quantity and packed state, plus the group order and the trip’s to-dos. Defaults to the next upcoming trip.',
       inputSchema: z.object({ trip: z.string().optional().describe('Trip name or id') }),
     },
     async ({ trip: key }) => {
@@ -275,7 +298,7 @@ function buildServer(call: Call) {
               i.qty_mode === 'fixed'
                 ? i.qty
                 : `${i.qty} ${i.qty_mode.replace('_', ' ')}${i.qty_offset ? ` ${i.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(i.qty_offset)}` : ''}${i.max_qty !== null ? `, max ${i.max_qty}` : ''}`,
-            usually_for: i.default_people.map((p) => names.get(p) ?? p),
+            who_packs: i.default_people.map((p) => names.get(p) ?? p),
             auto_pack: packLabel(packChoice(i)),
           })),
         );
@@ -289,7 +312,7 @@ function buildServer(call: Call) {
     'add_items',
     {
       description:
-        'Add items to a trip’s packing list. Names that match the catalog use its quantity rules. bag can be a bag name, "no bag" (travels outside any bag) or "later".',
+        'Add items to a trip’s packing list. Names that match the catalog use its quantity rules and group. bag can be a bag name, "no bag" (travels outside any bag) or "later".',
       inputSchema: z.object({
         trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
         items: z
@@ -299,6 +322,7 @@ function buildServer(call: Call) {
               for: z.string().optional().describe('Person name, or "shared"'),
               bag: z.string().optional(),
               qty: z.number().nonnegative().optional(),
+              group: groupInput,
               notes: z.string().optional(),
             }),
           )
@@ -321,6 +345,7 @@ function buildServer(call: Call) {
             person_id: resolvePerson(s.people, it.for ?? null) ?? null,
             ...resolveBag(d.bags, t.name, it.bag),
             ...(match ? { qty_override: it.qty ?? null } : { qty: it.qty ?? 1 }),
+            ...(it.group !== undefined ? { category: it.group } : {}),
             notes: it.notes ?? null,
           });
           added.push(`${row.name} (×${displayQty(row) ?? '?'})`);
@@ -336,7 +361,7 @@ function buildServer(call: Call) {
     'update_item',
     {
       description:
-        'Change one item on a packing list: mark packed or unpacked, move it to another person or bag, change quantity, rename, or edit notes. Use ids from get_packing_list.',
+        'Change one item on a packing list: mark packed or unpacked, move it to another person, bag or group, change quantity, rename, or edit notes. Use ids from get_packing_list.',
       inputSchema: z.object({
         item_id: z.string(),
         packed: z.boolean().optional(),
@@ -344,10 +369,11 @@ function buildServer(call: Call) {
         bag: z.string().optional().describe('Bag name, "no bag" or "later"'),
         qty: z.number().nonnegative().optional(),
         name: z.string().optional(),
+        group: groupInput,
         notes: z.string().optional(),
       }),
     },
-    async ({ item_id, packed, for: who, bag, qty, name, notes }) => {
+    async ({ item_id, packed, for: who, bag, qty, name, group, notes }) => {
       try {
         const s = await state();
         const owner = s.trips.length ? await findRowTrip(s, item_id) : null;
@@ -361,6 +387,7 @@ function buildServer(call: Call) {
           ...resolveBag(owner.bags, owner.trip.name, bag),
           ...(qty !== undefined ? (owner.row.calc_mode ? { qty_override: qty } : { qty }) : {}),
           ...(name !== undefined ? { name } : {}),
+          ...(group !== undefined ? { category: group } : {}),
           ...(notes !== undefined ? { notes } : {}),
         });
         return text(`Updated ${row.name}${row.packed ? ' (packed)' : ''}.`);
@@ -473,7 +500,8 @@ function buildServer(call: Call) {
   server.registerTool(
     'list_templates',
     {
-      description: 'List templates (reusable packing lists) and what’s on them.',
+      description:
+        'List templates (reusable packing lists) and what’s on them. Use get_template for item ids and groups.',
       inputSchema: z.object({}),
     },
     async () => {
@@ -507,6 +535,127 @@ function buildServer(call: Call) {
         const { t } = await resolveTrip(key);
         const tpl = await call<Template>('POST', `/trips/${t.id}/save-as-template`, { name });
         return text(`Saved template “${tpl.name}” with ${tpl.items.length} items.`);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  // ---------- templates and groups ----------
+  function summarizeTemplate(t: Template, s: AppState) {
+    const items = new Map(s.items.map((i) => [i.id, i]));
+    const names = new Map(s.people.map((p) => [p.id, p.name]));
+    return {
+      id: t.id,
+      name: t.name,
+      trip_type: t.trip_type,
+      climate: t.climate,
+      activities: t.activities,
+      group_order: groupOrder(t.items, t.category_order),
+      items: [...t.items]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((ti) => {
+          const item = items.get(ti.item_id);
+          const who = ti.assignees.length ? ti.assignees : (item?.default_people ?? []);
+          return {
+            id: ti.id,
+            name: item?.name ?? 'Removed item',
+            group: ti.category,
+            who_packs: who.length ? who.map((p) => names.get(p) ?? p) : 'Shared',
+            quantity: calcSummary(
+              resolveCalc(item ?? { qty_mode: 'fixed', qty: 1, max_qty: null }, ti),
+            ),
+            ...(ti.pack_type || ti.carry_on ? { auto_pack: ti.pack_type ?? 'Carry-on' } : {}),
+            ...(ti.notes ? { notes: ti.notes } : {}),
+          };
+        }),
+      todos: sortTemplateTodos(t.todos).map((x) => todoView(x)),
+    };
+  }
+
+  server.registerTool(
+    'get_template',
+    {
+      description:
+        'Show a template: its items with ids, groups, who packs each, quantities and notes, the group order, and its to-dos.',
+      inputSchema: z.object({ template: z.string().describe('Template name or id') }),
+    },
+    async ({ template }) => {
+      try {
+        const s = await state();
+        return text(
+          summarizeTemplate(
+            find(s.templates, template, (t) => t.name, 'template'),
+            s,
+          ),
+        );
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_template_item',
+    {
+      description:
+        'Change one item on a template: its group, who packs it, or notes. Use ids from get_template.',
+      inputSchema: z.object({
+        template_item_id: z.string(),
+        group: groupInput,
+        who_packs: z
+          .array(z.string())
+          .optional()
+          .describe('People’s names. Empty uses the catalog item’s people, or one shared entry.'),
+        notes: z.string().nullable().optional(),
+      }),
+    },
+    async ({ template_item_id, group, who_packs, notes }) => {
+      try {
+        const s = await state();
+        const tpl = s.templates.find((t) => t.items.some((i) => i.id === template_item_id));
+        if (!tpl)
+          throw new ToolError('No template item has that id. Use get_template to find ids.');
+        const t = await call<Template>('PATCH', `/template-items/${template_item_id}`, {
+          ...(group !== undefined ? { category: group } : {}),
+          ...(who_packs !== undefined
+            ? { assignees: who_packs.map((n) => find(s.people, n, (p) => p.name, 'person').id) }
+            : {}),
+          ...(notes !== undefined ? { notes } : {}),
+        });
+        const row = summarizeTemplate(t, s).items.find((i) => i.id === template_item_id);
+        return text({ updated: row });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'set_group_order',
+    {
+      description:
+        'Set the order item groups are shown in on a trip or template. Groups you leave out follow, in their usual order.',
+      inputSchema: z.object({
+        trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
+        template: z.string().optional().describe('Template name or id'),
+        order: z.array(z.string().min(1)).min(1).max(200),
+      }),
+    },
+    async (a) => {
+      try {
+        const s = await state();
+        if (a.trip && a.template) throw new ToolError('Give either trip or template, not both.');
+        if (a.template) {
+          const t = find(s.templates, a.template, (x) => x.name, 'template');
+          const u = await call<Template>('PATCH', `/templates/${t.id}`, {
+            category_order: a.order,
+          });
+          return text({ template: u.name, group_order: groupOrder(u.items, u.category_order) });
+        }
+        const { t } = await resolveTrip(a.trip);
+        const d = await call<TripDetail>('PATCH', `/trips/${t.id}`, { category_order: a.order });
+        return text({ trip: d.trip.name, group_order: groupOrder(d.items, d.trip.category_order) });
       } catch (e) {
         return fail(e);
       }

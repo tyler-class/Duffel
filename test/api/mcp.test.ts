@@ -164,6 +164,9 @@ describe('MCP', () => {
         'add_todos',
         'update_todo',
         'remove_todo',
+        'get_template',
+        'update_template_item',
+        'set_group_order',
       ]),
     );
 
@@ -263,6 +266,57 @@ describe('MCP', () => {
     const tplDone = await call('update_todo', { todo_id: tplTodos[0]!.id, done: true });
     expect(tplDone.error).toBe(true);
     expect((await call('list_todos', { trip: 'Lisbon', template: 'Beach week' })).error).toBe(true);
+
+    // Groups.
+    type Pack = {
+      group_order: string[];
+      items: { id: string; name: string; group: string | null }[];
+    };
+    const pack = async () =>
+      JSON.parse((await call('get_packing_list', { trip: 'Lisbon' })).text) as Pack;
+    let lis = await pack();
+    expect(lis.group_order.length).toBeGreaterThan(1);
+    const towelRow = lis.items.find((i) => i.name === 'Beach towel')!;
+    expect((await call('update_item', { item_id: towelRow.id, group: 'Beach stuff' })).error).toBe(
+      false,
+    );
+    await call('add_items', { trip: 'Lisbon', items: [{ name: 'Snorkel', group: 'Beach stuff' }] });
+    lis = await pack();
+    expect(lis.items.filter((i) => i.group === 'Beach stuff').map((i) => i.name)).toEqual(
+      expect.arrayContaining(['Beach towel', 'Snorkel']),
+    );
+    const ordered = JSON.parse(
+      (await call('set_group_order', { trip: 'Lisbon', order: ['Beach stuff'] })).text,
+    ) as { group_order: string[] };
+    expect(ordered.group_order[0]).toBe('Beach stuff');
+    expect((await pack()).group_order[0]).toBe('Beach stuff');
+
+    type Tpl = {
+      group_order: string[];
+      items: { id: string; name: string; group: string | null; who_packs: string[] | string }[];
+    };
+    const tplView = JSON.parse(
+      (await call('get_template', { template: 'Beach week' })).text,
+    ) as Tpl;
+    const ti = tplView.items[0]!;
+    const updated = JSON.parse(
+      (
+        await call('update_template_item', {
+          template_item_id: ti.id,
+          group: 'Essentials',
+          who_packs: ['Sam', 'Mia'],
+        })
+      ).text,
+    ) as { updated: Tpl['items'][number] };
+    expect(updated.updated).toMatchObject({ group: 'Essentials', who_packs: ['Sam', 'Mia'] });
+    await call('set_group_order', { template: 'Beach week', order: ['Essentials'] });
+    expect(
+      (JSON.parse((await call('get_template', { template: 'Beach week' })).text) as Tpl)
+        .group_order[0],
+    ).toBe('Essentials');
+    expect(
+      (await call('update_template_item', { template_item_id: 'nope', group: 'x' })).error,
+    ).toBe(true);
 
     // The app lists the connection and can revoke it.
     const conns = (await api.get<{ connections: { name: string }[] }>('/connections')).data;

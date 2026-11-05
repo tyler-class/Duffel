@@ -283,8 +283,8 @@ function ItemForm({
         </FieldRow>
         <FieldRow
           icon="user"
-          label="Usually for"
-          hint="Templates and suggestions add one row per person."
+          label="Who packs this"
+          hint="Each person gets their own entry when it goes on a trip. Nobody: one shared entry."
         >
           <PeoplePicker
             people={data.people}
