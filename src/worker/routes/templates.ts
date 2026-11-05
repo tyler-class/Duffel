@@ -10,7 +10,8 @@ import {
   templateTodoInput,
   templateTodoPatch,
 } from '@shared/schemas';
-import { defaultBagCarryOn } from '@shared/logic';
+import { defaultBagCarryOn, mergeWhen, normalizeWhen, WHEN_KEYS, whenCols } from '@shared/logic';
+import type { TodoWhen } from '@shared/types';
 import {
   b,
   existingIds,
@@ -161,7 +162,7 @@ templates.post('/templates/:id/todos', async (c) => {
     template_id: id,
     title: input.title,
     phase: input.phase,
-    due_days: input.due_days ?? null,
+    ...whenCols(normalizeWhen(input)),
     notes: input.notes ?? null,
     sort_order: input.sort_order ?? Math.max(-1, ...t.todos.map((x) => x.sort_order)) + 1,
     created_at: now,
@@ -173,20 +174,21 @@ templates.post('/templates/:id/todos', async (c) => {
 templates.patch('/template-todos/:id', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
-  const row = await first<{ template_id: string }>(
+  const row = await first<{ template_id: string } & Record<string, unknown>>(
     db,
-    'SELECT template_id FROM template_todos WHERE id = ?',
+    'SELECT * FROM template_todos WHERE id = ?',
     id,
   );
   if (!row) throw notFound('To-do');
   const input = await body(c, templateTodoPatch);
-  const f = defined({
+  const f: Record<string, unknown> = defined({
     title: input.title,
     phase: input.phase,
-    due_days: input.due_days,
     notes: input.notes,
     sort_order: input.sort_order,
   });
+  if (WHEN_KEYS.some((k) => input[k] !== undefined))
+    Object.assign(f, whenCols(mergeWhen(row as Partial<TodoWhen>, input)));
   if (Object.keys(f).length) await updateStmt(db, 'template_todos', id, f).run();
   return c.json(await one(db, row.template_id));
 });

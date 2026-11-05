@@ -4,19 +4,26 @@
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
+  describeRelative,
   displayQty,
   isCarryOn,
   localToday,
   packChoice,
   packLabel,
   shortBagLabel,
+  sortTemplateTodos,
+  sortTripTodos,
   splitTrips,
+  todoDueDate,
 } from '@shared/logic';
+import { REL_ANCHORS, REL_DIRS, TODO_PHASE_LABELS, TODO_PHASES } from '@shared/lookups';
 import type {
   AppState,
   Item,
   Person,
   Template,
+  TemplateTodo,
+  TodoWhen,
   TripBag,
   TripDetail,
   TripItem,
@@ -73,6 +80,59 @@ function find<T extends { id: string }>(
   throw new ToolError(`No ${what} matches “${key}”. Options: ${options}.`);
 }
 
+/** How an assistant sees a to-do: when it's due in words and as a date. */
+function todoView(t: TemplateTodo | TripDetail['todos'][number], trip?: TripDetail['trip']) {
+  const date = trip ? todoDueDate(t, trip) : t.date_mode === 'fixed' ? t.due_date : null;
+  return {
+    id: t.id,
+    title: t.title,
+    phase: TODO_PHASE_LABELS[t.phase],
+    when:
+      t.date_mode === 'relative'
+        ? describeRelative(t)
+        : t.date_mode === 'fixed'
+          ? 'fixed date'
+          : 'no date',
+    ...(date ? { date } : {}),
+    ...('done' in t ? { done: t.done } : {}),
+    ...(t.notes ? { notes: t.notes } : {}),
+  };
+}
+
+const todoDateInput = {
+  date: z
+    .string()
+    .nullable()
+    .optional()
+    .describe('A fixed date, YYYY-MM-DD. null removes the date.'),
+  relative: z
+    .object({
+      days: z.number().int().min(0).max(3650).default(0),
+      direction: z.enum(REL_DIRS),
+      anchor: z.enum(REL_ANCHORS).describe('Start, middle or end of the trip'),
+    })
+    .optional()
+    .describe(
+      'A date relative to the trip, e.g. 3 days before the start. Follows the trip’s dates.',
+    ),
+};
+
+function whenFrom(a: {
+  date?: string | null;
+  relative?: { days: number; direction: TodoWhen['rel_dir']; anchor: TodoWhen['rel_anchor'] };
+}): Partial<TodoWhen> {
+  if (a.relative)
+    return {
+      date_mode: 'relative',
+      rel_days: a.relative.days,
+      rel_dir: a.relative.direction,
+      rel_anchor: a.relative.anchor,
+    };
+  if (a.date === null) return { date_mode: 'none' };
+  if (a.date !== undefined) return { date_mode: 'fixed', due_date: a.date };
+  return {};
+}
+
 function summarizeTrip(d: TripDetail, people: Person[]) {
   const bags = new Map(d.bags.map((b) => [b.id, b]));
   const names = new Map(people.map((p) => [p.id, p.name]));
@@ -103,6 +163,7 @@ function summarizeTrip(d: TripDetail, people: Person[]) {
       packed: r.packed,
       notes: r.notes,
     })),
+    todos: sortTripTodos(d.todos, d.trip).map((t) => todoView(t, d.trip)),
   };
 }
 
@@ -174,7 +235,7 @@ function buildServer(call: Call) {
     'get_packing_list',
     {
       description:
-        'Show a trip’s packing list: every item with who it’s for, which bag, carry-on, quantity and packed state. Defaults to the next upcoming trip.',
+        'Show a trip’s packing list: every item with who it’s for, which bag, carry-on, quantity and packed state, plus its to-dos. Defaults to the next upcoming trip.',
       inputSchema: z.object({ trip: z.string().optional().describe('Trip name or id') }),
     },
     async ({ trip: key }) => {
@@ -366,7 +427,7 @@ function buildServer(call: Call) {
     'create_trip',
     {
       description:
-        'Create a trip from a template, by copying a past trip (everything starts unpacked), or blank. Dates are YYYY-MM-DD; per-day items scale to the trip length.',
+        'Create a trip from a template, by copying a past trip (everything starts unpacked and to-dos undone), or blank. Dates are YYYY-MM-DD; per-day items scale to the trip length and relative to-do dates follow the trip.',
       inputSchema: z.object({
         name: z.string().min(1),
         from_template: z.string().optional().describe('Template name or id'),
@@ -426,6 +487,7 @@ function buildServer(call: Call) {
             trip_type: t.trip_type,
             climate: t.climate,
             items: t.items.map((ti) => items.get(ti.item_id) ?? '?'),
+            todos: sortTemplateTodos(t.todos).map((x) => todoView(x)),
           })),
         );
       } catch (e) {
@@ -445,6 +507,152 @@ function buildServer(call: Call) {
         const { t } = await resolveTrip(key);
         const tpl = await call<Template>('POST', `/trips/${t.id}/save-as-template`, { name });
         return text(`Saved template “${tpl.name}” with ${tpl.items.length} items.`);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  // ---------- to-dos ----------
+  async function todoOwner(s: AppState, a: { trip?: string; template?: string }) {
+    if (a.trip && a.template) throw new ToolError('Give either trip or template, not both.');
+    if (a.template)
+      return {
+        template: find<Template>(s.templates, a.template, (t) => t.name, 'template'),
+      };
+    return { trip: (await resolveTrip(a.trip)).t };
+  }
+
+  server.registerTool(
+    'list_todos',
+    {
+      description:
+        'List to-dos (Pre-trip, During trip, After trip) for a trip or a template, sorted by date. Defaults to the next trip.',
+      inputSchema: z.object({
+        trip: z.string().optional().describe('Trip name or id'),
+        template: z.string().optional().describe('Template name or id'),
+      }),
+    },
+    async (a) => {
+      try {
+        const s = await state();
+        const o = await todoOwner(s, a);
+        if (o.template)
+          return text({
+            template: o.template.name,
+            todos: sortTemplateTodos(o.template.todos).map((t) => todoView(t)),
+          });
+        const d = await trip(o.trip!.id);
+        return text({
+          trip: d.trip.name,
+          start_date: d.trip.start_date,
+          end_date: d.trip.end_date,
+          todos: sortTripTodos(d.todos, d.trip).map((t) => todoView(t, d.trip)),
+        });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_todos',
+    {
+      description:
+        'Add to-dos to a trip or a template. phase is pre (before the trip), during or after. Give a fixed date, a relative one (days before/on/after the start, middle or end of the trip), or neither.',
+      inputSchema: z.object({
+        trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
+        template: z.string().optional().describe('Template name or id'),
+        todos: z
+          .array(
+            z.object({
+              title: z.string().min(1),
+              phase: z.enum(TODO_PHASES).default('pre'),
+              ...todoDateInput,
+              notes: z.string().optional(),
+            }),
+          )
+          .min(1)
+          .max(100),
+      }),
+    },
+    async (a) => {
+      try {
+        const s = await state();
+        const o = await todoOwner(s, a);
+        const path = o.template
+          ? `/templates/${o.template.id}/todos`
+          : `/trips/${o.trip!.id}/todos`;
+        for (const t of a.todos)
+          await call('POST', path, {
+            title: t.title,
+            phase: t.phase,
+            ...whenFrom(t),
+            notes: t.notes ?? null,
+          });
+        return text(
+          `Added ${a.todos.length} to-do${a.todos.length === 1 ? '' : 's'} to ${o.template?.name ?? o.trip!.name}.`,
+        );
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_todo',
+    {
+      description:
+        'Change a to-do on a trip or template: mark it done (trips), rename it, move it to another phase, change or remove its date, or edit notes. Use ids from list_todos.',
+      inputSchema: z.object({
+        todo_id: z.string(),
+        done: z.boolean().optional(),
+        title: z.string().min(1).optional(),
+        phase: z.enum(TODO_PHASES).optional(),
+        ...todoDateInput,
+        notes: z.string().nullable().optional(),
+      }),
+    },
+    async (a) => {
+      try {
+        const s = await state();
+        const onTemplate = s.templates.some((t) => t.todos.some((x) => x.id === a.todo_id));
+        if (onTemplate && a.done !== undefined)
+          throw new ToolError('Template to-dos can’t be done; only trip to-dos can.');
+        const body = {
+          ...(a.done !== undefined ? { done: a.done } : {}),
+          ...(a.title !== undefined ? { title: a.title } : {}),
+          ...(a.phase !== undefined ? { phase: a.phase } : {}),
+          ...whenFrom(a),
+          ...(a.notes !== undefined ? { notes: a.notes } : {}),
+        };
+        if (onTemplate) {
+          await call('PATCH', `/template-todos/${a.todo_id}`, body);
+          return text('Updated the template to-do.');
+        }
+        const d = await call<TripDetail>('PATCH', `/trip-todos/${a.todo_id}`, body).catch(() => {
+          throw new ToolError('No to-do has that id. Use list_todos to find ids.');
+        });
+        const t = d.todos.find((x) => x.id === a.todo_id)!;
+        return text({ updated: todoView(t, d.trip) });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'remove_todo',
+    {
+      description: 'Delete a to-do from a trip or template.',
+      inputSchema: z.object({ todo_id: z.string() }),
+    },
+    async ({ todo_id }) => {
+      try {
+        const s = await state();
+        const onTemplate = s.templates.some((t) => t.todos.some((x) => x.id === todo_id));
+        await call('DELETE', onTemplate ? `/template-todos/${todo_id}` : `/trip-todos/${todo_id}`);
+        return text('Removed.');
       } catch (e) {
         return fail(e);
       }

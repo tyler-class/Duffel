@@ -1,4 +1,4 @@
-import type { TodoPhase } from '@shared/lookups';
+import type { RelAnchor, RelDir, TodoDateMode, TodoPhase } from '@shared/lookups';
 import type {
   Item,
   Person,
@@ -7,6 +7,7 @@ import type {
   TemplateBag,
   TemplateItem,
   TemplateTodo,
+  TodoWhen,
   Trip,
   TripBag,
   TripItem,
@@ -156,13 +157,23 @@ export function toTemplateBag(r: Row, people: string[] = []): TemplateBag {
   };
 }
 
+function toWhen(r: Row): TodoWhen {
+  return {
+    date_mode: (r.date_mode as TodoDateMode) ?? 'none',
+    due_date: s(r.due_date),
+    rel_days: n(r.rel_days),
+    rel_dir: (r.rel_dir as RelDir | null) ?? null,
+    rel_anchor: (r.rel_anchor as RelAnchor | null) ?? null,
+  };
+}
+
 export function toTemplateTodo(r: Row): TemplateTodo {
   return {
     id: String(r.id),
     template_id: String(r.template_id),
     title: String(r.title),
     phase: (r.phase as TodoPhase) ?? 'pre',
-    due_days: n(r.due_days),
+    ...toWhen(r),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
   };
@@ -174,7 +185,7 @@ export function toTripTodo(r: Row): TripTodo {
     trip_id: String(r.trip_id),
     title: String(r.title),
     phase: (r.phase as TodoPhase) ?? 'pre',
-    due_date: s(r.due_date),
+    ...toWhen(r),
     notes: s(r.notes),
     done: bool(r.done),
     done_at: s(r.done_at),

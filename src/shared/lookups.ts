@@ -18,6 +18,14 @@ export const TODO_PHASE_LABELS: Record<TodoPhase, string> = {
   after: 'After trip',
 };
 
+/** A to-do's date: none, a fixed date, or relative to the trip. */
+export const TODO_DATE_MODES = ['none', 'fixed', 'relative'] as const;
+export type TodoDateMode = (typeof TODO_DATE_MODES)[number];
+export const REL_DIRS = ['before', 'on', 'after'] as const;
+export type RelDir = (typeof REL_DIRS)[number];
+export const REL_ANCHORS = ['start', 'middle', 'end'] as const;
+export type RelAnchor = (typeof REL_ANCHORS)[number];
+
 export const DEFAULT_LOOKUPS = {
   role: ['Adult', 'Child', 'Baby'],
   category: [

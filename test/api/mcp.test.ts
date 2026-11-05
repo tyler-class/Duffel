@@ -160,6 +160,10 @@ describe('MCP', () => {
         'create_trip',
         'save_trip_as_template',
         'search_catalog',
+        'list_todos',
+        'add_todos',
+        'update_todo',
+        'remove_todo',
       ]),
     );
 
@@ -209,6 +213,56 @@ describe('MCP', () => {
     };
     expect(trip.created.items.length).toBeGreaterThan(10);
     expect(trip.created.items.every((i) => !i.packed)).toBe(true);
+
+    // To-dos.
+    const call = async (name: string, args: object) => {
+      const r = (await rpc(token!, 'tools/call', { name, arguments: args })).data.result!;
+      return { error: !!r.isError, text: r.content![0]!.text };
+    };
+    type Todo = { id: string; title: string; when: string; date?: string; done?: boolean };
+    const todosOf = async (args: object) =>
+      (JSON.parse((await call('list_todos', args)).text) as { todos: Todo[] }).todos;
+    expect(await todosOf({ trip: 'Lisbon' })).toHaveLength(6);
+    const added = await call('add_todos', {
+      trip: 'Lisbon',
+      todos: [
+        {
+          title: 'Print boarding passes',
+          relative: { days: 1, direction: 'before', anchor: 'start' },
+        },
+        { title: 'Pay the deposit', date: '2026-11-20', notes: 'Card ending 42' },
+      ],
+    });
+    expect(added).toEqual({ error: false, text: 'Added 2 to-dos to Lisbon.' });
+    const lisbon = await todosOf({ trip: 'Lisbon' });
+    const passes = lisbon.find((t) => t.title === 'Print boarding passes')!;
+    // Sample trips are dated from today, so check the date is the day before the start.
+    const start = (
+      JSON.parse((await call('list_todos', { trip: 'Lisbon' })).text) as {
+        start_date: string;
+      }
+    ).start_date;
+    const dayBefore = new Date(Date.parse(start) - 86_400_000).toISOString().slice(0, 10);
+    expect(passes).toMatchObject({ when: '1 day before the trip starts', date: dayBefore });
+    expect(lisbon.find((t) => t.title === 'Pay the deposit')?.date).toBe('2026-11-20');
+    const done = await call('update_todo', { todo_id: passes.id, done: true });
+    expect(JSON.parse(done.text).updated.done).toBe(true);
+    await call('update_todo', { todo_id: passes.id, date: null });
+    expect((await todosOf({ trip: 'Lisbon' })).find((t) => t.id === passes.id)?.when).toBe(
+      'no date',
+    );
+    expect((await call('remove_todo', { todo_id: passes.id })).error).toBe(false);
+    expect(await todosOf({ trip: 'Lisbon' })).toHaveLength(7);
+
+    await call('add_todos', {
+      template: 'Beach week',
+      todos: [{ title: 'Sunscreen run', relative: { direction: 'on', anchor: 'middle' } }],
+    });
+    const tplTodos = await todosOf({ template: 'Beach week' });
+    expect(tplTodos.find((t) => t.title === 'Sunscreen run')?.when).toBe('The middle of the trip');
+    const tplDone = await call('update_todo', { todo_id: tplTodos[0]!.id, done: true });
+    expect(tplDone.error).toBe(true);
+    expect((await call('list_todos', { trip: 'Lisbon', template: 'Beach week' })).error).toBe(true);
 
     // The app lists the connection and can revoke it.
     const conns = (await api.get<{ connections: { name: string }[] }>('/connections')).data;

@@ -26,6 +26,10 @@ import {
   planTemplateTodos,
   planTodosClone,
   planTodosFromTemplate,
+  normalizeWhen,
+  whenCols,
+  mergeWhen,
+  WHEN_KEYS,
   type TodoDraft,
   resolveCalc,
   rewriteLabelPrefix,
@@ -37,7 +41,7 @@ import {
   type LengthLike,
   type TripItemDraft,
 } from '@shared/logic';
-import type { Item, Template, Trip, TripBag, TripDetail } from '@shared/types';
+import type { Item, Template, TodoWhen, Trip, TripBag, TripDetail } from '@shared/types';
 import {
   b,
   existingIds,
@@ -210,7 +214,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     if (!activities.length) activities = tpl.activities;
     tripType ??= tpl.trip_type;
     if (!categoryOrder.length) categoryOrder = tpl.category_order;
-    todos = planTodosFromTemplate(tpl.todos, dates);
+    todos = planTodosFromTemplate(tpl.todos);
     // The template's bag setup comes first, so its order wins when placing items.
     for (const tb of tpl.bags) {
       addBag({
@@ -312,7 +316,7 @@ trips.post('/trips', async (c) => {
         trip_id: id,
         title: t.title,
         phase: t.phase,
-        due_date: t.due_date,
+        ...whenCols(t),
         notes: t.notes,
         done: 0,
         done_at: null,
@@ -493,7 +497,7 @@ trips.post('/trips/:id/save-as-template', async (c) => {
         template_id: templateId,
         title: t.title,
         phase: t.phase,
-        due_days: t.due_days,
+        ...whenCols(t),
         notes: t.notes,
         sort_order: t.sort_order,
         created_at: now,
@@ -942,7 +946,7 @@ trips.post('/trips/:id/todos', async (c) => {
     trip_id: tripId,
     title: input.title,
     phase: input.phase,
-    due_date: input.due_date ?? null,
+    ...whenCols(normalizeWhen(input)),
     notes: input.notes ?? null,
     done: b(input.done),
     done_at: input.done ? now : null,
@@ -956,9 +960,9 @@ trips.post('/trips/:id/todos', async (c) => {
 trips.patch('/trip-todos/:id', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
-  const row = await first<{ trip_id: string; done: number }>(
+  const row = await first<{ trip_id: string; done: number } & Record<string, unknown>>(
     db,
-    'SELECT trip_id, done FROM trip_todos WHERE id = ?',
+    'SELECT * FROM trip_todos WHERE id = ?',
     id,
   );
   if (!row) throw notFound('To-do');
@@ -966,10 +970,11 @@ trips.patch('/trip-todos/:id', async (c) => {
   const f: Record<string, unknown> = defined({
     title: input.title,
     phase: input.phase,
-    due_date: input.due_date,
     notes: input.notes,
     sort_order: input.sort_order,
   });
+  if (WHEN_KEYS.some((k) => input[k] !== undefined))
+    Object.assign(f, whenCols(mergeWhen(row as Partial<TodoWhen>, input)));
   if (input.done !== undefined) {
     f.done = b(input.done);
     if (input.done !== (row.done === 1)) f.done_at = input.done ? nowIso() : null;

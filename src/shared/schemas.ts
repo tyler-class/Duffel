@@ -1,6 +1,13 @@
 // Request validation shared by the Worker (enforces) and the client (types).
 import { z } from 'zod';
-import { AUTOPACK_FALLBACKS, QTY_MODES, TODO_PHASES } from './lookups';
+import {
+  AUTOPACK_FALLBACKS,
+  QTY_MODES,
+  REL_ANCHORS,
+  REL_DIRS,
+  TODO_DATE_MODES,
+  TODO_PHASES,
+} from './lookups';
 import { isISODate } from './logic/dates';
 
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v);
@@ -191,24 +198,24 @@ export const reorderRows = z.object({
     .max(1000),
 });
 const todoPhase = z.enum(TODO_PHASES);
-export const tripTodoInput = z.object({
-  title: name(200),
-  phase: todoPhase.default('pre'),
+/** When a to-do is due: none, a fixed date, or `rel_days` `rel_dir` the trip's `rel_anchor`. */
+const todoWhen = {
+  date_mode: z.enum(TODO_DATE_MODES).optional(),
   due_date: date.optional(),
-  notes: text(2000).optional(),
-  done: z.boolean().default(false),
-  sort_order: z.number().int().optional(),
-});
-export const tripTodoPatch = patchOf(tripTodoInput);
+  rel_days: z.number().int().min(0).max(3650).nullable().optional(),
+  rel_dir: z.enum(REL_DIRS).nullable().optional(),
+  rel_anchor: z.enum(REL_ANCHORS).nullable().optional(),
+};
 export const templateTodoInput = z.object({
   title: name(200),
   phase: todoPhase.default('pre'),
-  /** Days before the trip (pre), day of the trip from 1 (during), days after (after). */
-  due_days: z.number().int().min(0).max(3650).nullable().optional(),
+  ...todoWhen,
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
 });
 export const templateTodoPatch = patchOf(templateTodoInput);
+export const tripTodoInput = templateTodoInput.extend({ done: z.boolean().default(false) });
+export const tripTodoPatch = patchOf(tripTodoInput);
 
 export const saveAsTemplate = z.object({ name: name() });
 

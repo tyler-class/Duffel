@@ -1,10 +1,18 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { TODO_PHASE_LABELS, TODO_PHASES, type TodoPhase } from '@shared/lookups';
-import { localToday, sortTemplateTodos, sortTripTodos, type tripStage } from '@shared/logic';
+import {
+  describeRelative,
+  localToday,
+  sortTemplateTodos,
+  sortTripTodos,
+  todoDueDate,
+  whenCols,
+  type tripStage,
+} from '@shared/logic';
 import type { AppState, Template, TemplateTodo, TripDetail, TripTodo } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
-import { formatDay, relativeWhen } from '../lib/format';
+import { formatDay } from '../lib/format';
 import { keys } from '../lib/queries';
 import { Icon } from './Icon';
 import { SwipeRow } from './SwipeRow';
@@ -67,7 +75,7 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
   const tripId = detail.trip.id;
   const key = keys.trip(tripId);
   const today = localToday();
-  const sorted = sortTripTodos(detail.todos);
+  const sorted = sortTripTodos(detail.todos, detail.trip);
 
   function local(change: (todos: TripTodo[]) => TripTodo[]) {
     const prev = qc.getQueryData<TripDetail>(key);
@@ -92,7 +100,7 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
   const body = (d: TodoDraft) => ({
     title: d.title,
     phase: d.phase,
-    due_date: d.due_date,
+    ...whenCols(d),
     notes: d.notes.trim() || null,
   });
 
@@ -109,7 +117,7 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
             api.post<TripDetail>(`/trips/${tripId}/todos`, {
               title: t.title,
               phase: t.phase,
-              due_date: t.due_date,
+              ...whenCols(t),
               notes: t.notes,
               done: t.done,
               sort_order: t.sort_order,
@@ -137,7 +145,10 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
             />
             {!rows.length && <p className="px-3 py-3 text-sm text-faint">Nothing yet.</p>}
             {rows.map((t) => {
-              const late = !t.done && !!t.due_date && t.due_date < today;
+              const due = todoDueDate(t, detail.trip);
+              // A relative date the trip can't place yet (no dates) shows in words.
+              const dateText = due ? formatDay(due) : describeRelative(t);
+              const late = !t.done && !!due && due < today;
               return (
                 <SwipeRow
                   key={t.id}
@@ -173,9 +184,9 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
                       >
                         {t.title}
                       </span>
-                      {(t.due_date || t.notes) && (
+                      {(dateText || t.notes) && (
                         <span className="flex min-w-0 items-center gap-2.5 overflow-hidden text-[13px] whitespace-nowrap text-soft">
-                          {t.due_date && (
+                          {dateText && (
                             <span
                               className={cx(
                                 'inline-flex flex-none items-center gap-1',
@@ -183,7 +194,7 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
                               )}
                             >
                               <Icon name="cal" size={13} />
-                              {formatDay(t.due_date)}
+                              {dateText}
                             </span>
                           )}
                           {t.notes && <span className="truncate">{t.notes}</span>}
@@ -200,7 +211,6 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
       <div className="h-8" />
       <TodoSheet
         open={!!sheet}
-        kind="trip"
         editing={!!sheet?.todo}
         trip={detail.trip}
         initial={
@@ -208,7 +218,7 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
             ? {
                 title: sheet.todo.title,
                 phase: sheet.todo.phase,
-                due_date: sheet.todo.due_date,
+                ...whenCols(sheet.todo),
                 notes: sheet.todo.notes ?? '',
               }
             : { phase: sheet?.phase ?? 'pre' }
@@ -286,12 +296,12 @@ export function TemplateTodos({ tpl }: { tpl: Template }) {
                   onClick={() => setSheet({ todo: t, phase: t.phase })}
                 >
                   <span className="text-base leading-tight">{t.title}</span>
-                  {(t.due_days !== null || t.notes) && (
+                  {(t.date_mode !== 'none' || t.notes) && (
                     <span className="flex min-w-0 items-center gap-2.5 overflow-hidden text-[13px] whitespace-nowrap text-soft">
-                      {t.due_days !== null && (
+                      {t.date_mode !== 'none' && (
                         <span className="inline-flex flex-none items-center gap-1">
                           <Icon name="cal" size={13} />
-                          {relativeWhen(t.phase, t.due_days)}
+                          {t.date_mode === 'fixed' ? formatDay(t.due_date) : describeRelative(t)}
                         </span>
                       )}
                       {t.notes && <span className="truncate">{t.notes}</span>}
@@ -306,14 +316,13 @@ export function TemplateTodos({ tpl }: { tpl: Template }) {
       <div className="h-8" />
       <TodoSheet
         open={!!sheet}
-        kind="template"
         editing={!!sheet?.todo}
         initial={
           sheet?.todo
             ? {
                 title: sheet.todo.title,
                 phase: sheet.todo.phase,
-                due_days: sheet.todo.due_days,
+                ...whenCols(sheet.todo),
                 notes: sheet.todo.notes ?? '',
               }
             : { phase: sheet?.phase ?? 'pre' }
@@ -324,7 +333,7 @@ export function TemplateTodos({ tpl }: { tpl: Template }) {
           const b = {
             title: d.title,
             phase: d.phase,
-            due_days: d.due_days,
+            ...whenCols(d),
             notes: d.notes.trim() || null,
           };
           put(

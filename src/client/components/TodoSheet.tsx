@@ -1,7 +1,17 @@
 import { useState } from 'react';
-import { TODO_PHASE_LABELS, TODO_PHASES, type TodoPhase } from '@shared/lookups';
-import { todoDays } from '@shared/logic';
-import { relativeWhen } from '../lib/format';
+import {
+  REL_ANCHORS,
+  REL_DIRS,
+  TODO_PHASE_LABELS,
+  TODO_PHASES,
+  type RelAnchor,
+  type RelDir,
+  type TodoDateMode,
+  type TodoPhase,
+} from '@shared/lookups';
+import { describeRelative, NO_DATE, normalizeWhen, todoDueDate } from '@shared/logic';
+import type { TodoWhen } from '@shared/types';
+import { formatDay } from '../lib/format';
 import { NumberInput } from './fields';
 import {
   DangerButton,
@@ -14,29 +24,29 @@ import {
   TextInput,
 } from './ui';
 
-export interface TodoDraft {
+export interface TodoDraft extends TodoWhen {
   title: string;
   phase: TodoPhase;
-  /** Trips: a real date. */
-  due_date: string | null;
-  /** Templates: days relative to the trip. */
-  due_days: number | null;
   notes: string;
 }
 
-const DAYS_LABEL: Record<TodoPhase, string> = {
-  pre: 'Days before the trip',
-  during: 'Day of the trip',
-  after: 'Days after the trip',
+const MODES: [TodoDateMode, string][] = [
+  ['none', 'No date'],
+  ['fixed', 'Fixed date'],
+  ['relative', 'Relative'],
+];
+const DIRS: Record<RelDir, string> = { before: 'Before', on: 'On', after: 'After' };
+const ANCHORS: Record<RelAnchor, string> = {
+  start: 'Start of trip',
+  middle: 'Middle',
+  end: 'End of trip',
 };
 
 type Props = {
   open: boolean;
-  /** Trips have real dates; templates have dates relative to the trip. */
-  kind: 'trip' | 'template';
   initial?: Partial<TodoDraft>;
   editing?: boolean;
-  /** The trip's dates, to say when a date falls. */
+  /** The trip's dates, to show when a relative date falls. */
   trip?: { start_date: string | null; end_date: string | null };
   onClose: () => void;
   onSave: (d: TodoDraft) => Promise<void>;
@@ -49,26 +59,27 @@ export function TodoSheet(props: Props) {
   return <TodoSheetBody {...props} />;
 }
 
-function TodoSheetBody({ kind, initial, editing, trip, onClose, onSave, onDelete }: Props) {
+function TodoSheetBody({ initial, editing, trip, onClose, onSave, onDelete }: Props) {
   const [d, setD] = useState<TodoDraft>({
     title: '',
     phase: 'pre',
-    due_date: null,
-    due_days: null,
     notes: '',
+    ...NO_DATE,
     ...initial,
   });
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const set = (p: Partial<TodoDraft>) => setD((x) => ({ ...x, ...p }));
-  const rel = kind === 'trip' && trip ? todoDays(d.phase, d.due_date, trip) : null;
+  const when = normalizeWhen(d);
+  const falls = d.date_mode === 'relative' && trip ? todoDueDate(when, trip) : null;
 
   async function save() {
     if (!d.title.trim()) return setError('Enter what needs doing.');
+    if (d.date_mode === 'fixed' && !d.due_date) return setError('Pick a date, or choose No date.');
     setBusy(true);
     setError('');
     try {
-      await onSave({ ...d, title: d.title.trim() });
+      await onSave({ ...d, ...when, title: d.title.trim() });
       onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not save that.');
@@ -118,43 +129,76 @@ function TodoSheetBody({ kind, initial, editing, trip, onClose, onSave, onDelete
             ))}
           </div>
         </FieldRow>
-        {kind === 'trip' ? (
-          <FieldRow
-            icon="cal"
-            label="Date"
-            htmlFor="todo-date"
-            hint={rel !== null && rel >= 0 ? relativeWhen(d.phase, rel) : undefined}
-          >
-            <div className="flex items-center gap-2">
+        <FieldRow
+          icon="cal"
+          label="Date"
+          hint={
+            d.date_mode === 'relative'
+              ? [describeRelative(when), falls && formatDay(falls)].filter(Boolean).join(' · ')
+              : undefined
+          }
+        >
+          <div className="flex flex-col gap-2.5">
+            <div className="flex flex-wrap gap-1.5">
+              {MODES.map(([m, label]) => (
+                <Pick
+                  key={m}
+                  on={d.date_mode === m}
+                  onClick={() =>
+                    set(
+                      m === 'relative' && d.date_mode !== 'relative'
+                        ? { date_mode: m, rel_days: 3, rel_dir: 'before', rel_anchor: 'start' }
+                        : { date_mode: m },
+                    )
+                  }
+                >
+                  {label}
+                </Pick>
+              ))}
+            </div>
+            {d.date_mode === 'fixed' && (
               <TextInput
                 id="todo-date"
                 type="date"
+                aria-label="Date"
                 value={d.due_date ?? ''}
                 onChange={(e) => set({ due_date: e.target.value || null })}
               />
-              {d.due_date && (
-                <GhostButton className="py-1" onClick={() => set({ due_date: null })}>
-                  Clear
-                </GhostButton>
-              )}
-            </div>
-          </FieldRow>
-        ) : (
-          <FieldRow
-            icon="cal"
-            label={DAYS_LABEL[d.phase]}
-            htmlFor="todo-days"
-            hint={relativeWhen(d.phase, d.due_days) || 'Optional. Trips turn it into a date.'}
-          >
-            <NumberInput
-              id="todo-days"
-              step="1"
-              value={d.due_days}
-              placeholder="No date"
-              onChange={(v) => set({ due_days: v === null ? null : Math.max(0, Math.round(v)) })}
-            />
-          </FieldRow>
-        )}
+            )}
+            {d.date_mode === 'relative' && (
+              <>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {d.rel_dir !== 'on' && (
+                    <div className="w-20">
+                      <NumberInput
+                        id="todo-days"
+                        step="1"
+                        value={d.rel_days}
+                        placeholder="0"
+                        onChange={(v) =>
+                          set({ rel_days: v === null ? null : Math.max(0, Math.round(v)) })
+                        }
+                      />
+                    </div>
+                  )}
+                  {d.rel_dir !== 'on' && <span className="pr-1 text-sm text-soft">days</span>}
+                  {REL_DIRS.map((x) => (
+                    <Pick key={x} on={d.rel_dir === x} onClick={() => set({ rel_dir: x })}>
+                      {DIRS[x]}
+                    </Pick>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {REL_ANCHORS.map((a) => (
+                    <Pick key={a} on={d.rel_anchor === a} onClick={() => set({ rel_anchor: a })}>
+                      {ANCHORS[a]}
+                    </Pick>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </FieldRow>
         <FieldRow icon="note" label="Notes" htmlFor="todo-notes">
           <textarea
             id="todo-notes"

@@ -305,23 +305,27 @@ const len = tripLength(start, end)!;
 // Things to do around the trip; the trip gets them with real dates.
 const beachTodos: TemplateTodo[] = (
   [
-    ['Book a pet sitter', 'pre', 21, null],
-    ['Check passports are valid', 'pre', 30, 'Six months past the return date'],
-    ['Hold the mail', 'pre', 3, null],
-    ['Book the snorkel trip', 'during', 2, null],
-    ['Return the rental car', 'after', 0, 'Fill the tank first'],
-    ['Unpack and do laundry', 'after', 1, null],
+    ['Book a pet sitter', 'pre', 21, 'before', 'start', null],
+    ['Check passports are valid', 'pre', 30, 'before', 'start', 'Six months past the return date'],
+    ['Hold the mail', 'pre', 3, 'before', 'start', null],
+    ['Book the snorkel trip', 'during', 0, 'on', 'middle', null],
+    ['Return the rental car', 'after', 0, 'on', 'end', 'Fill the tank first'],
+    ['Unpack and do laundry', 'after', 1, 'after', 'end', null],
   ] as const
-).map(([title, phase, due_days, notes], i) => ({
+).map(([title, phase, rel_days, rel_dir, rel_anchor, notes], i) => ({
   id: id('ttodo'),
   template_id: beach.tpl.id,
   title,
   phase,
-  due_days,
+  date_mode: 'relative',
+  due_date: null,
+  rel_days,
+  rel_dir,
+  rel_anchor,
   notes,
   sort_order: i,
 }));
-const tripTodos = planTodosFromTemplate(beachTodos, { start_date: start, end_date: end });
+const tripTodos = planTodosFromTemplate(beachTodos);
 const bagDefs = [
   [suitcases[0]!, 'Big checked', 'Checked'],
   [suitcases[1]!, 'Kids’ suitcase', 'Checked'],

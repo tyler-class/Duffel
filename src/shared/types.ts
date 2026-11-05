@@ -1,4 +1,11 @@
-import type { AutoPackFallback, QtyMode, TodoPhase } from './lookups';
+import type {
+  AutoPackFallback,
+  QtyMode,
+  RelAnchor,
+  RelDir,
+  TodoDateMode,
+  TodoPhase,
+} from './lookups';
 
 export interface Person {
   id: string;
@@ -81,14 +88,23 @@ export interface TemplateBag {
   people: string[];
 }
 
-/** A to-do on a template. Its date is relative to the trip. */
-export interface TemplateTodo {
+/** When a to-do is due: no date, a fixed date, or relative to the trip's dates. */
+export interface TodoWhen {
+  date_mode: TodoDateMode;
+  /** Fixed mode. */
+  due_date: string | null;
+  /** Relative mode: `rel_days` days `rel_dir` the `rel_anchor` of the trip. */
+  rel_days: number | null;
+  rel_dir: RelDir | null;
+  rel_anchor: RelAnchor | null;
+}
+
+/** A to-do on a template. */
+export interface TemplateTodo extends TodoWhen {
   id: string;
   template_id: string;
   title: string;
   phase: TodoPhase;
-  /** Days before the trip (pre), day of the trip from 1 (during), days after it (after). */
-  due_days: number | null;
   notes: string | null;
   sort_order: number;
 }
@@ -169,12 +185,11 @@ export interface TripItem {
   sort_order: number;
 }
 
-export interface TripTodo {
+export interface TripTodo extends TodoWhen {
   id: string;
   trip_id: string;
   title: string;
   phase: TodoPhase;
-  due_date: string | null;
   notes: string | null;
   done: boolean;
   done_at: string | null;
