@@ -697,7 +697,7 @@ function TemplateItemSheet({
           value={pack}
           onChange={setPack}
           types={data.lookups.suitcaseType ?? []}
-          inherit={`Catalog: ${item ? packLabel(packChoice(item)) : 'Main bag'}`}
+          inherit={`Catalog: ${item ? packLabel(packChoice(item)) : 'Luggage'}`}
           main={false}
           noBag={false}
         />

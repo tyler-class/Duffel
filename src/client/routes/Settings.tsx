@@ -73,12 +73,12 @@ export function Settings() {
           onChange={(autopack_fallback) => run(() => api.patch('/settings', { autopack_fallback }))}
           options={[
             ['unplaced', 'Leave in No bag'],
-            ['main', 'Use their main bag'],
+            ['main', 'Use their luggage'],
           ]}
         />
         <p className="text-xs text-faint">
           {data.settings.autopack_fallback === 'main'
-            ? 'The item goes in their main (checked) bag, so nothing is left without a bag.'
+            ? 'The item goes in their suitcase (or duffel, backpack), so nothing is left without a bag.'
             : 'The item stays in No bag, so you notice. It moves in when a bag of that type is added.'}
         </p>
         <ErrorText>{error}</ErrorText>

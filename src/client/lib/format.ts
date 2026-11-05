@@ -33,12 +33,12 @@ export function plural(n: number, one: string, many = `${one}s`) {
 /** What an auto pack choice does, for the hint under the picker. */
 export function packHint(c: PackChoice, fallback: AutoPackFallback): string {
   if (c === 'none') return 'Car seats, strollers: travels outside any bag.';
-  if (c === 'main') return 'Goes into its person’s main (checked) bag.';
+  if (c === 'main') return 'Goes in its person’s suitcase, or their duffel or backpack.';
   if (c === 'carry_on') return 'Goes into its person’s carry-on bag.';
   const t = c.type.toLowerCase();
   return `Goes into its person’s ${t}, or a shared ${t}. If there’s none on the trip, ${
     fallback === 'main'
-      ? 'it goes in their main bag instead'
+      ? 'it goes in their luggage instead'
       : 'it stays in No bag and moves in when one is added'
   } (see Settings).`;
 }

@@ -107,7 +107,7 @@ async function setDefaultPeople(db: D1Database, itemId: string, people: string[]
   ]);
 }
 
-/** Auto pack is one choice: no bag, a bag type, carry-on, or the main bag. */
+/** Auto pack is one choice: no bag, a bag type, carry-on, or their luggage. */
 async function noCarryOnWithoutBag(db: D1Database, itemId: string) {
   await db.batch([
     db

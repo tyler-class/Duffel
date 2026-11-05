@@ -153,7 +153,7 @@ const samePack = (a: PackChoice | null, b: PackChoice | null) =>
     : a === b;
 
 /**
- * Auto pack: main bag, carry-on, a bag type (or a new one), or no bag. With `inherit`, a
+ * Auto pack: luggage, carry-on, a bag type (or a new one), or no bag. With `inherit`, a
  * first option (null) uses someone else's choice, labelled with it.
  */
 export function PackPicker({

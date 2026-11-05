@@ -36,16 +36,32 @@ const sameType = (a: string | null | undefined, b: string) =>
 export type Placement = { trip_bag_id: string | null; no_bag: boolean };
 
 /**
+ * Which of a person's bags their things go in first: suitcases, then duffels, backpacks
+ * and totes, then any other or untyped bag. Bags for special things (diaper bags,
+ * coolers) come last, so they only get everyday items when there's nothing else.
+ */
+export const BAG_TYPE_ORDER = ['suitcase', 'duffel', 'backpack', 'tote'];
+export const SPECIAL_BAG_TYPES = ['diaper bag', 'cooler'];
+
+/** Lower is better. Special bags rank last. */
+export function bagRank(type: string | null | undefined): number {
+  const t = type?.trim().toLowerCase() ?? '';
+  const i = BAG_TYPE_ORDER.indexOf(t);
+  if (i >= 0) return i;
+  return SPECIAL_BAG_TYPES.includes(t) ? BAG_TYPE_ORDER.length + 1 : BAG_TYPE_ORDER.length;
+}
+const isSpecial = (b: PlaceableBag) => bagRank(b.type) > BAG_TYPE_ORDER.length;
+
+/**
  * Where a row goes when a trip is built:
  * - items that never go in a bag → No bag;
  * - items with a bag type → their person's bag of that type, else the one shared bag of
  *   that type; with none, No bag yet (or, if `fallback` is 'main', on to the rules below);
- * - a person's carry-on items → their carry-on bag; other items → their checked bag
- *   (the first by bag order when they have several);
- * - if they have no matching bag of their own, the one shared bag of that kind, if
- *   there is exactly one;
- * - shared items → the one shared bag of that kind; shared carry-on items may also go
- *   in the trip's only carry-on bag;
+ * - a person's carry-on items → their carry-on bag; other items → their luggage. With
+ *   several, the best by type (BAG_TYPE_ORDER), then bag order;
+ * - if they have no bag of that kind, the best shared one by type, if one clearly wins
+ *   (never a diaper bag or cooler);
+ * - shared carry-on items may also go in the trip's only carry-on bag;
  * - otherwise No bag yet.
  */
 export function placeRow(
@@ -72,13 +88,15 @@ export function placeRow(
   }
   const kind = [...bags]
     .filter((b) => b.carry_on === row.carry)
-    .sort((a, b) => a.sort_order - b.sort_order);
+    .sort((a, b) => bagRank(a.type) - bagRank(b.type) || a.sort_order - b.sort_order);
   if (row.person_id) {
     const mine = kind.find((b) => b.people.includes(row.person_id!));
     if (mine) return { trip_bag_id: mine.id, no_bag: false };
   }
-  const shared = kind.filter((b) => !b.people.length);
-  if (shared.length === 1) return { trip_bag_id: shared[0]!.id, no_bag: false };
+  // A shared bag only when the ranking picks a clear winner; two equally good ones is a guess.
+  const shared = kind.filter((b) => !b.people.length && !isSpecial(b));
+  const best = shared.filter((b) => bagRank(b.type) === bagRank(shared[0]?.type));
+  if (best.length === 1) return { trip_bag_id: best[0]!.id, no_bag: false };
   if (!row.person_id && row.carry && kind.length === 1)
     return { trip_bag_id: kind[0]!.id, no_bag: false };
   return { trip_bag_id: null, no_bag: false };
@@ -126,8 +144,8 @@ export function packFields(c: PackChoice) {
   };
 }
 
-/** "Diaper bag", "Carry-on", "Main bag", "No bag". */
+/** "Diaper bag", "Carry-on", "Luggage", "No bag". */
 export function packLabel(c: PackChoice): string {
   if (typeof c === 'object') return c.type;
-  return c === 'none' ? 'No bag' : c === 'carry_on' ? 'Carry-on' : 'Main bag';
+  return c === 'none' ? 'No bag' : c === 'carry_on' ? 'Carry-on' : 'Luggage';
 }
