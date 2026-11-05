@@ -79,6 +79,8 @@ If you deployed with the button, your copy lives in your own GitHub account and 
 
 The update replaces the app’s code with Duffel’s, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let an Action change them, so if Duffel’s workflows change you copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
 
+Copies made before Duffel 0.8.1 have an older `update.yml` that GitHub switches off after 60 days without a commit. Replace your copy’s `.github/workflows/update.yml` with [Duffel’s](.github/workflows/update.yml) once to keep it running.
+
 If you deployed by hand, `git pull` and `npm run deploy`.
 
 If your copy was made before this update existed, copy [`.github/workflows/update.yml`](.github/workflows/update.yml) into it once.

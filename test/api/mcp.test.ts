@@ -139,7 +139,8 @@ describe('MCP', () => {
     expect(meta.authorization_servers).toEqual([ORIGIN]);
   });
 
-  it('connects with the household password and runs tools', async () => {
+  // Long: it walks through most tools in one session.
+  it('connects with the household password and runs tools', { timeout: 30_000 }, async () => {
     const api = await session();
     await api.post('/sample-data');
     const { token } = await connect();
