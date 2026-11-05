@@ -356,7 +356,9 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
               onGroupsChange={moveGroups}
               renderHeader={(c, rs) => (
                 <div className="flex items-center gap-2 px-1 pt-4 pb-1.5">
-                  <span className="text-[13px] font-semibold text-soft">{c}</span>
+                  <span className="rounded-full bg-chip px-2.5 py-0.5 text-[13px] font-semibold text-soft">
+                    {c}
+                  </span>
                   <span className="ml-auto font-mono text-[11px] text-faint tnum">{rs.length}</span>
                 </div>
               )}

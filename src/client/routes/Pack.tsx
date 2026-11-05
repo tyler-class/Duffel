@@ -605,7 +605,7 @@ function PackTrip(props: {
               const done = g.rows.filter((r) => r.packed).length;
               return (
                 <section key={g.key} className="mt-5 px-5">
-                  <div className="flex items-center gap-2 border-b border-line pb-2.5">
+                  <div className="flex items-center gap-2 rounded-2xl bg-chip py-1.5 pr-1.5 pl-3.5">
                     <button
                       className="flex min-w-0 items-center gap-2 rounded-full py-0.5 text-base font-semibold"
                       aria-expanded={!isCollapsed}
@@ -677,8 +677,10 @@ function PackTrip(props: {
                       onRowsChange={moveRows}
                       onGroupsChange={moveGroups}
                       renderHeader={(c, rs) => (
-                        <div className="flex items-center gap-2 px-3 pt-4 pb-1.5">
-                          <span className="text-[13px] font-semibold text-soft">{c}</span>
+                        <div className="flex items-center gap-2 pt-4 pr-3 pb-1.5 pl-1.5">
+                          <span className="rounded-full bg-chip px-2.5 py-0.5 text-[13px] font-semibold text-soft">
+                            {c}
+                          </span>
                           <span className="ml-auto font-mono text-[11px] text-faint tnum">
                             {rs.filter((r) => r.packed).length}/{rs.length}
                           </span>

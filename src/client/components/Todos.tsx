@@ -46,7 +46,7 @@ function PhaseHeader({
 }) {
   const label = TODO_PHASE_LABELS[phase];
   return (
-    <div className="flex items-center gap-2 border-b border-line pb-2.5">
+    <div className="flex items-center gap-2 rounded-2xl bg-chip py-1.5 pr-1.5 pl-3.5">
       <span className="text-base font-semibold">{label}</span>
       {now && (
         <span className="rounded bg-todo-tint px-1.5 py-px text-[11px] font-medium text-todo">
