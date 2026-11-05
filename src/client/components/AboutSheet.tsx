@@ -10,6 +10,7 @@ const LINKS: [string, string, IconName][] = [
     'coffee',
   ],
   ['https://tylerclass.net', 'tylerclass.net', 'link'],
+  ['mailto:duffel@tylerclass.net', 'Questions or help? duffel@tylerclass.net', 'mail'],
 ];
 
 /** About Duffel: version, what it is, who built it, and links. */
@@ -28,8 +29,8 @@ export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => vo
           <a
             key={href}
             href={href}
-            target="_blank"
-            rel="noreferrer"
+            // Email opens the mail app; the rest open in a new tab.
+            {...(href.startsWith('mailto:') ? {} : { target: '_blank', rel: 'noreferrer' })}
             className="flex w-full items-center gap-3 border-t border-line py-3.5 text-base text-ink"
           >
             <Icon name={icon} size={18} className="flex-none text-accent" />
