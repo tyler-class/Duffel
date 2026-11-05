@@ -1,4 +1,4 @@
-import type { AutoPackFallback, QtyMode } from './lookups';
+import type { AutoPackFallback, QtyMode, TodoPhase } from './lookups';
 
 export interface Person {
   id: string;
@@ -81,6 +81,18 @@ export interface TemplateBag {
   people: string[];
 }
 
+/** A to-do on a template. Its date is relative to the trip. */
+export interface TemplateTodo {
+  id: string;
+  template_id: string;
+  title: string;
+  phase: TodoPhase;
+  /** Days before the trip (pre), day of the trip from 1 (during), days after it (after). */
+  due_days: number | null;
+  notes: string | null;
+  sort_order: number;
+}
+
 export interface Template {
   id: string;
   name: string;
@@ -92,6 +104,7 @@ export interface Template {
   category_order: string[];
   items: TemplateItem[];
   bags: TemplateBag[];
+  todos: TemplateTodo[];
 }
 
 export interface Trip {
@@ -156,6 +169,18 @@ export interface TripItem {
   sort_order: number;
 }
 
+export interface TripTodo {
+  id: string;
+  trip_id: string;
+  title: string;
+  phase: TodoPhase;
+  due_date: string | null;
+  notes: string | null;
+  done: boolean;
+  done_at: string | null;
+  sort_order: number;
+}
+
 export interface Settings {
   instance_name: string;
   /** Where an item with a bag type goes when its person has no bag of that type. */
@@ -177,4 +202,5 @@ export interface TripDetail {
   trip: Trip;
   bags: TripBag[];
   items: TripItem[];
+  todos: TripTodo[];
 }

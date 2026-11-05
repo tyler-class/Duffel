@@ -33,6 +33,7 @@ import {
   TagPicker,
 } from '../components/fields';
 import { SortableGroups } from '../components/SortableGroups';
+import { TemplateTodos } from '../components/Todos';
 import { SwipeRow } from '../components/SwipeRow';
 import {
   DangerButton,
@@ -173,7 +174,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   const [editing, setEditing] = useState<TemplateItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [bagSheet, setBagSheet] = useState<TemplateBag | 'new' | null>(null);
-  const [tab, setTab] = useState<'items' | 'details'>('items');
+  const [tab, setTab] = useState<'items' | 'todos' | 'details'>('items');
   const [moveError, setMoveError] = useState('');
   const qc = useQueryClient();
   const sorted = useMemo(
@@ -260,13 +261,14 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         }
       />
       <div className="px-5 pb-1">
-        <SlideToggle<'items' | 'details'>
+        <SlideToggle<'items' | 'todos' | 'details'>
           label="Template sections"
           value={tab}
           onChange={setTab}
           options={[
-            ['items', 'Items'],
-            ['details', 'Template details'],
+            ['items', 'Packing'],
+            ['todos', 'To-dos'],
+            ['details', 'Details'],
           ]}
         />
       </div>
@@ -407,6 +409,8 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
           </div>
         </>
       )}
+
+      {tab === 'todos' && <TemplateTodos tpl={tpl} />}
 
       {tab === 'details' && (
         <div className="px-5 pt-3">

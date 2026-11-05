@@ -4,11 +4,13 @@ import { useNavigate, useParams, useSearchParams } from 'react-router';
 import {
   displayQty,
   isCarryOn,
+  localToday,
   mergeCategoryOrder,
   orderCategories,
   progress,
   reorderMoves,
   shortBagLabel,
+  tripStage,
 } from '@shared/logic';
 import { DEFAULT_LOOKUPS } from '@shared/lookups';
 import type { Item, Person, Trip, TripBag, TripDetail, TripItem } from '@shared/types';
@@ -22,6 +24,7 @@ import { ItemSheet, type ItemDraft, type SaveResult } from '../components/ItemSh
 import { CatalogPicker } from '../components/CatalogPicker';
 import { SwipeRow } from '../components/SwipeRow';
 import { SortableGroups } from '../components/SortableGroups';
+import { TripTodos } from '../components/Todos';
 import { useToast } from '../components/Toast';
 import {
   ActionList,
@@ -103,6 +106,8 @@ function PackTrip(props: {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moveOpen, setMoveOpen] = useState(false);
+  // Packing or To-dos. Unset = pick by where the trip is (see below).
+  const [view, setView] = useState<'packing' | 'todos' | null>(null);
   const [params, setParams] = useSearchParams();
   // "Sort them now" from trip details: open select mode with the waiting rows picked.
   useEffect(() => {
@@ -151,7 +156,18 @@ function PackTrip(props: {
   const personMap = useMemo(() => new Map(people.map((p) => [p.id, p])), [people]);
   const bagName = (b: TripBag) => shortBagLabel(b.label, trip?.name ?? '');
   const prog = progress(rows, bagMap);
-  const pct = prog.total ? Math.round((prog.done / prog.total) * 100) : 0;
+  const todos = detail?.todos ?? [];
+  const pre = todos.filter((t) => t.phase === 'pre');
+  const preDone = pre.filter((t) => t.done).length;
+  // One bar for getting ready: packed items in orange, pre-trip to-dos in blue.
+  const readyTotal = prog.total + pre.length;
+  const wPacked = readyTotal ? (prog.done / readyTotal) * 100 : 0;
+  const wTodos = readyTotal ? (preDone / readyTotal) * 100 : 0;
+  const stage = trip ? tripStage(trip, localToday()) : 'before';
+  const nowPhase = stage === 'during' ? 'during' : stage === 'after' ? 'after' : null;
+  const nowTodos = nowPhase ? todos.filter((t) => t.phase === nowPhase) : [];
+  // On the trip (or after it), open on its to-dos when there are any.
+  const shown = view ?? (nowTodos.length ? 'todos' : 'packing');
 
   const filtered = status !== 'all' || where !== 'all';
   const visible = rows.filter((r) => {
@@ -387,251 +403,315 @@ function PackTrip(props: {
         </div>
         <div className="mt-2 flex flex-col gap-1.5">
           <div
-            className="h-1.5 overflow-hidden rounded-full bg-track"
+            className="flex h-1.5 overflow-hidden rounded-full bg-track"
             role="progressbar"
-            aria-valuenow={pct}
+            aria-valuenow={Math.round(wPacked + wTodos)}
             aria-valuemin={0}
             aria-valuemax={100}
-            aria-label="Packed"
+            aria-label="Ready for the trip"
           >
             <div
-              className="h-full rounded-full bg-accent transition-[width] duration-200"
-              style={{ width: `${pct}%` }}
+              className="h-full bg-accent transition-[width] duration-200"
+              style={{ width: `${wPacked}%` }}
+            />
+            <div
+              className="h-full bg-todo transition-[width] duration-200"
+              style={{ width: `${wTodos}%` }}
             />
           </div>
-          <span className="text-[13px] text-soft tnum">
-            <span className="font-semibold text-ink">{prog.done}</span> of {prog.total} packed
+          <span className="flex flex-wrap items-center gap-x-3.5 gap-y-1 text-[13px] text-soft tnum">
+            <span className="inline-flex items-center gap-1.5">
+              {pre.length > 0 && <span className="h-2 w-2 rounded-full bg-accent" />}
+              <span>
+                <span className="font-semibold text-ink">{prog.done}</span> of {prog.total} packed
+              </span>
+            </span>
+            {pre.length > 0 && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-todo" />
+                <span>
+                  <span className="font-semibold text-ink">{preDone}</span> of {pre.length} pre-trip
+                  to-dos
+                </span>
+              </span>
+            )}
           </span>
-        </div>
-      </header>
-
-      <div className="flex flex-col gap-2 px-5 pt-3 pb-1">
-        <div className="flex items-center gap-2">
-          <SlideToggle<GroupBy>
-            label="Group by"
-            value={groupBy}
-            onChange={setGroupBy}
-            options={[
-              ['person', 'By person'],
-              ['bag', 'By bag'],
-            ]}
-          />
-          <button
-            className={cx(
-              'ml-auto inline-flex h-[38px] items-center rounded-full px-3.5 text-sm',
-              selecting ? 'bg-accent font-semibold text-accent-ink' : 'bg-chip text-soft',
-            )}
-            onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
-            aria-pressed={selecting}
-          >
-            {selecting ? 'Done' : 'Select'}
-          </button>
-          <button
-            className={cx(
-              'inline-flex h-[38px] items-center gap-1.5 rounded-full px-3.5 text-sm',
-              filtered ? 'bg-accent-tint font-semibold text-accent' : 'bg-chip text-soft',
-            )}
-            onClick={(e) => setFilterAnchor(e.currentTarget.getBoundingClientRect())}
-            aria-haspopup="menu"
-          >
-            <Icon name="filter" size={15} />
-            Filter{filtered ? ` (${(status !== 'all' ? 1 : 0) + (where !== 'all' ? 1 : 0)})` : ''}
-          </button>
-        </div>
-        {filtered && (
-          <div className="flex flex-wrap gap-1.5">
-            {status !== 'all' && (
-              <FilterChip onClear={() => setStatus('all')}>
-                {status === 'packed' ? 'Packed' : 'To pack'}
-              </FilterChip>
-            )}
-            {where !== 'all' && (
-              <FilterChip onClear={() => setWhere('all')}>
-                {where === 'carry' ? 'Carry-on' : 'Luggage'}
-              </FilterChip>
-            )}
-          </div>
-        )}
-      </div>
-      <Menu
-        open={!!filterAnchor}
-        onClose={() => setFilterAnchor(null)}
-        anchor={filterAnchor}
-        title="Filter"
-      >
-        <div className="flex flex-col gap-4 py-3">
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-soft">Show</span>
-            <Segmented<Status>
-              label="Packed status"
-              value={status}
-              onChange={setStatus}
-              options={[
-                ['all', 'All'],
-                ['packed', 'Packed'],
-                ['todo', 'To pack'],
-              ]}
-            />
-          </div>
-          <div className="flex flex-col gap-1.5">
-            <span className="text-xs text-soft">Where</span>
-            <Segmented<Where>
-              label="Where"
-              value={where}
-              onChange={setWhere}
-              options={[
-                ['all', 'All'],
-                ['carry', 'Carry-on'],
-                ['luggage', 'Luggage'],
-              ]}
-            />
-          </div>
-          {filtered && (
+          {nowTodos.length > 0 && (
             <button
-              className="self-start text-sm text-accent"
-              onClick={() => (setStatus('all'), setWhere('all'))}
+              className="inline-flex items-center gap-1.5 self-start rounded-full bg-todo-tint px-3 py-1 text-[13px] font-medium text-todo"
+              onClick={() => setView('todos')}
             >
-              Clear filters
+              {stage === 'during' ? 'On the trip' : 'After the trip'} ·{' '}
+              {nowTodos.every((t) => t.done)
+                ? 'all done'
+                : `${plural(nowTodos.filter((t) => !t.done).length, 'to-do')} left`}
             </button>
           )}
         </div>
-      </Menu>
+      </header>
 
-      <div className="px-5">
-        <ErrorText>{error}</ErrorText>
+      <div className="px-5 pt-3">
+        <SlideToggle<'packing' | 'todos'>
+          label="Trip sections"
+          value={shown}
+          onChange={(v) => {
+            setView(v);
+            if (v === 'todos') stopSelecting();
+          }}
+          options={[
+            ['packing', 'Packing'],
+            [
+              'todos',
+              <span key="t" className="inline-flex items-center gap-1.5">
+                To-dos
+                {todos.some((t) => !t.done) && (
+                  <span className="font-mono text-[11px] text-faint tnum">
+                    {todos.filter((t) => !t.done).length}
+                  </span>
+                )}
+              </span>,
+            ],
+          ]}
+        />
       </div>
 
-      {!rows.length && detail ? (
-        <Empty
-          title="This list is empty"
-          action={
-            <div className="flex gap-2">
-              <PrimaryButton icon="plus" onClick={() => setMenu('catalog')}>
-                Add from catalog
-              </PrimaryButton>
-            </div>
-          }
-        >
-          Add items from your catalog, or tap + next to a person.
-        </Empty>
-      ) : null}
-      {filtered && rows.length > 0 && !groups.length && (
-        <p className="px-5 py-12 text-center text-sm text-soft">
-          {status === 'todo' && where === 'all'
-            ? 'Everything is packed.'
-            : 'Nothing matches these filters.'}
-        </p>
-      )}
+      {shown === 'todos' && detail && <TripTodos detail={detail} stage={stage} />}
 
-      {(rows.length > 0 || !detail) &&
-        groups.map((g) => {
-          const ck = `${groupBy}:${g.key}`;
-          const isCollapsed = !!collapsed[ck];
-          const done = g.rows.filter((r) => r.packed).length;
-          return (
-            <section key={g.key} className="mt-5 px-5">
-              <div className="flex items-center gap-2 border-b border-line pb-2.5">
-                <button
-                  className="flex min-w-0 items-center gap-2 rounded-full py-0.5 text-base font-semibold"
-                  aria-expanded={!isCollapsed}
-                  onClick={() => toggleCollapsed(ck)}
-                >
-                  <GroupMark g={g} />
-                  <span className="truncate">{g.label}</span>
-                  {g.bag?.carry_on && (
-                    <span className="rounded bg-accent-tint px-1.5 py-px text-[11px] font-medium text-accent">
-                      Carry-on
-                    </span>
-                  )}
-                  <Icon
-                    name="chev"
-                    size={13}
-                    className={cx('text-faint transition-transform', isCollapsed && '-rotate-90')}
-                  />
-                </button>
-                {selecting && g.rows.length > 0 && (
-                  <button
-                    className="ml-auto text-sm text-accent"
-                    onClick={() => {
-                      const all = g.rows.every((r) => selected.has(r.id));
-                      setSelected((cur) => {
-                        const n = new Set(cur);
-                        for (const r of g.rows) {
-                          if (all) n.delete(r.id);
-                          else n.add(r.id);
-                        }
-                        return n;
-                      });
-                    }}
-                  >
-                    {g.rows.every((r) => selected.has(r.id)) ? 'Deselect all' : 'Select all'}
-                  </button>
+      {shown === 'packing' && (
+        <>
+          <div className="flex flex-col gap-2 px-5 pt-3 pb-1">
+            <div className="flex items-center gap-2">
+              <SlideToggle<GroupBy>
+                label="Group by"
+                value={groupBy}
+                onChange={setGroupBy}
+                options={[
+                  ['person', 'By person'],
+                  ['bag', 'By bag'],
+                ]}
+              />
+              <button
+                className={cx(
+                  'ml-auto inline-flex h-[38px] items-center rounded-full px-3.5 text-sm',
+                  selecting ? 'bg-accent font-semibold text-accent-ink' : 'bg-chip text-soft',
                 )}
-                <span
-                  className={cx(
-                    'font-mono text-xs text-faint tnum',
-                    !(selecting && g.rows.length > 0) && 'ml-auto',
-                  )}
-                >
-                  {done}/{g.rows.length}
-                </span>
-                {!selecting && (
-                  <IconButton
-                    icon="plus"
-                    label={`Add to ${g.label}`}
-                    className="h-7 w-7"
-                    onClick={() => openAdd(g)}
-                  />
+                onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
+                aria-pressed={selecting}
+              >
+                {selecting ? 'Done' : 'Select'}
+              </button>
+              <button
+                className={cx(
+                  'inline-flex h-[38px] items-center gap-1.5 rounded-full px-3.5 text-sm',
+                  filtered ? 'bg-accent-tint font-semibold text-accent' : 'bg-chip text-soft',
+                )}
+                onClick={(e) => setFilterAnchor(e.currentTarget.getBoundingClientRect())}
+                aria-haspopup="menu"
+              >
+                <Icon name="filter" size={15} />
+                Filter
+                {filtered ? ` (${(status !== 'all' ? 1 : 0) + (where !== 'all' ? 1 : 0)})` : ''}
+              </button>
+            </div>
+            {filtered && (
+              <div className="flex flex-wrap gap-1.5">
+                {status !== 'all' && (
+                  <FilterChip onClear={() => setStatus('all')}>
+                    {status === 'packed' ? 'Packed' : 'To pack'}
+                  </FilterChip>
+                )}
+                {where !== 'all' && (
+                  <FilterChip onClear={() => setWhere('all')}>
+                    {where === 'carry' ? 'Carry-on' : 'Luggage'}
+                  </FilterChip>
                 )}
               </div>
-              {!isCollapsed && g.person?.notes && (
-                <p className="flex items-start gap-1.5 pt-2 text-[13px] text-soft">
-                  <Icon name="note" size={14} className="mt-0.5 flex-none text-faint" />
-                  {g.person.notes}
-                </p>
+            )}
+          </div>
+          <Menu
+            open={!!filterAnchor}
+            onClose={() => setFilterAnchor(null)}
+            anchor={filterAnchor}
+            title="Filter"
+          >
+            <div className="flex flex-col gap-4 py-3">
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-soft">Show</span>
+                <Segmented<Status>
+                  label="Packed status"
+                  value={status}
+                  onChange={setStatus}
+                  options={[
+                    ['all', 'All'],
+                    ['packed', 'Packed'],
+                    ['todo', 'To pack'],
+                  ]}
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <span className="text-xs text-soft">Where</span>
+                <Segmented<Where>
+                  label="Where"
+                  value={where}
+                  onChange={setWhere}
+                  options={[
+                    ['all', 'All'],
+                    ['carry', 'Carry-on'],
+                    ['luggage', 'Luggage'],
+                  ]}
+                />
+              </div>
+              {filtered && (
+                <button
+                  className="self-start text-sm text-accent"
+                  onClick={() => (setStatus('all'), setWhere('all'))}
+                >
+                  Clear filters
+                </button>
               )}
-              {!isCollapsed && (
-                <SortableGroups
-                  rows={g.rows}
-                  saved={trip.category_order}
-                  defaults={DEFAULT_LOOKUPS.category}
-                  disabled={selecting}
-                  onRowsChange={moveRows}
-                  onGroupsChange={moveGroups}
-                  renderHeader={(c, rs) => (
-                    <div className="flex items-center gap-2 px-3 pt-4 pb-1.5">
-                      <span className="text-[13px] font-semibold text-soft">{c}</span>
-                      <span className="ml-auto font-mono text-[11px] text-faint tnum">
-                        {rs.filter((r) => r.packed).length}/{rs.length}
-                      </span>
-                    </div>
+            </div>
+          </Menu>
+
+          <div className="px-5">
+            <ErrorText>{error}</ErrorText>
+          </div>
+
+          {!rows.length && detail ? (
+            <Empty
+              title="This list is empty"
+              action={
+                <div className="flex gap-2">
+                  <PrimaryButton icon="plus" onClick={() => setMenu('catalog')}>
+                    Add from catalog
+                  </PrimaryButton>
+                </div>
+              }
+            >
+              Add items from your catalog, or tap + next to a person.
+            </Empty>
+          ) : null}
+          {filtered && rows.length > 0 && !groups.length && (
+            <p className="px-5 py-12 text-center text-sm text-soft">
+              {status === 'todo' && where === 'all'
+                ? 'Everything is packed.'
+                : 'Nothing matches these filters.'}
+            </p>
+          )}
+
+          {(rows.length > 0 || !detail) &&
+            groups.map((g) => {
+              const ck = `${groupBy}:${g.key}`;
+              const isCollapsed = !!collapsed[ck];
+              const done = g.rows.filter((r) => r.packed).length;
+              return (
+                <section key={g.key} className="mt-5 px-5">
+                  <div className="flex items-center gap-2 border-b border-line pb-2.5">
+                    <button
+                      className="flex min-w-0 items-center gap-2 rounded-full py-0.5 text-base font-semibold"
+                      aria-expanded={!isCollapsed}
+                      onClick={() => toggleCollapsed(ck)}
+                    >
+                      <GroupMark g={g} />
+                      <span className="truncate">{g.label}</span>
+                      {g.bag?.carry_on && (
+                        <span className="rounded bg-accent-tint px-1.5 py-px text-[11px] font-medium text-accent">
+                          Carry-on
+                        </span>
+                      )}
+                      <Icon
+                        name="chev"
+                        size={13}
+                        className={cx(
+                          'text-faint transition-transform',
+                          isCollapsed && '-rotate-90',
+                        )}
+                      />
+                    </button>
+                    {selecting && g.rows.length > 0 && (
+                      <button
+                        className="ml-auto text-sm text-accent"
+                        onClick={() => {
+                          const all = g.rows.every((r) => selected.has(r.id));
+                          setSelected((cur) => {
+                            const n = new Set(cur);
+                            for (const r of g.rows) {
+                              if (all) n.delete(r.id);
+                              else n.add(r.id);
+                            }
+                            return n;
+                          });
+                        }}
+                      >
+                        {g.rows.every((r) => selected.has(r.id)) ? 'Deselect all' : 'Select all'}
+                      </button>
+                    )}
+                    <span
+                      className={cx(
+                        'font-mono text-xs text-faint tnum',
+                        !(selecting && g.rows.length > 0) && 'ml-auto',
+                      )}
+                    >
+                      {done}/{g.rows.length}
+                    </span>
+                    {!selecting && (
+                      <IconButton
+                        icon="plus"
+                        label={`Add to ${g.label}`}
+                        className="h-7 w-7"
+                        onClick={() => openAdd(g)}
+                      />
+                    )}
+                  </div>
+                  {!isCollapsed && g.person?.notes && (
+                    <p className="flex items-start gap-1.5 pt-2 text-[13px] text-soft">
+                      <Icon name="note" size={14} className="mt-0.5 flex-none text-faint" />
+                      {g.person.notes}
+                    </p>
                   )}
-                  renderRow={(r) => (
-                    <Row
-                      row={r}
-                      sub={rowSub(r, groupBy, bagMap, personMap, bagName)}
-                      carry={groupBy === 'person' && isCarryOn(r, bagMap)}
-                      onToggle={() => toggle(r)}
-                      onEdit={() => setEditing(r)}
-                      onDelete={() => remove(r)}
-                      selecting={selecting}
-                      selected={selected.has(r.id)}
-                      onSelect={() =>
-                        setSelected((cur) => {
-                          const n = new Set(cur);
-                          if (n.has(r.id)) n.delete(r.id);
-                          else n.add(r.id);
-                          return n;
-                        })
-                      }
+                  {!isCollapsed && (
+                    <SortableGroups
+                      rows={g.rows}
+                      saved={trip.category_order}
+                      defaults={DEFAULT_LOOKUPS.category}
+                      disabled={selecting}
+                      onRowsChange={moveRows}
+                      onGroupsChange={moveGroups}
+                      renderHeader={(c, rs) => (
+                        <div className="flex items-center gap-2 px-3 pt-4 pb-1.5">
+                          <span className="text-[13px] font-semibold text-soft">{c}</span>
+                          <span className="ml-auto font-mono text-[11px] text-faint tnum">
+                            {rs.filter((r) => r.packed).length}/{rs.length}
+                          </span>
+                        </div>
+                      )}
+                      renderRow={(r) => (
+                        <Row
+                          row={r}
+                          sub={rowSub(r, groupBy, bagMap, personMap, bagName)}
+                          carry={groupBy === 'person' && isCarryOn(r, bagMap)}
+                          onToggle={() => toggle(r)}
+                          onEdit={() => setEditing(r)}
+                          onDelete={() => remove(r)}
+                          selecting={selecting}
+                          selected={selected.has(r.id)}
+                          onSelect={() =>
+                            setSelected((cur) => {
+                              const n = new Set(cur);
+                              if (n.has(r.id)) n.delete(r.id);
+                              else n.add(r.id);
+                              return n;
+                            })
+                          }
+                        />
+                      )}
                     />
                   )}
-                />
-              )}
-            </section>
-          );
-        })}
-      <div className={selecting ? 'h-24' : 'h-8'} />
+                </section>
+              );
+            })}
+          <div className={selecting ? 'h-24' : 'h-8'} />
+        </>
+      )}
 
       {selecting && (
         <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-4 md:bottom-6 md:left-60">

@@ -14,6 +14,9 @@
   --accent-ink: #ffffff;
   --accent-tint: color-mix(in srgb, #f97316 11%, #f6f5f0);
   --track: #e4e4de;
+  /* To-dos: a second, calm color beside the orange. */
+  --todo: #3b82f6;
+  --todo-tint: color-mix(in srgb, #3b82f6 11%, #f6f5f0);
   --chip: #efefe9;
   --seg: #ffffff;
   --danger: #dc2626;
@@ -43,6 +46,8 @@
     --accent-ink: #181818;
     --accent-tint: color-mix(in srgb, #fb923c 14%, #181818);
     --track: #313131;
+    --todo: #60a5fa;
+    --todo-tint: color-mix(in srgb, #60a5fa 14%, #181818);
     --chip: #212121;
     --seg: #313131;
     --danger: #ef4444;
@@ -72,6 +77,8 @@
   --color-accent-ink: var(--accent-ink);
   --color-accent-tint: var(--accent-tint);
   --color-track: var(--track);
+  --color-todo: var(--todo);
+  --color-todo-tint: var(--todo-tint);
   --color-chip: var(--chip);
   --color-seg: var(--seg);
   --color-danger: var(--danger);

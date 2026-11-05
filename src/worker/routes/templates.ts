@@ -7,6 +7,8 @@ import {
   templateItemPatch,
   templateItemsAdd,
   templatePatch,
+  templateTodoInput,
+  templateTodoPatch,
 } from '@shared/schemas';
 import { defaultBagCarryOn } from '@shared/logic';
 import {
@@ -77,13 +79,11 @@ templates.post('/templates/:id/items', async (c) => {
   const t = await one(db, id);
   const { item_ids } = await body(c, templateItemsAdd);
   const valid = await existingIds(db, 'items', item_ids);
+  // Each new row starts in its catalog item's group.
   const cats = new Map(
     (
       await db
-        .prepare(
-          `SELECT id, category FROM items WHERE id IN (${item_ids.map(() => '?').join(',')})`,
-        )
-        .bind(...item_ids)
+        .prepare('SELECT id, category FROM items')
         .all<{ id: string; category: string | null }>()
     ).results.map((r) => [r.id, r.category]),
   );
@@ -147,6 +147,53 @@ templates.patch('/template-items/:id', async (c) => {
   }
   if (stmts.length) await db.batch(stmts);
   return c.json(await one(db, row.template_id));
+});
+
+// ---------- to-dos ----------
+templates.post('/templates/:id/todos', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  const t = await one(db, id);
+  const input = await body(c, templateTodoInput);
+  const now = nowIso();
+  await insertStmt(db, 'template_todos', {
+    id: newId(),
+    template_id: id,
+    title: input.title,
+    phase: input.phase,
+    due_days: input.due_days ?? null,
+    notes: input.notes ?? null,
+    sort_order: input.sort_order ?? Math.max(-1, ...t.todos.map((x) => x.sort_order)) + 1,
+    created_at: now,
+    updated_at: now,
+  }).run();
+  return c.json(await one(db, id), 201);
+});
+
+templates.patch('/template-todos/:id', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  const row = await first<{ template_id: string }>(
+    db,
+    'SELECT template_id FROM template_todos WHERE id = ?',
+    id,
+  );
+  if (!row) throw notFound('To-do');
+  const input = await body(c, templateTodoPatch);
+  const f = defined({
+    title: input.title,
+    phase: input.phase,
+    due_days: input.due_days,
+    notes: input.notes,
+    sort_order: input.sort_order,
+  });
+  if (Object.keys(f).length) await updateStmt(db, 'template_todos', id, f).run();
+  return c.json(await one(db, row.template_id));
+});
+
+templates.delete('/template-todos/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM template_todos WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
 });
 
 /** Saves new positions (and groups) after template items are dragged around. */

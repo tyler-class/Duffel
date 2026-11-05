@@ -1,14 +1,19 @@
 // Generates seed/sample.json: a small, generic household for demos and "Load sample data".
 // Run: npx tsx scripts/build-sample.ts
 import { writeFileSync } from 'node:fs';
-import { planFromTemplate, tripLength, defaultBagCarryOn } from '../src/shared/logic';
+import {
+  planFromTemplate,
+  planTodosFromTemplate,
+  tripLength,
+  defaultBagCarryOn,
+} from '../src/shared/logic';
 import {
   EXPORT_FORMAT,
   EXPORT_VERSION,
   type DuffelExport,
   type ExportRow,
 } from '../src/shared/exportFormat';
-import type { Item, TemplateItem } from '../src/shared/types';
+import type { Item, TemplateItem, TemplateTodo } from '../src/shared/types';
 import type { QtyMode } from '../src/shared/lookups';
 
 let n = 0;
@@ -296,6 +301,27 @@ const tripId = id('trip');
 const start = '2026-12-12';
 const end = '2026-12-19';
 const len = tripLength(start, end)!;
+
+// Things to do around the trip; the trip gets them with real dates.
+const beachTodos: TemplateTodo[] = (
+  [
+    ['Book a pet sitter', 'pre', 21, null],
+    ['Check passports are valid', 'pre', 30, 'Six months past the return date'],
+    ['Hold the mail', 'pre', 3, null],
+    ['Book the snorkel trip', 'during', 2, null],
+    ['Return the rental car', 'after', 0, 'Fill the tank first'],
+    ['Unpack and do laundry', 'after', 1, null],
+  ] as const
+).map(([title, phase, due_days, notes], i) => ({
+  id: id('ttodo'),
+  template_id: beach.tpl.id,
+  title,
+  phase,
+  due_days,
+  notes,
+  sort_order: i,
+}));
+const tripTodos = planTodosFromTemplate(beachTodos, { start_date: start, end_date: end });
 const bagDefs = [
   [suitcases[0]!, 'Big checked', 'Checked'],
   [suitcases[1]!, 'Kids’ suitcase', 'Checked'],
@@ -419,6 +445,7 @@ const data: DuffelExport = {
     })) as ExportRow[],
     template_item_assignees: [],
     template_bags: templateBags,
+    template_todos: beachTodos.map((t) => ({ ...t, ...stamp })) as unknown as ExportRow[],
     template_bag_people: templateBags.flatMap((b) =>
       (owners[b.label] ?? []).map((p) => ({ template_bag_id: b.id, person_id: p })),
     ),
@@ -448,6 +475,14 @@ const data: DuffelExport = {
       (owners[b.label] ?? []).map((p) => ({ trip_bag_id: b.id, person_id: p })),
     ),
     trip_items: tripItems as unknown as ExportRow[],
+    trip_todos: tripTodos.map((t) => ({
+      ...t,
+      id: id('todo'),
+      trip_id: tripId,
+      done: 0,
+      done_at: null,
+      ...stamp,
+    })) as unknown as ExportRow[],
   },
 };
 

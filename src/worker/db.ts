@@ -1,3 +1,4 @@
+import type { TodoPhase } from '@shared/lookups';
 import type {
   Item,
   Person,
@@ -5,9 +6,11 @@ import type {
   Template,
   TemplateBag,
   TemplateItem,
+  TemplateTodo,
   Trip,
   TripBag,
   TripItem,
+  TripTodo,
 } from '@shared/types';
 import type { AutoPackFallback, QtyMode } from '@shared/lookups';
 
@@ -153,7 +156,38 @@ export function toTemplateBag(r: Row, people: string[] = []): TemplateBag {
   };
 }
 
-export function toTemplate(r: Row, items: TemplateItem[] = [], bags: TemplateBag[] = []): Template {
+export function toTemplateTodo(r: Row): TemplateTodo {
+  return {
+    id: String(r.id),
+    template_id: String(r.template_id),
+    title: String(r.title),
+    phase: (r.phase as TodoPhase) ?? 'pre',
+    due_days: n(r.due_days),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+  };
+}
+
+export function toTripTodo(r: Row): TripTodo {
+  return {
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    title: String(r.title),
+    phase: (r.phase as TodoPhase) ?? 'pre',
+    due_date: s(r.due_date),
+    notes: s(r.notes),
+    done: bool(r.done),
+    done_at: s(r.done_at),
+    sort_order: Number(r.sort_order),
+  };
+}
+
+export function toTemplate(
+  r: Row,
+  items: TemplateItem[] = [],
+  bags: TemplateBag[] = [],
+  todos: TemplateTodo[] = [],
+): Template {
   return {
     id: String(r.id),
     name: String(r.name),
@@ -164,6 +198,7 @@ export function toTemplate(r: Row, items: TemplateItem[] = [], bags: TemplateBag
     category_order: arr(r.category_order),
     items,
     bags,
+    todos,
   };
 }
 
@@ -285,6 +320,17 @@ export async function loadTemplates(db: D1Database, templateId?: string): Promis
       ...binds,
     ),
   ]);
+  const todoRows = await all(
+    db,
+    `SELECT * FROM template_todos${tWhere} ORDER BY sort_order, created_at`,
+    ...binds,
+  );
+  const todosByTemplate = new Map<string, TemplateTodo[]>();
+  for (const r of todoRows) {
+    const t = toTemplateTodo(r);
+    if (!todosByTemplate.has(t.template_id)) todosByTemplate.set(t.template_id, []);
+    todosByTemplate.get(t.template_id)!.push(t);
+  }
   const byBag = groupPairs(bagPeople, 'template_bag_id', 'person_id');
   const bagsByTemplate = new Map<string, TemplateBag[]>();
   for (const r of bagRows) {
@@ -300,7 +346,12 @@ export async function loadTemplates(db: D1Database, templateId?: string): Promis
     byTemplate.get(ti.template_id)!.push(ti);
   }
   return rows.map((r) =>
-    toTemplate(r, byTemplate.get(String(r.id)) ?? [], bagsByTemplate.get(String(r.id)) ?? []),
+    toTemplate(
+      r,
+      byTemplate.get(String(r.id)) ?? [],
+      bagsByTemplate.get(String(r.id)) ?? [],
+      todosByTemplate.get(String(r.id)) ?? [],
+    ),
   );
 }
 
@@ -368,6 +419,16 @@ export async function loadTripItems(db: D1Database, tripId: string): Promise<Tri
       tripId,
     )
   ).map(toTripItem);
+}
+
+export async function loadTripTodos(db: D1Database, tripId: string): Promise<TripTodo[]> {
+  return (
+    await all(
+      db,
+      'SELECT * FROM trip_todos WHERE trip_id = ? ORDER BY sort_order, created_at',
+      tripId,
+    )
+  ).map(toTripTodo);
 }
 
 export async function getSetting(db: D1Database, key: string): Promise<string | null> {

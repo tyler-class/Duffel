@@ -9,6 +9,15 @@ export const QTY_MODE_LABELS: Record<QtyMode, string> = {
   per_night: 'Per night',
 };
 
+/** When a to-do happens: before, during or after the trip. */
+export const TODO_PHASES = ['pre', 'during', 'after'] as const;
+export type TodoPhase = (typeof TODO_PHASES)[number];
+export const TODO_PHASE_LABELS: Record<TodoPhase, string> = {
+  pre: 'Pre-trip',
+  during: 'During trip',
+  after: 'After trip',
+};
+
 export const DEFAULT_LOOKUPS = {
   role: ['Adult', 'Child', 'Baby'],
   category: [

@@ -48,3 +48,20 @@ export function gapText(g: { carry: boolean; pack_type: string | null; count: nu
   if (g.pack_type) return `${plural(g.count, 'item')} with no ${g.pack_type.toLowerCase()}`;
   return `${plural(g.count, g.carry ? 'carry-on item' : 'item')} with no ${g.carry ? 'carry-on' : 'checked'} bag`;
 }
+
+/** A template to-do's date in words: "14 days before", "Day 2", "1 day after". */
+export function relativeWhen(phase: 'pre' | 'during' | 'after', days: number | null): string {
+  if (days === null) return '';
+  if (phase === 'during') return `Day ${Math.max(1, days)}`;
+  if (days === 0) return phase === 'pre' ? 'Day the trip starts' : 'Day the trip ends';
+  return `${plural(days, 'day')} ${phase === 'pre' ? 'before' : 'after'}`;
+}
+
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+
+/** "Thu, Dec 10" */
+export function formatDay(d: string | null): string {
+  const n = dayNumber(d);
+  if (n === null || !d) return '';
+  return `${WEEKDAYS[(n + 4) % 7]}, ${formatDate(d)}`;
+}

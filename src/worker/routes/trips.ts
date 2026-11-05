@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import {
   reorderRows,
   saveAsTemplate,
+  tripTodoInput,
+  tripTodoPatch,
   tripBagInput,
   tripBagPatch,
   tripCreate,
@@ -21,6 +23,10 @@ import {
   planTemplateFromTrip,
   placeRow,
   recalcRows,
+  planTemplateTodos,
+  planTodosClone,
+  planTodosFromTemplate,
+  type TodoDraft,
   resolveCalc,
   rewriteLabelPrefix,
   suggestItems,
@@ -46,6 +52,7 @@ import {
   loadTrip,
   loadTripBags,
   loadTripItems,
+  loadTripTodos,
   newId,
   setBagPeople,
   nowIso,
@@ -62,12 +69,13 @@ async function getTrip(db: D1Database, id: string): Promise<Trip> {
 }
 
 export async function tripDetail(db: D1Database, id: string): Promise<TripDetail> {
-  const [trip, bags, items] = await Promise.all([
+  const [trip, bags, items, todos] = await Promise.all([
     getTrip(db, id),
     loadTripBags(db, id),
     loadTripItems(db, id),
+    loadTripTodos(db, id),
   ]);
-  return { trip, bags, items };
+  return { trip, bags, items, todos };
 }
 
 const lenOf = (t: { days: number | null; nights: number | null }): LengthLike | null =>
@@ -139,6 +147,8 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
   let categoryOrder: string[] = input.category_order ?? [];
   const bags: (TripBag & { source?: string })[] = [];
   let drafts: (TripItemDraft & { sort_order?: number })[] = [];
+  let todos: TodoDraft[] = [];
+  const dates = { start_date: input.start_date ?? null, end_date: input.end_date ?? null };
   const suitcases = new Map((await loadSuitcases(db)).map((s) => [s.id, s]));
 
   const addBag = (bg: {
@@ -187,6 +197,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     });
     for (const bg of plan.bags) bags.push({ ...bg, trip_id: id });
     drafts = plan.items;
+    todos = planTodosClone(await loadTripTodos(db, src.id), src, dates);
     if (!travelers.length) travelers.push(...src.travelers);
   }
 
@@ -199,6 +210,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     if (!activities.length) activities = tpl.activities;
     tripType ??= tpl.trip_type;
     if (!categoryOrder.length) categoryOrder = tpl.category_order;
+    todos = planTodosFromTemplate(tpl.todos, dates);
     // The template's bag setup comes first, so its order wins when placing items.
     for (const tb of tpl.bags) {
       addBag({
@@ -245,7 +257,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     created_at: now,
     updated_at: now,
   };
-  return { tripRow, travelers, bags, drafts };
+  return { tripRow, travelers, bags, drafts, todos };
 }
 
 /** What a trip would look like: bags, and how many rows would have no bag yet. */
@@ -264,7 +276,7 @@ trips.post('/trips', async (c) => {
   const db = c.env.DB;
   const id = newId();
   const now = nowIso();
-  const { tripRow, travelers, bags, drafts } = await planTrip(db, input, id, now);
+  const { tripRow, travelers, bags, drafts, todos } = await planTrip(db, input, id, now);
   const stmts: D1PreparedStatement[] = [
     insertStmt(db, 'trips', tripRow),
     ...travelers.map((p) =>
@@ -293,6 +305,23 @@ trips.post('/trips', async (c) => {
     );
   }
   stmts.push(...drafts.map((d, i) => tripItemStmt(db, id, d, d.sort_order ?? i, now)));
+  stmts.push(
+    ...todos.map((t) =>
+      insertStmt(db, 'trip_todos', {
+        id: newId(),
+        trip_id: id,
+        title: t.title,
+        phase: t.phase,
+        due_date: t.due_date,
+        notes: t.notes,
+        done: 0,
+        done_at: null,
+        sort_order: t.sort_order,
+        created_at: now,
+        updated_at: now,
+      }),
+    ),
+  );
   await db.batch(stmts);
   return c.json(await tripDetail(db, id), 201);
 });
@@ -429,11 +458,12 @@ trips.post('/trips/:id/save-as-template', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   const { name } = await body(c, saveAsTemplate);
-  const [trip, bags, rows, items] = await Promise.all([
+  const [trip, bags, rows, items, tripTodos] = await Promise.all([
     getTrip(db, id),
     loadTripBags(db, id),
     loadTripItems(db, id),
     loadItems(db),
+    loadTripTodos(db, id),
   ]);
   const plan = planTemplateFromTrip({
     rows,
@@ -456,6 +486,21 @@ trips.post('/trips/:id/save-as-template', async (c) => {
       updated_at: now,
     }),
   ];
+  for (const t of planTemplateTodos(tripTodos, trip)) {
+    stmts.push(
+      insertStmt(db, 'template_todos', {
+        id: newId(),
+        template_id: templateId,
+        title: t.title,
+        phase: t.phase,
+        due_days: t.due_days,
+        notes: t.notes,
+        sort_order: t.sort_order,
+        created_at: now,
+        updated_at: now,
+      }),
+    );
+  }
   for (const ni of plan.newCatalogItems) {
     stmts.push(
       insertStmt(db, 'items', {
@@ -878,6 +923,64 @@ trips.post('/trips/:id/items/reorder', async (c) => {
     ),
   );
   return c.json(await tripDetail(db, tripId));
+});
+
+// ---------- to-dos ----------
+trips.post('/trips/:id/todos', async (c) => {
+  const tripId = c.req.param('id');
+  const db = c.env.DB;
+  await getTrip(db, tripId);
+  const input = await body(c, tripTodoInput);
+  const max = await first<{ m: number | null }>(
+    db,
+    'SELECT MAX(sort_order) AS m FROM trip_todos WHERE trip_id = ?',
+    tripId,
+  );
+  const now = nowIso();
+  await insertStmt(db, 'trip_todos', {
+    id: newId(),
+    trip_id: tripId,
+    title: input.title,
+    phase: input.phase,
+    due_date: input.due_date ?? null,
+    notes: input.notes ?? null,
+    done: b(input.done),
+    done_at: input.done ? now : null,
+    sort_order: input.sort_order ?? (max?.m ?? -1) + 1,
+    created_at: now,
+    updated_at: now,
+  }).run();
+  return c.json(await tripDetail(db, tripId), 201);
+});
+
+trips.patch('/trip-todos/:id', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  const row = await first<{ trip_id: string; done: number }>(
+    db,
+    'SELECT trip_id, done FROM trip_todos WHERE id = ?',
+    id,
+  );
+  if (!row) throw notFound('To-do');
+  const input = await body(c, tripTodoPatch);
+  const f: Record<string, unknown> = defined({
+    title: input.title,
+    phase: input.phase,
+    due_date: input.due_date,
+    notes: input.notes,
+    sort_order: input.sort_order,
+  });
+  if (input.done !== undefined) {
+    f.done = b(input.done);
+    if (input.done !== (row.done === 1)) f.done_at = input.done ? nowIso() : null;
+  }
+  if (Object.keys(f).length) await updateStmt(db, 'trip_todos', id, f).run();
+  return c.json(await tripDetail(db, row.trip_id));
+});
+
+trips.delete('/trip-todos/:id', async (c) => {
+  await c.env.DB.prepare('DELETE FROM trip_todos WHERE id = ?').bind(c.req.param('id')).run();
+  return c.json({ ok: true });
 });
 
 trips.delete('/trip-items/:id', async (c) => {
