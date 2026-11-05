@@ -18,6 +18,7 @@ import {
   planFromTemplate,
   planRows,
   planTemplateFromTrip,
+  placeRow,
   recalcRows,
   resolveCalc,
   rewriteLabelPrefix,
@@ -25,6 +26,7 @@ import {
   suggestPlacements,
   unplacedSummary,
   tripLength,
+  typedBags,
   type LengthLike,
   type TripItemDraft,
 } from '@shared/logic';
@@ -33,6 +35,7 @@ import {
   b,
   existingIds,
   first,
+  getAutoPackFallback,
   insertStmt,
   json,
   loadItems,
@@ -93,6 +96,7 @@ function tripItemStmt(
     packed: 0,
     packed_at: null,
     carry_hint: b(d.carry_hint),
+    pack_type: d.pack_type,
     notes: d.notes,
     sort_order: sortOrder,
     created_at: now,
@@ -208,7 +212,12 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
 
   if (tpl) {
     const items = new Map((await loadItems(db)).map((i) => [i.id, i]));
-    drafts = planFromTemplate(tpl.items, items, { len, travelers, bags });
+    drafts = planFromTemplate(tpl.items, items, {
+      len,
+      travelers,
+      bags: typedBags(bags, suitcases),
+      fallback: await getAutoPackFallback(db),
+    });
   }
 
   const tripRow = {
@@ -376,10 +385,12 @@ trips.post('/trips/:id/items/from-catalog', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   const input = await body(c, tripItemsAdd);
-  const [trip, bags, items] = await Promise.all([
+  const [trip, bags, items, suitcases, fallback] = await Promise.all([
     getTrip(db, id),
     loadTripBags(db, id),
     loadItems(db),
+    loadSuitcases(db),
+    getAutoPackFallback(db),
   ]);
   const byId = new Map(items.map((i) => [i.id, i]));
   const person = input.person_id
@@ -392,12 +403,14 @@ trips.post('/trips/:id/items/from-catalog', async (c) => {
       item,
       assignees: person ? [input.person_id!] : [],
       carryHint: item.usually_carry_on,
+      packType: item.pack_type,
       notes: null,
     }));
   const drafts = planRows(entries, {
     len: lenOf(trip),
     travelers: trip.travelers,
-    bags,
+    bags: typedBags(bags, new Map(suitcases.map((s) => [s.id, s]))),
+    fallback,
   });
   const start = await nextSortOrder(db, id);
   const now = nowIso();
@@ -602,13 +615,23 @@ trips.delete('/trip-bags/:id', async (c) => {
   return c.json({ ...(await tripDetail(c.env.DB, row.trip_id)), moved: moved?.n ?? 0 });
 });
 
+/** A trip's bags with their catalog type, for auto pack. */
+async function placeableBags(db: D1Database, tripId: string) {
+  const [bags, suitcases] = await Promise.all([loadTripBags(db, tripId), loadSuitcases(db)]);
+  return typedBags(bags, new Map(suitcases.map((s) => [s.id, s])));
+}
+
 /** Rows waiting in "No bag yet" that now have a matching bag. */
 trips.get('/trips/:id/placements', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   await getTrip(db, id);
-  const [bags, rows] = await Promise.all([loadTripBags(db, id), loadTripItems(db, id)]);
-  return c.json({ moves: suggestPlacements(rows, bags) });
+  const [bags, rows, fallback] = await Promise.all([
+    placeableBags(db, id),
+    loadTripItems(db, id),
+    getAutoPackFallback(db),
+  ]);
+  return c.json({ moves: suggestPlacements(rows, bags, fallback) });
 });
 
 /** Moves every waiting row that now has a matching bag into it. */
@@ -616,8 +639,12 @@ trips.post('/trips/:id/placements/apply', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   await getTrip(db, id);
-  const [bags, rows] = await Promise.all([loadTripBags(db, id), loadTripItems(db, id)]);
-  const moves = suggestPlacements(rows, bags);
+  const [bags, rows, fallback] = await Promise.all([
+    placeableBags(db, id),
+    loadTripItems(db, id),
+    getAutoPackFallback(db),
+  ]);
+  const moves = suggestPlacements(rows, bags, fallback);
   if (moves.length) {
     const now = nowIso();
     await db.batch(
@@ -675,7 +702,19 @@ trips.post('/trips/:id/items', async (c) => {
   const calc = item ? resolveCalc(item) : null;
   const now = nowIso();
   const id = input.id ?? newId();
-  const bagId = input.no_bag ? null : (input.trip_bag_id ?? null);
+  let bagId = input.no_bag ? null : (input.trip_bag_id ?? null);
+  // Auto pack: a catalog item with a bag type goes into its person's bag of that type.
+  if (item?.pack_type && !bagId && !input.no_bag) {
+    bagId = placeRow(
+      {
+        person_id: input.person_id ?? null,
+        carry: false,
+        not_in_suitcase: false,
+        pack_type: item.pack_type,
+      },
+      await placeableBags(db, tripId),
+    ).trip_bag_id;
+  }
   await insertStmt(db, 'trip_items', {
     id,
     trip_id: tripId,
@@ -703,6 +742,7 @@ trips.post('/trips/:id/items', async (c) => {
           )?.c ?? 0) === 1
         : (item?.usually_carry_on ?? false),
     ),
+    pack_type: item?.pack_type ?? null,
     notes: input.notes ?? null,
     sort_order: input.sort_order ?? (await nextSortOrder(db, tripId)),
     created_at: now,

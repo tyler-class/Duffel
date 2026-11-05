@@ -1,4 +1,4 @@
-import type { QtyMode } from './lookups';
+import type { AutoPackFallback, QtyMode } from './lookups';
 
 export interface Person {
   id: string;
@@ -27,6 +27,8 @@ export interface Item {
   dimensions_source: string | null;
   not_in_suitcase: boolean;
   usually_carry_on: boolean;
+  /** Auto pack: goes into its person's bag of this type ("Diaper bag"). */
+  pack_type: string | null;
   notes: string | null;
   archived: boolean;
   default_people: string[];
@@ -57,6 +59,8 @@ export interface TemplateItem {
   /** Null = the catalog item's offset. */
   qty_offset_override: number | null;
   carry_on: boolean;
+  /** Auto pack bag type; wins over carry_on and the catalog's choice. */
+  pack_type: string | null;
   notes: string | null;
   sort_order: number;
   assignees: string[];
@@ -138,12 +142,16 @@ export interface TripItem {
   packed_at: string | null;
   /** Should ride in its person's carry-on bag. */
   carry_hint: boolean;
+  /** Auto pack bag type: the row moves into a bag of this type when one is added. */
+  pack_type: string | null;
   notes: string | null;
   sort_order: number;
 }
 
 export interface Settings {
   instance_name: string;
+  /** Where an item with a bag type goes when its person has no bag of that type. */
+  autopack_fallback: AutoPackFallback;
 }
 
 /** Everything except trip items: small enough to load in one request. */

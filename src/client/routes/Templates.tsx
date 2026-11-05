@@ -2,18 +2,28 @@ import { useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
 import type { AppState, Item, Template, TemplateBag, TemplateItem } from '@shared/types';
-import { calcSummary, planFromTemplate, resolveCalc, unplacedSummary } from '@shared/logic';
+import {
+  calcSummary,
+  packChoice,
+  packLabel,
+  planFromTemplate,
+  resolveCalc,
+  typedBags,
+  unplacedSummary,
+  type PackChoice,
+} from '@shared/logic';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
-import { plural } from '../lib/format';
+import { gapText, packHint, plural } from '../lib/format';
 import { Icon } from '../components/Icon';
 import { CatalogPicker } from '../components/CatalogPicker';
 import {
   NumberInput,
   OffsetStepper,
   OnePicker,
+  PackPicker,
   PeoplePicker,
   TagPicker,
 } from '../components/fields';
@@ -31,7 +41,6 @@ import {
   PrimaryButton,
   Segmented,
   Sheet,
-  Switch,
   TextInput,
 } from '../components/ui';
 
@@ -162,7 +171,12 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   // Where this template's items would go with its bags (all people, any trip length).
   const gaps = tpl.items.length
     ? unplacedSummary(
-        planFromTemplate(tpl.items, items, { len: null, travelers: [], bags: tpl.bags }),
+        planFromTemplate(tpl.items, items, {
+          len: null,
+          travelers: [],
+          bags: typedBags(tpl.bags, new Map(data.suitcases.map((s) => [s.id, s]))),
+          fallback: data.settings.autopack_fallback,
+        }),
       )
     : [];
   const dirty =
@@ -238,10 +252,8 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         <div className="mx-6 mt-3 flex flex-col gap-1 rounded-2xl bg-chip px-4 py-3 text-sm text-soft">
           <span className="font-medium text-ink">Some items won’t have a bag</span>
           {gaps.map((g) => (
-            <span key={`${g.person_id}|${g.carry}`}>
-              {g.person_id ? (people.get(g.person_id)?.name ?? 'Someone') : 'Shared'}:{' '}
-              {plural(g.count, g.carry ? 'carry-on item' : 'item')} with no{' '}
-              {g.carry ? 'carry-on' : 'checked'} bag
+            <span key={`${g.person_id}|${g.carry}|${g.pack_type}`}>
+              {g.person_id ? (people.get(g.person_id)?.name ?? 'Someone') : 'Shared'}: {gapText(g)}
             </span>
           ))}
           <span className="text-xs text-faint">They’ll start in No bag on new trips.</span>
@@ -286,10 +298,10 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
                       Shared
                     </span>
                   )}
-                  {ti.carry_on && (
+                  {(ti.pack_type || ti.carry_on) && (
                     <span className="inline-flex items-center gap-1">
-                      <Icon name="backpack" size={13} />
-                      Carry-on
+                      <Icon name={ti.pack_type ? 'bag' : 'backpack'} size={13} />
+                      {ti.pack_type ?? 'Carry-on'}
                     </span>
                   )}
                   {ti.notes && <span className="truncate">{ti.notes}</span>}
@@ -455,7 +467,10 @@ function TemplateItemSheet({
   const [qty, setQty] = useState<number | null>(ti.qty_override);
   const [offset, setOffset] = useState<number | null>(ti.qty_offset_override);
   const [assignees, setAssignees] = useState<string[]>(ti.assignees);
-  const [carry, setCarry] = useState(ti.carry_on);
+  // null = the catalog item's choice.
+  const [pack, setPack] = useState<PackChoice | null>(
+    ti.pack_type ? { type: ti.pack_type } : ti.carry_on ? 'carry_on' : null,
+  );
   const [notes, setNotes] = useState(ti.notes ?? '');
   if (!data) return null;
   const effMode = mode === 'default' ? (item?.qty_mode ?? 'fixed') : mode;
@@ -484,7 +499,8 @@ function TemplateItemSheet({
                     qty_override: qty,
                     qty_offset_override: effMode === 'fixed' ? null : offset,
                     assignees,
-                    carry_on: carry,
+                    carry_on: pack === 'carry_on',
+                    pack_type: typeof pack === 'object' && pack ? pack.type : null,
                     notes,
                   }),
                 );
@@ -559,11 +575,19 @@ function TemplateItemSheet({
       >
         <PeoplePicker people={data.people} value={assignees} onChange={setAssignees} />
       </FieldRow>
-      <FieldRow icon="backpack" hint="Goes into the person’s carry-on bag when a trip is built.">
-        <div className="flex items-center justify-between">
-          <span className="text-base">Carry-on</span>
-          <Switch label="Carry-on" on={carry} onChange={setCarry} />
-        </div>
+      <FieldRow
+        icon="bag"
+        label="Auto pack"
+        hint={packHint(pack ?? (item ? packChoice(item) : 'main'), data.settings.autopack_fallback)}
+      >
+        <PackPicker
+          value={pack}
+          onChange={setPack}
+          types={data.lookups.suitcaseType ?? []}
+          inherit={`Catalog: ${item ? packLabel(packChoice(item)) : 'Main bag'}`}
+          main={false}
+          noBag={false}
+        />
       </FieldRow>
       <FieldRow icon="note" label="Notes" htmlFor="ti-notes">
         <TextInput id="ti-notes" value={notes} onChange={(e) => setNotes(e.target.value)} />

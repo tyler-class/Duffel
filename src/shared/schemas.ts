@@ -1,6 +1,6 @@
 // Request validation shared by the Worker (enforces) and the client (types).
 import { z } from 'zod';
-import { QTY_MODES } from './lookups';
+import { AUTOPACK_FALLBACKS, QTY_MODES } from './lookups';
 import { isISODate } from './logic/dates';
 
 const blankToNull = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v);
@@ -56,6 +56,7 @@ export const itemInput = z.object({
   dimensions_source: text(500).optional(),
   not_in_suitcase: z.boolean().default(false),
   usually_carry_on: z.boolean().default(false),
+  pack_type: text(40).optional(),
   notes: text(2000).optional(),
   archived: z.boolean().default(false),
   default_people: z.array(id).max(50).default([]),
@@ -92,6 +93,7 @@ export const templateItemInput = z.object({
   qty_override: num.optional(),
   qty_offset_override: offset.nullable().optional(),
   carry_on: z.boolean().default(false),
+  pack_type: text(40).optional(),
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
   assignees: z.array(id).max(50).default([]),
@@ -172,7 +174,10 @@ export const tripItemsBulk = z.object({
 });
 export const saveAsTemplate = z.object({ name: name() });
 
-export const settingsPatch = z.object({ instance_name: name(60) });
+export const settingsPatch = z.object({
+  instance_name: name(60).optional(),
+  autopack_fallback: z.enum(AUTOPACK_FALLBACKS).optional(),
+});
 export const loginInput = z.object({ password: z.string().min(1).max(500) });
 
 export type PersonInput = z.input<typeof personInput>;

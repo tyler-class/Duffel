@@ -3,7 +3,15 @@
 // because OAuthProvider has already checked the assistant's token.
 import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
-import { displayQty, isCarryOn, localToday, shortBagLabel, splitTrips } from '@shared/logic';
+import {
+  displayQty,
+  isCarryOn,
+  localToday,
+  packChoice,
+  packLabel,
+  shortBagLabel,
+  splitTrips,
+} from '@shared/logic';
 import type {
   AppState,
   Item,
@@ -207,6 +215,7 @@ function buildServer(call: Call) {
                 ? i.qty
                 : `${i.qty} ${i.qty_mode.replace('_', ' ')}${i.qty_offset ? ` ${i.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(i.qty_offset)}` : ''}${i.max_qty !== null ? `, max ${i.max_qty}` : ''}`,
             usually_for: i.default_people.map((p) => names.get(p) ?? p),
+            auto_pack: packLabel(packChoice(i)),
           })),
         );
       } catch (e) {

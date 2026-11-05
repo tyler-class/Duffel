@@ -17,6 +17,7 @@ import { dayNumber } from '@shared/logic';
 import {
   all,
   first,
+  getAutoPackFallback,
   getSetting,
   loadItems,
   loadPeople,
@@ -81,17 +82,22 @@ async function lookupsInUse(db: D1Database): Promise<Partial<Record<LookupKind, 
 
 admin.get('/state', async (c) => {
   const db = c.env.DB;
-  const [instanceName, people, items, suitcases, templates, trips, inUse] = await Promise.all([
-    getSetting(db, 'instance_name'),
-    loadPeople(db),
-    loadItems(db),
-    loadSuitcases(db),
-    loadTemplates(db),
-    loadTrips(db),
-    lookupsInUse(db),
-  ]);
+  const [instanceName, fallback, people, items, suitcases, templates, trips, inUse] =
+    await Promise.all([
+      getSetting(db, 'instance_name'),
+      getAutoPackFallback(db),
+      loadPeople(db),
+      loadItems(db),
+      loadSuitcases(db),
+      loadTemplates(db),
+      loadTrips(db),
+      lookupsInUse(db),
+    ]);
   const state: AppState = {
-    settings: { instance_name: instanceName ?? DEFAULT_INSTANCE_NAME },
+    settings: {
+      instance_name: instanceName ?? DEFAULT_INSTANCE_NAME,
+      autopack_fallback: fallback,
+    },
     people,
     items,
     suitcases,
@@ -104,12 +110,19 @@ admin.get('/state', async (c) => {
 
 admin.patch('/settings', async (c) => {
   const input = await body(c, settingsPatch);
-  await c.env.DB.prepare(
-    'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
-  )
-    .bind('instance_name', input.instance_name)
-    .run();
-  return c.json({ instance_name: input.instance_name });
+  const db = c.env.DB;
+  const set = (key: string, value: string) =>
+    db
+      .prepare(
+        'INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+      )
+      .bind(key, value);
+  const stmts = [];
+  if (input.instance_name !== undefined) stmts.push(set('instance_name', input.instance_name));
+  if (input.autopack_fallback !== undefined)
+    stmts.push(set('autopack_fallback', input.autopack_fallback));
+  if (stmts.length) await db.batch(stmts);
+  return c.json(input);
 });
 
 export async function exportAll(db: D1Database): Promise<DuffelExport> {

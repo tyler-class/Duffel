@@ -84,8 +84,8 @@ describe('bag ownership', () => {
     expect(preview.rows).toBe(6);
     expect(preview.unplaced).toEqual(
       expect.arrayContaining([
-        { person_id: mia.id, carry: true, count: 1 },
-        { person_id: leo.id, carry: false, count: 1 },
+        { person_id: mia.id, carry: true, pack_type: null, count: 1 },
+        { person_id: leo.id, carry: false, pack_type: null, count: 1 },
       ]),
     );
 
@@ -163,5 +163,62 @@ describe('bag ownership', () => {
     ).data;
     expect(copy.bags[0]!.people).toEqual([sam.id]);
     expect(copy.items[0]!.trip_bag_id).toBe(copy.bags[0]!.id);
+  });
+});
+
+describe('auto pack', () => {
+  it('packs an item into its person’s bag of that type, now or once one is added', async () => {
+    const api = await session();
+    const mia = (await api.post<Person>('/people', { name: 'Mia' })).data;
+    const main = (
+      await api.post<Suitcase>('/suitcases', { name: 'Main', type: 'Suitcase', people: [mia.id] })
+    ).data;
+    const diaperBag = (
+      await api.post<Suitcase>('/suitcases', {
+        name: 'Mia diaper bag',
+        type: 'Diaper bag',
+        people: [mia.id],
+      })
+    ).data;
+    const diapers = (
+      await api.post<Item>('/items', {
+        name: 'Diapers',
+        pack_type: 'Diaper bag',
+        usually_carry_on: true, // a type wins: saved as not carry-on
+        default_people: [mia.id],
+      })
+    ).data;
+    expect([diapers.pack_type, diapers.usually_carry_on]).toEqual(['Diaper bag', false]);
+
+    let tpl = (await api.post<Template>('/templates', { name: 'Weekend' })).data;
+    tpl = (
+      await api.post<Template>(`/templates/${tpl.id}/bags`, { suitcase_id: main.id, label: 'Main' })
+    ).data;
+    tpl = (await api.post<Template>(`/templates/${tpl.id}/items`, { item_ids: [diapers.id] })).data;
+
+    // No diaper bag on the trip yet: it waits, and says what it's waiting for.
+    const body = { name: 'Trip', source: { kind: 'template', template_id: tpl.id } };
+    const t = (await api.post<TripDetail>('/trips', body)).data;
+    expect(t.items[0]).toMatchObject({ trip_bag_id: null, no_bag: false, pack_type: 'Diaper bag' });
+
+    // Adding the diaper bag gives the row a home.
+    const withBag = (
+      await api.post<TripDetail>(`/trips/${t.trip.id}/bags`, {
+        suitcase_id: diaperBag.id,
+        label: 'Diaper bag',
+      })
+    ).data;
+    const added = withBag.bags.find((b) => b.suitcase_id === diaperBag.id)!;
+    const moves = (
+      await api.get<{ moves: { id: string; trip_bag_id: string }[] }>(
+        `/trips/${t.trip.id}/placements`,
+      )
+    ).data.moves;
+    expect(moves).toEqual([{ id: t.items[0]!.id, trip_bag_id: added.id }]);
+
+    // With the "main bag" setting, a new trip puts it in the main bag instead.
+    await api.patch('/settings', { autopack_fallback: 'main' });
+    const t2 = (await api.post<TripDetail>('/trips', { ...body, name: 'Trip 2' })).data;
+    expect(t2.bags.find((b) => b.id === t2.items[0]!.trip_bag_id)?.label).toBe('Main');
   });
 });

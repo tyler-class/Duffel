@@ -1,5 +1,6 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
+import type { AutoPackFallback } from '@shared/lookups';
 import { api, errorMessage } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
@@ -11,6 +12,7 @@ import {
   PageHeader,
   PrimaryButton,
   SectionLabel,
+  Segmented,
   Sheet,
   TextInput,
 } from '../components/ui';
@@ -62,6 +64,30 @@ export function Settings() {
           </div>
         </FieldRow>
         <ErrorText>{error}</ErrorText>
+      </div>
+
+      <SectionLabel icon="bag">Auto pack</SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 pb-2">
+        <p className="text-sm text-soft">
+          A catalog item can auto pack into a type of bag, like diapers into a diaper bag. When it
+          goes on a trip for someone, Duffel puts it in that person’s bag of that type, or the
+          trip’s shared one. A bag’s type is set under Catalog → Bags.
+        </p>
+        <span className="text-sm text-ink">When someone has no bag of that type</span>
+        <Segmented<AutoPackFallback>
+          label="When someone has no bag of that type"
+          value={data.settings.autopack_fallback}
+          onChange={(autopack_fallback) => run(() => api.patch('/settings', { autopack_fallback }))}
+          options={[
+            ['unplaced', 'Wait in No bag yet'],
+            ['main', 'Use their main bag'],
+          ]}
+        />
+        <p className="text-xs text-faint">
+          {data.settings.autopack_fallback === 'main'
+            ? 'The item goes in their main (checked) bag, so nothing is left without a bag.'
+            : 'The item waits in No bag yet, so you notice. It moves in when a bag of that type is added.'}
+        </p>
       </div>
 
       <SectionLabel icon="phone">Install on your phone</SectionLabel>

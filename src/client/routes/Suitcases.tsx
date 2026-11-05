@@ -148,7 +148,15 @@ export function Suitcases() {
             onChange={(people) => setD({ ...d, people })}
           />
         </FieldRow>
-        <FieldRow icon="layers" label="Type">
+        <FieldRow
+          icon="layers"
+          label="Type"
+          hint={
+            d.type
+              ? `Items set to auto pack into a ${d.type.toLowerCase()} go in this bag.`
+              : 'Items can auto pack into a type of bag, so give each bag one.'
+          }
+        >
           <OnePicker
             value={d.type}
             onChange={(type) => setD({ ...d, type })}

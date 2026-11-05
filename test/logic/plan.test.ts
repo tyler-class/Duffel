@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  templatePack,
   defaultBagCarryOn,
   placeRow,
   suggestPlacements,
@@ -161,6 +162,41 @@ describe('placeRow', () => {
       placeRow({ person_id: 'p1', carry: true, not_in_suitcase: false }, bags).trip_bag_id,
     ).toBe('carry');
   });
+  it('auto packs into the person’s bag of that type, then a shared one', () => {
+    const bags = [
+      { ...mk('main', false, ['p1']), type: 'Suitcase' },
+      { ...mk('diapers', false, ['p1']), type: 'Diaper bag' },
+      { ...mk('cooler', false, []), type: 'Cooler' },
+    ];
+    const r = (pack_type: string, person_id = 'p1') =>
+      placeRow({ person_id, carry: false, not_in_suitcase: false, pack_type }, bags).trip_bag_id;
+    expect(r('diaper bag')).toBe('diapers');
+    expect(r('Cooler', 'p2')).toBe('cooler');
+  });
+  it('with no bag of that type, waits or uses the main bag per the setting', () => {
+    const bags = [{ ...mk('main', false, ['p1']), type: 'Suitcase' }];
+    const row = { person_id: 'p1', carry: false, not_in_suitcase: false, pack_type: 'Cooler' };
+    expect(placeRow(row, bags)).toEqual({ trip_bag_id: null, no_bag: false });
+    expect(placeRow(row, bags, 'main').trip_bag_id).toBe('main');
+    expect(placeRow({ ...row, not_in_suitcase: true }, bags).no_bag).toBe(true);
+  });
+  it('a template’s bag type or carry-on wins over the catalog’s', () => {
+    const cat = { usually_carry_on: true, pack_type: null };
+    expect(templatePack({ carry_on: false, pack_type: 'Cooler' }, cat)).toEqual({
+      carryHint: false,
+      packType: 'Cooler',
+    });
+    expect(templatePack({ carry_on: false, pack_type: null }, cat)).toEqual({
+      carryHint: true,
+      packType: null,
+    });
+    expect(
+      templatePack(
+        { carry_on: true, pack_type: null },
+        { usually_carry_on: false, pack_type: 'Tote' },
+      ),
+    ).toEqual({ carryHint: true, packType: null });
+  });
   it('bags for several people work for each of them', () => {
     const bags = [mk('kids', false, ['p3', 'p4'])];
     expect(
@@ -210,8 +246,8 @@ describe('placeRow', () => {
       row({ id: 'r5', person_id: 'p1', trip_bag_id: 'x' }),
     ];
     expect(unplacedSummary(rows)).toEqual([
-      { person_id: 'p1', carry: true, count: 2 },
-      { person_id: 'p2', carry: false, count: 1 },
+      { person_id: 'p1', carry: true, pack_type: null, count: 2 },
+      { person_id: 'p2', carry: false, pack_type: null, count: 1 },
     ]);
     expect(suggestPlacements(rows, [mk('c1', true, ['p1'])])).toEqual([
       { id: 'r1', trip_bag_id: 'c1' },

@@ -28,7 +28,7 @@ export const DEFAULT_LOOKUPS = {
   ],
   climate: ['Cold', 'Mild', 'Hot'],
   activity: ['Beach', 'Pool', 'City', 'Hiking', 'Camping', 'Skiing', 'Nice dinners'],
-  suitcaseType: ['Suitcase', 'Duffel', 'Backpack', 'Diaper bag', 'Tote', 'Cooler', 'Other'],
+  suitcaseType: ['Suitcase', 'Duffel', 'Backpack', 'Diaper bag', 'Tote', 'Cooler'],
   tripType: ['Car trip', 'Domestic flight', 'International flight'],
   tripStatus: ['Planning', 'Packing', 'Packed', 'Done'],
   bagRole: ['Checked', 'Carry-on', 'Personal item', 'Car trunk', 'Car cabin'],
@@ -36,6 +36,10 @@ export const DEFAULT_LOOKUPS = {
 
 export type LookupKind = keyof typeof DEFAULT_LOOKUPS;
 export type Lookups = Record<LookupKind, string[]>;
+
+/** Where an item with a bag type goes when its person has no bag of that type. */
+export const AUTOPACK_FALLBACKS = ['unplaced', 'main'] as const;
+export type AutoPackFallback = (typeof AUTOPACK_FALLBACKS)[number];
 
 /** Bag roles that make a trip bag carry-on when it has no suitcase. */
 export const CARRY_ON_BAG_ROLES = ['carry-on', 'personal item'];

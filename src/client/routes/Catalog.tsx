@@ -2,15 +2,17 @@ import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
 import { QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
 import type { AppState, Item } from '@shared/types';
-import { calcSummary, resolveCalc } from '@shared/logic';
+import { calcSummary, packChoice, packFields, packLabel, resolveCalc } from '@shared/logic';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { load, save } from '../lib/storage';
+import { packHint } from '../lib/format';
 import { Icon } from '../components/Icon';
 import {
   NumberInput,
   OffsetStepper,
+  PackPicker,
   PeoplePicker,
   SelectSheet,
   TagPicker,
@@ -118,16 +120,15 @@ export function Catalog() {
                         ))}
                       </span>
                     )}
-                    {i.not_in_suitcase && (
+                    {packChoice(i) !== 'main' && (
                       <span className="inline-flex items-center gap-1">
-                        <Icon name="nobag" size={13} />
-                        No bag
-                      </span>
-                    )}
-                    {i.usually_carry_on && (
-                      <span className="inline-flex items-center gap-1">
-                        <Icon name="backpack" size={13} />
-                        Carry-on
+                        <Icon
+                          name={
+                            i.not_in_suitcase ? 'nobag' : i.usually_carry_on ? 'backpack' : 'bag'
+                          }
+                          size={13}
+                        />
+                        {packLabel(packChoice(i))}
                       </span>
                     )}
                     {i.archived && <span>Archived</span>}
@@ -166,6 +167,7 @@ const emptyItem = (): Omit<Item, 'id'> => ({
   dimensions_source: null,
   not_in_suitcase: false,
   usually_carry_on: false,
+  pack_type: null,
   notes: null,
   archived: false,
   default_people: [],
@@ -304,41 +306,16 @@ function ItemForm({
             options={data.lookups.activity ?? []}
           />
         </FieldRow>
-        <FieldRow icon="nobag" hint="Car seats, strollers: never in a suitcase.">
-          <div className="flex items-center justify-between">
-            <span className="text-base">Doesn’t go in a bag</span>
-            <Switch
-              label="Doesn’t go in a bag"
-              on={f.not_in_suitcase}
-              onChange={(not_in_suitcase) =>
-                set(
-                  not_in_suitcase
-                    ? { not_in_suitcase, usually_carry_on: false }
-                    : { not_in_suitcase },
-                )
-              }
-            />
-          </div>
-        </FieldRow>
         <FieldRow
-          icon="backpack"
-          hint={
-            f.not_in_suitcase
-              ? 'Off because this item doesn’t go in a bag.'
-              : 'Goes into the person’s carry-on bag when a trip is built.'
-          }
+          icon="bag"
+          label="Auto pack"
+          hint={packHint(packChoice(f), data.settings.autopack_fallback)}
         >
-          <div className="flex items-center justify-between">
-            <span className={f.not_in_suitcase ? 'text-base text-faint' : 'text-base'}>
-              Usually carry-on
-            </span>
-            <Switch
-              label="Usually carry-on"
-              disabled={f.not_in_suitcase}
-              on={f.usually_carry_on && !f.not_in_suitcase}
-              onChange={(usually_carry_on) => set({ usually_carry_on })}
-            />
-          </div>
+          <PackPicker
+            value={packChoice(f)}
+            onChange={(c) => set(packFields(c ?? 'main'))}
+            types={data.lookups.suitcaseType ?? []}
+          />
         </FieldRow>
         <FieldRow
           icon="scale"

@@ -9,7 +9,7 @@ import type {
   TripBag,
   TripItem,
 } from '@shared/types';
-import type { QtyMode } from '@shared/lookups';
+import type { AutoPackFallback, QtyMode } from '@shared/lookups';
 
 export type Row = Record<string, unknown>;
 
@@ -99,6 +99,7 @@ export function toItem(r: Row, defaultPeople: string[] = []): Item {
     dimensions_source: s(r.dimensions_source),
     not_in_suitcase: bool(r.not_in_suitcase),
     usually_carry_on: bool(r.usually_carry_on),
+    pack_type: s(r.pack_type),
     notes: s(r.notes),
     archived: bool(r.archived),
     default_people: defaultPeople,
@@ -130,6 +131,7 @@ export function toTemplateItem(r: Row, assignees: string[] = []): TemplateItem {
     qty_override: n(r.qty_override),
     qty_offset_override: n(r.qty_offset_override),
     carry_on: bool(r.carry_on),
+    pack_type: s(r.pack_type),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
     assignees,
@@ -218,6 +220,7 @@ export function toTripItem(r: Row): TripItem {
     packed: bool(r.packed),
     packed_at: s(r.packed_at),
     carry_hint: bool(r.carry_hint),
+    pack_type: s(r.pack_type),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
   };
@@ -388,4 +391,9 @@ export async function existingIds(
     rows.forEach((r) => out.add(r.id));
   }
   return out;
+}
+
+/** Where an item with a bag type goes when its person has no bag of that type. */
+export async function getAutoPackFallback(db: D1Database): Promise<AutoPackFallback> {
+  return (await getSetting(db, 'autopack_fallback')) === 'main' ? 'main' : 'unplaced';
 }

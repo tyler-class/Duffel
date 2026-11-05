@@ -1,4 +1,5 @@
-import { dayNumber } from '@shared/logic';
+import { dayNumber, type PackChoice } from '@shared/logic';
+import type { AutoPackFallback } from '@shared/lookups';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -27,4 +28,23 @@ export function formatRange(start: string | null, end: string | null): string {
 
 export function plural(n: number, one: string, many = `${one}s`) {
   return `${n} ${n === 1 ? one : many}`;
+}
+
+/** What an auto pack choice does, for the hint under the picker. */
+export function packHint(c: PackChoice, fallback: AutoPackFallback): string {
+  if (c === 'none') return 'Car seats, strollers: travels outside any bag.';
+  if (c === 'main') return 'Goes into its person’s main (checked) bag.';
+  if (c === 'carry_on') return 'Goes into its person’s carry-on bag.';
+  const t = c.type.toLowerCase();
+  return `Goes into its person’s ${t}, or a shared ${t}. If there’s none on the trip, ${
+    fallback === 'main'
+      ? 'it goes in their main bag instead'
+      : 'it waits in No bag yet and moves in when one is added'
+  } (see Settings).`;
+}
+
+/** "Olivia: 3 items with no diaper bag". */
+export function gapText(g: { carry: boolean; pack_type: string | null; count: number }): string {
+  if (g.pack_type) return `${plural(g.count, 'item')} with no ${g.pack_type.toLowerCase()}`;
+  return `${plural(g.count, g.carry ? 'carry-on item' : 'item')} with no ${g.carry ? 'carry-on' : 'checked'} bag`;
 }

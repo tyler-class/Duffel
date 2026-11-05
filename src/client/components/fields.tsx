@@ -1,5 +1,6 @@
 import { useId, useState, type ReactNode } from 'react';
 import type { Person } from '@shared/types';
+import { packLabel, type PackChoice } from '@shared/logic';
 import { Icon } from './Icon';
 import { Pick, PersonDot, Sheet, TextInput, cx } from './ui';
 
@@ -139,10 +140,62 @@ function AddTag({
           }
         }}
         onBlur={add}
-        placeholder="Other"
+        placeholder="New"
         className="w-16 bg-transparent text-sm focus:outline-none"
       />
     </span>
+  );
+}
+
+const samePack = (a: PackChoice | null, b: PackChoice | null) =>
+  typeof a === 'object' && typeof b === 'object' && a && b
+    ? a.type.toLowerCase() === b.type.toLowerCase()
+    : a === b;
+
+/**
+ * Auto pack: main bag, carry-on, a bag type (or a new one), or no bag. With `inherit`, a
+ * first option (null) uses someone else's choice, labelled with it.
+ */
+export function PackPicker({
+  value,
+  onChange,
+  types,
+  inherit,
+  main = true,
+  noBag = true,
+}: {
+  value: PackChoice | null;
+  onChange: (v: PackChoice | null) => void;
+  types: string[];
+  inherit?: string;
+  main?: boolean;
+  noBag?: boolean;
+}) {
+  const [custom, setCustom] = useState('');
+  const typed =
+    typeof value === 'object' && value && !types.some((t) => samePack({ type: t }, value))
+      ? [...types, value.type]
+      : types;
+  const options: PackChoice[] = [
+    ...(main ? (['main'] as const) : []),
+    'carry_on',
+    ...typed.map((type) => ({ type })),
+    ...(noBag ? (['none'] as const) : []),
+  ];
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {inherit !== undefined && (
+        <Pick on={value === null} onClick={() => onChange(null)}>
+          {inherit}
+        </Pick>
+      )}
+      {options.map((o) => (
+        <Pick key={packLabel(o)} on={samePack(value, o)} onClick={() => onChange(o)}>
+          {packLabel(o)}
+        </Pick>
+      ))}
+      <AddTag value={custom} setValue={setCustom} onAdd={(type) => onChange({ type })} />
+    </div>
   );
 }
 

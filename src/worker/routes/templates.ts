@@ -108,10 +108,13 @@ templates.patch('/template-items/:id', async (c) => {
     qty_mode_override: input.qty_mode_override,
     qty_override: input.qty_override,
     qty_offset_override: input.qty_offset_override,
+    pack_type: input.pack_type,
     notes: input.notes,
     sort_order: input.sort_order,
   });
   if (input.carry_on !== undefined) f.carry_on = b(input.carry_on);
+  // A bag type and carry-on are one choice: a type wins.
+  if (input.pack_type) f.carry_on = 0;
   const stmts = [];
   if (Object.keys(f).length) stmts.push(updateStmt(db, 'template_items', id, f));
   if (input.assignees) {

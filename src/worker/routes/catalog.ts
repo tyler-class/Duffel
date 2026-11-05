@@ -82,6 +82,7 @@ function itemFields(input: Partial<ReturnType<typeof itemInput.parse>>) {
     'width_in',
     'height_in',
     'dimensions_source',
+    'pack_type',
     'notes',
   ] as const) {
     if (input[k] !== undefined) f[k] = input[k];
@@ -106,12 +107,18 @@ async function setDefaultPeople(db: D1Database, itemId: string, people: string[]
   ]);
 }
 
-/** An item that never goes in a bag can't usually be carry-on. */
+/** Auto pack is one choice: no bag, a bag type, carry-on, or the main bag. */
 async function noCarryOnWithoutBag(db: D1Database, itemId: string) {
-  await db
-    .prepare('UPDATE items SET usually_carry_on = 0 WHERE id = ? AND not_in_suitcase = 1')
-    .bind(itemId)
-    .run();
+  await db.batch([
+    db
+      .prepare(
+        'UPDATE items SET usually_carry_on = 0, pack_type = NULL WHERE id = ? AND not_in_suitcase = 1',
+      )
+      .bind(itemId),
+    db
+      .prepare('UPDATE items SET usually_carry_on = 0 WHERE id = ? AND pack_type IS NOT NULL')
+      .bind(itemId),
+  ]);
 }
 
 catalog.post('/items', async (c) => {

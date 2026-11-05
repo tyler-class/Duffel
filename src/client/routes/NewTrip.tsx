@@ -5,7 +5,7 @@ import type { TripDetail } from '@shared/types';
 import { api } from '../lib/api';
 import { useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
-import { formatRange, plural } from '../lib/format';
+import { formatRange, gapText, plural } from '../lib/format';
 import { Icon, type IconName } from '../components/Icon';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
 import { OnePicker, PeoplePicker, TagPicker } from '../components/fields';
@@ -25,7 +25,7 @@ import {
 type Start = 'template' | 'clone' | 'blank';
 interface Preview {
   rows: number;
-  unplaced: { person_id: string | null; carry: boolean; count: number }[];
+  unplaced: { person_id: string | null; carry: boolean; pack_type: string | null; count: number }[];
 }
 
 export function NewTrip() {
@@ -348,10 +348,13 @@ export function NewTrip() {
               {check.unplaced.map((g) => {
                 const p = data.people.find((x) => x.id === g.person_id);
                 return (
-                  <span key={`${g.person_id}|${g.carry}`} className="flex items-center gap-2">
+                  <span
+                    key={`${g.person_id}|${g.carry}|${g.pack_type}`}
+                    className="flex items-center gap-2"
+                  >
                     {p ? <PersonDot person={p} /> : <Icon name="users" size={14} />}
                     <span className="text-ink">{p?.name ?? 'Shared'}</span>
-                    {plural(g.count, g.carry ? 'carry-on item' : 'item')}
+                    {gapText(g)}
                   </span>
                 );
               })}

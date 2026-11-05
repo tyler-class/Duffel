@@ -1,5 +1,5 @@
 // Turning templates, catalog items and past trips into trip-item rows.
-import type { QtyMode } from '../lookups';
+import type { AutoPackFallback, QtyMode } from '../lookups';
 import type { Item, TemplateItem, TripBag, TripItem } from '../types';
 import { placeRow, rewriteLabelPrefix, type PlaceableBag } from './bags';
 import { calcQty, resolveCalc, rowCalc, type LengthLike } from './quantity';
@@ -19,14 +19,18 @@ export interface TripItemDraft {
   qty_override: number | null;
   notes: string | null;
   carry_hint: boolean;
+  /** Auto pack bag type; the row finds a bag of this type if one is added later. */
+  pack_type: string | null;
 }
 
 export interface PlanContext {
   len: LengthLike | null;
   /** Trip travelers. Empty = no restriction. */
   travelers: string[];
-  /** The trip's bags, with who each is for. */
+  /** The trip's bags, with who each is for and their type. */
   bags: PlaceableBag[];
+  /** Where a row with a bag type goes when nobody has that type of bag. */
+  fallback?: AutoPackFallback;
 }
 
 export interface PlanEntry {
@@ -38,6 +42,8 @@ export interface PlanEntry {
   /** Explicit people. Empty = fall back to the item's default people. */
   assignees: string[];
   carryHint: boolean;
+  /** Bag type to auto pack into. */
+  packType: string | null;
   notes: string | null;
 }
 
@@ -59,8 +65,14 @@ export function planRows(entries: PlanEntry[], ctx: PlanContext): TripItemDraft[
     const qty = calcQty(calc, ctx.len);
     for (const person of people) {
       const place = placeRow(
-        { person_id: person, carry: e.carryHint, not_in_suitcase: e.item.not_in_suitcase },
+        {
+          person_id: person,
+          carry: e.carryHint,
+          not_in_suitcase: e.item.not_in_suitcase,
+          pack_type: e.packType,
+        },
         ctx.bags,
+        ctx.fallback,
       );
       out.push({
         item_id: e.item.id,
@@ -69,6 +81,7 @@ export function planRows(entries: PlanEntry[], ctx: PlanContext): TripItemDraft[
         trip_bag_id: place.trip_bag_id,
         no_bag: place.no_bag,
         carry_hint: e.carryHint && !e.item.not_in_suitcase,
+        pack_type: e.item.not_in_suitcase ? null : e.packType,
         calc_mode: calc.mode,
         calc_unit_qty: calc.unitQty,
         calc_max: calc.max,
@@ -95,11 +108,21 @@ export function planFromTemplate(
       item,
       override: ti,
       assignees: ti.assignees,
-      carryHint: ti.carry_on || item.usually_carry_on,
+      ...templatePack(ti, item),
       notes: ti.notes,
     });
   }
   return planRows(entries, ctx);
+}
+
+/** A template item's pack choice wins over the catalog's: a bag type, then carry-on. */
+export function templatePack(
+  ti: Pick<TemplateItem, 'carry_on' | 'pack_type'>,
+  item: Pick<Item, 'usually_carry_on' | 'pack_type'>,
+): { carryHint: boolean; packType: string | null } {
+  if (ti.pack_type) return { carryHint: false, packType: ti.pack_type };
+  if (ti.carry_on) return { carryHint: true, packType: null };
+  return { carryHint: item.usually_carry_on, packType: item.pack_type };
 }
 
 export interface ClonePlan {
@@ -159,6 +182,7 @@ export function planClone(input: {
         qty_override: r.qty_override,
         notes: r.notes,
         carry_hint: r.carry_hint,
+        pack_type: r.pack_type,
         sort_order: r.sort_order,
       };
     });
@@ -172,6 +196,7 @@ export interface TemplatePlanItem {
   qty_override: number | null;
   qty_offset_override: number | null;
   carry_on: boolean;
+  pack_type: string | null;
   notes: string | null;
   assignees: string[];
   sort_order: number;
@@ -193,7 +218,10 @@ export interface NewCatalogItem {
 export function planTemplateFromTrip(input: {
   rows: TripItem[];
   bags: Map<string, Pick<TripBag, 'carry_on'>>;
-  items: Map<string, Pick<Item, 'id' | 'qty_mode' | 'qty'> & { qty_offset?: number }>;
+  items: Map<
+    string,
+    Pick<Item, 'id' | 'qty_mode' | 'qty'> & { qty_offset?: number; pack_type?: string | null }
+  >;
   newId: () => string;
 }): { newCatalogItems: NewCatalogItem[]; templateItems: TemplatePlanItem[] } {
   const newCatalogItems: NewCatalogItem[] = [];
@@ -227,10 +255,21 @@ export function planTemplateFromTrip(input: {
       (r.calc_offset ?? 0) !== (item.qty_offset ?? 0)
         ? (r.calc_offset ?? 0)
         : null;
+    const packType = r.pack_type && r.pack_type !== (item?.pack_type ?? null) ? r.pack_type : null;
     const carry =
-      (r.trip_bag_id ? (input.bags.get(r.trip_bag_id)?.carry_on ?? false) : false) || r.carry_hint;
+      (!packType && (r.trip_bag_id ? (input.bags.get(r.trip_bag_id)?.carry_on ?? false) : false)) ||
+      r.carry_hint;
     const notes = r.notes?.trim() || null;
-    const key = JSON.stringify([itemId, mode, unit, off, carry, notes, r.person_id === null]);
+    const key = JSON.stringify([
+      itemId,
+      mode,
+      unit,
+      off,
+      carry,
+      packType,
+      notes,
+      r.person_id === null,
+    ]);
     const g = groups.get(key);
     if (g && r.person_id && !g.assignees.includes(r.person_id)) {
       g.assignees.push(r.person_id);
@@ -241,6 +280,7 @@ export function planTemplateFromTrip(input: {
         qty_override: unit,
         qty_offset_override: off,
         carry_on: carry,
+        pack_type: packType,
         notes,
         assignees: r.person_id ? [r.person_id] : [],
         sort_order: order++,
@@ -272,18 +312,25 @@ export function suggestItems(
 export interface UnplacedGroup {
   person_id: string | null;
   carry: boolean;
+  /** The bag type these rows are waiting for, if any. */
+  pack_type: string | null;
   count: number;
 }
 
-/** Rows that would wait in "No bag yet", grouped by person and carry-on vs checked. */
+/** Rows that would wait in "No bag yet", grouped by person and the kind of bag they need. */
 export function unplacedSummary(
-  rows: Pick<TripItemDraft, 'person_id' | 'trip_bag_id' | 'no_bag' | 'carry_hint'>[],
+  rows: Pick<TripItemDraft, 'person_id' | 'trip_bag_id' | 'no_bag' | 'carry_hint' | 'pack_type'>[],
 ): UnplacedGroup[] {
   const groups = new Map<string, UnplacedGroup>();
   for (const r of rows) {
     if (r.trip_bag_id || r.no_bag) continue;
-    const key = `${r.person_id ?? ''}|${r.carry_hint ? 1 : 0}`;
-    const g = groups.get(key) ?? { person_id: r.person_id, carry: r.carry_hint, count: 0 };
+    const key = `${r.person_id ?? ''}|${r.carry_hint ? 1 : 0}|${r.pack_type ?? ''}`;
+    const g = groups.get(key) ?? {
+      person_id: r.person_id,
+      carry: r.carry_hint,
+      pack_type: r.pack_type,
+      count: 0,
+    };
     g.count++;
     groups.set(key, g);
   }
@@ -295,15 +342,25 @@ export function unplacedSummary(
  * was added or given an owner). Only rows that now have a home are returned.
  */
 export function suggestPlacements(
-  rows: Pick<TripItem, 'id' | 'person_id' | 'trip_bag_id' | 'no_bag' | 'carry_hint'>[],
+  rows: Pick<
+    TripItem,
+    'id' | 'person_id' | 'trip_bag_id' | 'no_bag' | 'carry_hint' | 'pack_type'
+  >[],
   bags: PlaceableBag[],
+  fallback?: AutoPackFallback,
 ): { id: string; trip_bag_id: string }[] {
   const out: { id: string; trip_bag_id: string }[] = [];
   for (const r of rows) {
     if (r.trip_bag_id || r.no_bag) continue;
     const place = placeRow(
-      { person_id: r.person_id, carry: r.carry_hint, not_in_suitcase: false },
+      {
+        person_id: r.person_id,
+        carry: r.carry_hint,
+        not_in_suitcase: false,
+        pack_type: r.pack_type,
+      },
       bags,
+      fallback,
     );
     if (place.trip_bag_id) out.push({ id: r.id, trip_bag_id: place.trip_bag_id });
   }
