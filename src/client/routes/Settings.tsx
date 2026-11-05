@@ -7,14 +7,12 @@ import { useSave } from '../lib/useSave';
 import { Icon } from '../components/Icon';
 import {
   ErrorText,
-  FieldRow,
   GhostButton,
   PageHeader,
   PrimaryButton,
   SectionLabel,
   Segmented,
   Sheet,
-  TextInput,
 } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ConnectAISection } from './ConnectAI';
@@ -25,12 +23,10 @@ export function Settings() {
   const toast = useToast();
   const { data } = useAppState();
   const { run, busy, error } = useSave();
-  const [name, setName] = useState<string | null>(null);
   const [restore, setRestore] = useState<{ file: File; data: unknown } | null>(null);
   const [restoreError, setRestoreError] = useState('');
   const fileRef = useRef<HTMLInputElement>(null);
   if (!data) return null;
-  const shownName = name ?? data.settings.instance_name;
 
   async function pickFile(f: File | undefined) {
     if (!f) return;
@@ -47,25 +43,6 @@ export function Settings() {
     <div className="pb-12">
       <PageHeader title="Settings" icon="settings" />
 
-      <SectionLabel icon="users">Household</SectionLabel>
-      <div className="px-6">
-        <FieldRow icon="tag" label="Name" htmlFor="inst-name">
-          <div className="flex items-center gap-2">
-            <TextInput id="inst-name" value={shownName} onChange={(e) => setName(e.target.value)} />
-            {shownName.trim() && shownName !== data.settings.instance_name && (
-              <GhostButton
-                className="py-1 text-accent"
-                disabled={busy}
-                onClick={() => run(() => api.patch('/settings', { instance_name: shownName }))}
-              >
-                Save
-              </GhostButton>
-            )}
-          </div>
-        </FieldRow>
-        <ErrorText>{error}</ErrorText>
-      </div>
-
       <SectionLabel icon="bag">Auto pack</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 pb-2">
         <p className="text-sm text-soft">
@@ -79,15 +56,16 @@ export function Settings() {
           value={data.settings.autopack_fallback}
           onChange={(autopack_fallback) => run(() => api.patch('/settings', { autopack_fallback }))}
           options={[
-            ['unplaced', 'Wait in No bag yet'],
+            ['unplaced', 'Leave in No bag'],
             ['main', 'Use their main bag'],
           ]}
         />
         <p className="text-xs text-faint">
           {data.settings.autopack_fallback === 'main'
             ? 'The item goes in their main (checked) bag, so nothing is left without a bag.'
-            : 'The item waits in No bag yet, so you notice. It moves in when a bag of that type is added.'}
+            : 'The item stays in No bag, so you notice. It moves in when a bag of that type is added.'}
         </p>
+        <ErrorText>{error}</ErrorText>
       </div>
 
       <SectionLabel icon="phone">Install on your phone</SectionLabel>

@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  reorderRows,
   templateBagInput,
   templateBagPatch,
   templateInput,
@@ -21,7 +22,7 @@ import {
   setBagPeople,
   updateStmt,
 } from '../db';
-import { body, defined, notFound, type AppEnv } from './util';
+import { ApiError, body, defined, notFound, type AppEnv } from './util';
 
 export const templates = new Hono<AppEnv>();
 
@@ -33,6 +34,7 @@ function templateFields(input: Partial<ReturnType<typeof templateInput.parse>>) 
     notes: input.notes,
   });
   if (input.activities !== undefined) f.activities = json(input.activities);
+  if (input.category_order !== undefined) f.category_order = json(input.category_order);
   return f;
 }
 
@@ -75,6 +77,16 @@ templates.post('/templates/:id/items', async (c) => {
   const t = await one(db, id);
   const { item_ids } = await body(c, templateItemsAdd);
   const valid = await existingIds(db, 'items', item_ids);
+  const cats = new Map(
+    (
+      await db
+        .prepare(
+          `SELECT id, category FROM items WHERE id IN (${item_ids.map(() => '?').join(',')})`,
+        )
+        .bind(...item_ids)
+        .all<{ id: string; category: string | null }>()
+    ).results.map((r) => [r.id, r.category]),
+  );
   let order = Math.max(-1, ...t.items.map((i) => i.sort_order)) + 1;
   const now = nowIso();
   const stmts = item_ids
@@ -85,6 +97,7 @@ templates.post('/templates/:id/items', async (c) => {
         template_id: id,
         item_id: itemId,
         carry_on: 0,
+        category: cats.get(itemId) ?? null,
         sort_order: order++,
         created_at: now,
         updated_at: now,
@@ -109,6 +122,7 @@ templates.patch('/template-items/:id', async (c) => {
     qty_override: input.qty_override,
     qty_offset_override: input.qty_offset_override,
     pack_type: input.pack_type,
+    category: input.category,
     notes: input.notes,
     sort_order: input.sort_order,
   });
@@ -133,6 +147,26 @@ templates.patch('/template-items/:id', async (c) => {
   }
   if (stmts.length) await db.batch(stmts);
   return c.json(await one(db, row.template_id));
+});
+
+/** Saves new positions (and groups) after template items are dragged around. */
+templates.post('/templates/:id/items/reorder', async (c) => {
+  const id = c.req.param('id');
+  const db = c.env.DB;
+  const t = await one(db, id);
+  const { moves } = await body(c, reorderRows);
+  const mine = new Set(t.items.map((i) => i.id));
+  if (moves.some((m) => !mine.has(m.id)))
+    throw new ApiError(400, 'invalid', 'Some of those items are not on this template.');
+  await db.batch(
+    moves.map((m) =>
+      updateStmt(db, 'template_items', m.id, {
+        sort_order: m.sort_order,
+        ...(m.category !== undefined ? { category: m.category } : {}),
+      }),
+    ),
+  );
+  return c.json(await one(db, id));
 });
 
 templates.delete('/template-items/:id', async (c) => {

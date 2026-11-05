@@ -132,6 +132,7 @@ export function toTemplateItem(r: Row, assignees: string[] = []): TemplateItem {
     qty_offset_override: n(r.qty_offset_override),
     carry_on: bool(r.carry_on),
     pack_type: s(r.pack_type),
+    category: s(r.category),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
     assignees,
@@ -160,6 +161,7 @@ export function toTemplate(r: Row, items: TemplateItem[] = [], bags: TemplateBag
     climate: s(r.climate),
     activities: arr(r.activities),
     notes: s(r.notes),
+    category_order: arr(r.category_order),
     items,
     bags,
   };
@@ -182,6 +184,7 @@ export function toTrip(r: Row, travelers: string[] = []): Trip {
     status: s(r.status),
     notes: s(r.notes),
     archived_at: s(r.archived_at),
+    category_order: arr(r.category_order),
     travelers,
     item_count: Number(r.item_count ?? 0),
     packed_count: Number(r.packed_count ?? 0),
@@ -221,6 +224,7 @@ export function toTripItem(r: Row): TripItem {
     packed_at: s(r.packed_at),
     carry_hint: bool(r.carry_hint),
     pack_type: s(r.pack_type),
+    category: s(r.category),
     notes: s(r.notes),
     sort_order: Number(r.sort_order),
   };

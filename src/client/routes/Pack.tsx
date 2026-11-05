@@ -1,7 +1,16 @@
 import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router';
-import { displayQty, isCarryOn, progress, shortBagLabel } from '@shared/logic';
+import {
+  displayQty,
+  isCarryOn,
+  mergeCategoryOrder,
+  orderCategories,
+  progress,
+  reorderMoves,
+  shortBagLabel,
+} from '@shared/logic';
+import { DEFAULT_LOOKUPS } from '@shared/lookups';
 import type { Item, Person, Trip, TripBag, TripDetail, TripItem } from '@shared/types';
 import { api, errorMessage } from '../lib/api';
 import { formatRange, plural } from '../lib/format';
@@ -12,6 +21,7 @@ import { Icon } from '../components/Icon';
 import { ItemSheet, type ItemDraft, type SaveResult } from '../components/ItemSheet';
 import { CatalogPicker } from '../components/CatalogPicker';
 import { SwipeRow } from '../components/SwipeRow';
+import { SortableGroups } from '../components/SortableGroups';
 import { useToast } from '../components/Toast';
 import {
   ActionList,
@@ -60,6 +70,7 @@ export function Pack() {
       trips={s.trips}
       people={s.people}
       catalog={s.items}
+      categories={s.lookups.category ?? []}
       detail={trip.data}
       error={trip.error}
     />
@@ -71,6 +82,7 @@ function PackTrip(props: {
   trips: Trip[];
   people: Person[];
   catalog: Item[];
+  categories: string[];
   detail?: TripDetail;
   error: Error | null;
 }) {
@@ -236,6 +248,7 @@ function PackTrip(props: {
                 qty: r.qty,
                 qty_override: r.qty_override,
                 packed: r.packed,
+                category: r.category,
                 notes: r.notes,
                 sort_order: r.sort_order,
               });
@@ -263,6 +276,57 @@ function PackTrip(props: {
             : null,
       no_bag: g.kind === 'nobag',
     });
+  }
+
+  /** Rows were dragged into a new order (or group) inside one person or bag. */
+  async function moveRows(next: { id: string; category: string | null }[]) {
+    if (!props.tripId) return;
+    const moves = reorderMoves(rows, next);
+    if (!moves.length) return;
+    const key = keys.trip(props.tripId);
+    const prev = qc.getQueryData<TripDetail>(key);
+    if (prev) {
+      const by = new Map(moves.map((m) => [m.id, m]));
+      qc.setQueryData<TripDetail>(key, {
+        ...prev,
+        items: prev.items
+          .map((r) => {
+            const m = by.get(r.id);
+            if (!m) return r;
+            return {
+              ...r,
+              sort_order: m.sort_order,
+              category: m.category !== undefined ? m.category : r.category,
+            };
+          })
+          .sort((a, b) => a.sort_order - b.sort_order),
+      });
+    }
+    setError('');
+    try {
+      await api.post(`/trips/${props.tripId}/items/reorder`, { moves });
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+    refresh();
+  }
+
+  /** Groups were dragged into a new order; the order is shared by everyone on the trip. */
+  async function moveGroups(order: string[]) {
+    if (!props.tripId || !trip) return;
+    const present = rows.map((r) => r.category?.trim()).filter((c): c is string => !!c);
+    const full = orderCategories(present, trip.category_order, DEFAULT_LOOKUPS.category);
+    const category_order = mergeCategoryOrder(full, order);
+    const key = keys.trip(props.tripId);
+    const prev = qc.getQueryData<TripDetail>(key);
+    if (prev) qc.setQueryData<TripDetail>(key, { ...prev, trip: { ...prev.trip, category_order } });
+    setError('');
+    try {
+      await api.patch(`/trips/${props.tripId}`, { category_order });
+    } catch (e) {
+      setError(errorMessage(e));
+    }
+    refresh();
   }
 
   async function saveNew(r: SaveResult) {
@@ -526,28 +590,44 @@ function PackTrip(props: {
                   {g.person.notes}
                 </p>
               )}
-              {!isCollapsed &&
-                g.rows.map((r) => (
-                  <Row
-                    key={r.id}
-                    row={r}
-                    sub={rowSub(r, groupBy, bagMap, personMap, bagName)}
-                    carry={groupBy === 'person' && isCarryOn(r, bagMap)}
-                    onToggle={() => toggle(r)}
-                    onEdit={() => setEditing(r)}
-                    onDelete={() => remove(r)}
-                    selecting={selecting}
-                    selected={selected.has(r.id)}
-                    onSelect={() =>
-                      setSelected((cur) => {
-                        const n = new Set(cur);
-                        if (n.has(r.id)) n.delete(r.id);
-                        else n.add(r.id);
-                        return n;
-                      })
-                    }
-                  />
-                ))}
+              {!isCollapsed && (
+                <SortableGroups
+                  rows={g.rows}
+                  saved={trip.category_order}
+                  defaults={DEFAULT_LOOKUPS.category}
+                  disabled={selecting}
+                  onRowsChange={moveRows}
+                  onGroupsChange={moveGroups}
+                  renderHeader={(c, rs) => (
+                    <div className="flex items-center gap-2 px-3 pt-4 pb-1.5">
+                      <span className="text-[13px] font-semibold text-soft">{c}</span>
+                      <span className="ml-auto font-mono text-[11px] text-faint tnum">
+                        {rs.filter((r) => r.packed).length}/{rs.length}
+                      </span>
+                    </div>
+                  )}
+                  renderRow={(r) => (
+                    <Row
+                      row={r}
+                      sub={rowSub(r, groupBy, bagMap, personMap, bagName)}
+                      carry={groupBy === 'person' && isCarryOn(r, bagMap)}
+                      onToggle={() => toggle(r)}
+                      onEdit={() => setEditing(r)}
+                      onDelete={() => remove(r)}
+                      selecting={selecting}
+                      selected={selected.has(r.id)}
+                      onSelect={() =>
+                        setSelected((cur) => {
+                          const n = new Set(cur);
+                          if (n.has(r.id)) n.delete(r.id);
+                          else n.add(r.id);
+                          return n;
+                        })
+                      }
+                    />
+                  )}
+                />
+              )}
             </section>
           );
         })}
@@ -631,6 +711,7 @@ function PackTrip(props: {
         catalog={catalog}
         len={len}
         bagName={bagName}
+        categories={props.categories}
         onClose={() => setEditing(null)}
         onSave={saveEdit}
         onDelete={() => editing && remove(editing)}
@@ -645,6 +726,7 @@ function PackTrip(props: {
         catalog={catalog}
         len={len}
         bagName={bagName}
+        categories={props.categories}
         onClose={() => setAdding(null)}
         onSave={saveNew}
       />

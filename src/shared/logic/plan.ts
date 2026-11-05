@@ -21,6 +21,8 @@ export interface TripItemDraft {
   carry_hint: boolean;
   /** Auto pack bag type; the row finds a bag of this type if one is added later. */
   pack_type: string | null;
+  /** Item group ("Clothing"). Null = not in a group. */
+  category: string | null;
 }
 
 export interface PlanContext {
@@ -45,6 +47,8 @@ export interface PlanEntry {
   /** Bag type to auto pack into. */
   packType: string | null;
   notes: string | null;
+  /** Item group. Undefined = the catalog item's category. */
+  category?: string | null;
 }
 
 /**
@@ -89,6 +93,7 @@ export function planRows(entries: PlanEntry[], ctx: PlanContext): TripItemDraft[
         qty,
         qty_override: null,
         notes: e.notes,
+        category: e.category !== undefined ? e.category : e.item.category,
       });
     }
   }
@@ -110,6 +115,7 @@ export function planFromTemplate(
       assignees: ti.assignees,
       ...templatePack(ti, item),
       notes: ti.notes,
+      category: ti.category,
     });
   }
   return planRows(entries, ctx);
@@ -183,6 +189,7 @@ export function planClone(input: {
         notes: r.notes,
         carry_hint: r.carry_hint,
         pack_type: r.pack_type,
+        category: r.category,
         sort_order: r.sort_order,
       };
     });
@@ -198,6 +205,7 @@ export interface TemplatePlanItem {
   carry_on: boolean;
   pack_type: string | null;
   notes: string | null;
+  category: string | null;
   assignees: string[];
   sort_order: number;
 }
@@ -207,6 +215,7 @@ export interface NewCatalogItem {
   name: string;
   qty: number;
   not_in_suitcase: boolean;
+  category: string | null;
 }
 
 /**
@@ -241,6 +250,7 @@ export function planTemplateFromTrip(input: {
           name: r.name.trim(),
           qty: r.qty_override ?? r.qty ?? 1,
           not_in_suitcase: r.no_bag,
+          category: r.category,
         });
       }
     }
@@ -268,6 +278,7 @@ export function planTemplateFromTrip(input: {
       carry,
       packType,
       notes,
+      r.category,
       r.person_id === null,
     ]);
     const g = groups.get(key);
@@ -282,6 +293,7 @@ export function planTemplateFromTrip(input: {
         carry_on: carry,
         pack_type: packType,
         notes,
+        category: r.category,
         assignees: r.person_id ? [r.person_id] : [],
         sort_order: order++,
       });

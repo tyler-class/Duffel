@@ -21,6 +21,7 @@ export const DEFAULT_LOOKUPS = {
     'Health & safety',
     'Electronics',
     'Documents',
+    'Food & drink',
     'Beach & pool',
     'Outdoor',
     'Entertainment',

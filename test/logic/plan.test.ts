@@ -414,7 +414,7 @@ describe('planTemplateFromTrip', () => {
   });
   it('adds ad-hoc rows to the catalog once', () => {
     expect(plan.newCatalogItems).toEqual([
-      { id: 'new1', name: 'Snacks', qty: 3, not_in_suitcase: false },
+      { id: 'new1', name: 'Snacks', qty: 3, not_in_suitcase: false, category: null },
     ]);
     expect(plan.templateItems[2]).toMatchObject({ item_id: 'new1', assignees: ['p1', 'p2'] });
   });

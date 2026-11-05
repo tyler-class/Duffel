@@ -61,6 +61,8 @@ export interface TemplateItem {
   carry_on: boolean;
   /** Auto pack bag type; wins over carry_on and the catalog's choice. */
   pack_type: string | null;
+  /** Item group on the template ("Clothing"). Null = not in a group. */
+  category: string | null;
   notes: string | null;
   sort_order: number;
   assignees: string[];
@@ -86,6 +88,8 @@ export interface Template {
   climate: string | null;
   activities: string[];
   notes: string | null;
+  /** Order of the item groups; groups not listed follow in the default order. */
+  category_order: string[];
   items: TemplateItem[];
   bags: TemplateBag[];
 }
@@ -106,6 +110,8 @@ export interface Trip {
   status: string | null;
   notes: string | null;
   archived_at: string | null;
+  /** Order of the item groups; groups not listed follow in the default order. */
+  category_order: string[];
   travelers: string[];
   item_count: number;
   packed_count: number;
@@ -144,6 +150,8 @@ export interface TripItem {
   carry_hint: boolean;
   /** Auto pack bag type: the row moves into a bag of this type when one is added. */
   pack_type: string | null;
+  /** Item group on the list ("Clothing"). Null = not in a group. */
+  category: string | null;
   notes: string | null;
   sort_order: number;
 }

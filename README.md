@@ -6,6 +6,7 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 
 - **Per-person lists.** Every item belongs to someone (or is shared), with quantities that scale with trip length: “1 T-shirt per day, at most 7”. Set a custom number any time and it stays put.
 - **Bags.** Bags belong to people (or are shared), and items land in the right one automatically. Carry-on is a property of the bag, so the carry-on view is always right. **Auto pack** sends an item to a type of bag: diapers into its person’s diaper bag, snacks into the cooler. Car seats and strollers go under “No bag”.
+- **Groups.** Items sit under groups like Clothing, Documents or Food & drink, on every person and bag. Drag items and whole groups into the order you pack them (long-press on a phone).
 - **Templates and past trips.** Start a trip from a template, copy last year’s trip (everything starts unpacked), or save any trip as a new template.
 - **Built for phones.** Install it to your home screen. The last trip you opened works offline, and check-offs sync when you’re back online.
 - **Pack together.** Everyone in the household signs in with one shared password and sees changes within seconds.

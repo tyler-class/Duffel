@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import {
+  reorderRows,
   saveAsTemplate,
   tripBagInput,
   tripBagPatch,
@@ -97,6 +98,7 @@ function tripItemStmt(
     packed_at: null,
     carry_hint: b(d.carry_hint),
     pack_type: d.pack_type,
+    category: d.category,
     notes: d.notes,
     sort_order: sortOrder,
     created_at: now,
@@ -134,6 +136,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
   let climate = input.climate ?? null;
   let activities = input.activities;
   let tripType = input.trip_type ?? null;
+  let categoryOrder: string[] = input.category_order ?? [];
   const bags: (TripBag & { source?: string })[] = [];
   let drafts: (TripItemDraft & { sort_order?: number })[] = [];
   const suitcases = new Map((await loadSuitcases(db)).map((s) => [s.id, s]));
@@ -168,6 +171,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     climate ??= src.climate;
     if (!activities.length) activities = src.activities;
     tripType ??= src.trip_type;
+    if (!categoryOrder.length) categoryOrder = src.category_order;
     const [srcBags, srcItems] = await Promise.all([
       loadTripBags(db, src.id),
       loadTripItems(db, src.id),
@@ -194,6 +198,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     climate ??= tpl.climate;
     if (!activities.length) activities = tpl.activities;
     tripType ??= tpl.trip_type;
+    if (!categoryOrder.length) categoryOrder = tpl.category_order;
     // The template's bag setup comes first, so its order wins when placing items.
     for (const tb of tpl.bags) {
       addBag({
@@ -233,6 +238,7 @@ async function planTrip(db: D1Database, input: TripCreateInput, id: string, now:
     destination: input.destination ?? null,
     climate,
     activities: json(activities),
+    category_order: json(categoryOrder),
     status: input.status ?? null,
     notes: input.notes ?? null,
     archived_at: input.archived ? now : null,
@@ -309,6 +315,7 @@ trips.patch('/trips/:id', async (c) => {
     notes: input.notes,
   });
   if (input.activities !== undefined) f.activities = json(input.activities);
+  if (input.category_order !== undefined) f.category_order = json(input.category_order);
   if (input.archived !== undefined)
     f.archived_at = input.archived ? (old.archived_at ?? nowIso()) : null;
 
@@ -443,6 +450,7 @@ trips.post('/trips/:id/save-as-template', async (c) => {
       trip_type: trip.trip_type,
       climate: trip.climate,
       activities: json(trip.activities),
+      category_order: json(trip.category_order),
       notes: null,
       created_at: now,
       updated_at: now,
@@ -456,6 +464,7 @@ trips.post('/trips/:id/save-as-template', async (c) => {
         qty_mode: 'fixed',
         qty: ni.qty,
         not_in_suitcase: b(ni.not_in_suitcase),
+        category: ni.category,
         created_at: now,
         updated_at: now,
       }),
@@ -472,6 +481,8 @@ trips.post('/trips/:id/save-as-template', async (c) => {
         qty_override: ti.qty_override,
         qty_offset_override: ti.qty_offset_override,
         carry_on: b(ti.carry_on),
+        pack_type: ti.pack_type,
+        category: ti.category,
         notes: ti.notes,
         sort_order: ti.sort_order,
         created_at: now,
@@ -743,6 +754,7 @@ trips.post('/trips/:id/items', async (c) => {
         : (item?.usually_carry_on ?? false),
     ),
     pack_type: item?.pack_type ?? null,
+    category: input.category !== undefined ? input.category : (item?.category ?? null),
     notes: input.notes ?? null,
     sort_order: input.sort_order ?? (await nextSortOrder(db, tripId)),
     created_at: now,
@@ -771,6 +783,7 @@ trips.patch('/trip-items/:id', async (c) => {
     trip_bag_id: input.trip_bag_id,
     qty: input.qty,
     qty_override: input.qty_override,
+    category: input.category,
     notes: input.notes,
     sort_order: input.sort_order,
   });
@@ -815,6 +828,7 @@ trips.post('/trips/:id/items/bulk', async (c) => {
   const f: Record<string, unknown> = defined({
     person_id: patch.person_id,
     trip_bag_id: patch.trip_bag_id,
+    category: patch.category,
   });
   if (patch.no_bag !== undefined) {
     f.no_bag = b(patch.no_bag);
@@ -844,6 +858,25 @@ trips.post('/trips/:id/items/bulk', async (c) => {
   }
   if (f.trip_bag_id) stmts.push(...ids.map((x) => syncCarryHint(db, x)));
   if (Object.keys(f).length || patch.packed !== undefined) await db.batch(stmts);
+  return c.json(await tripDetail(db, tripId));
+});
+
+/** Saves new positions (and groups) after rows are dragged around. */
+trips.post('/trips/:id/items/reorder', async (c) => {
+  const tripId = c.req.param('id');
+  const db = c.env.DB;
+  const { moves } = await body(c, reorderRows);
+  const onTrip = new Set((await loadTripItems(db, tripId)).map((r) => r.id));
+  if (moves.some((m) => !onTrip.has(m.id)))
+    throw new ApiError(400, 'invalid', 'Some of those items are not on this trip.');
+  await db.batch(
+    moves.map((m) =>
+      updateStmt(db, 'trip_items', m.id, {
+        sort_order: m.sort_order,
+        ...(m.category !== undefined ? { category: m.category } : {}),
+      }),
+    ),
+  );
   return c.json(await tripDetail(db, tripId));
 });
 

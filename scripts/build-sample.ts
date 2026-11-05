@@ -214,6 +214,7 @@ function template(
       pack_type: null,
       qty_override: null,
       carry_on: false,
+      category: it.category,
       notes: null,
       sort_order: i,
       assignees: [],

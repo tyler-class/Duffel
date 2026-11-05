@@ -1,7 +1,6 @@
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
-import { useAppState } from '../lib/queries';
 
 const TABS: [string, string, IconName][] = [
   ['/', 'Trips', 'map'],
@@ -18,7 +17,6 @@ function activeTab(path: string): string {
 export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
-  const { data } = useAppState();
   return (
     // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
     // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
@@ -32,9 +30,7 @@ export function Layout() {
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-chip px-3 pt-[calc(20px+env(safe-area-inset-top,0px))] pb-5 md:flex">
         <div className="flex items-center gap-2.5 px-3 pb-6">
           <img src="/favicon.svg" alt="" className="h-8 w-8 rounded-lg" />
-          <span className="truncate text-[15px] font-semibold">
-            {data?.settings.instance_name ?? 'Duffel'}
-          </span>
+          <span className="truncate text-[15px] font-semibold">Duffel</span>
         </div>
         <nav className="flex flex-col gap-1" aria-label="Main">
           {TABS.map(([to, label, icon]) => (

@@ -4,3 +4,4 @@ export * from './bags';
 export * from './plan';
 export * from './summary';
 export * from './colors';
+export * from './groups';

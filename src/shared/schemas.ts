@@ -84,6 +84,7 @@ export const templateInput = z.object({
   climate: text(40).optional(),
   activities: tags.default([]),
   notes: text(2000).optional(),
+  category_order: z.array(z.string().trim().min(1).max(60)).max(200).optional(),
 });
 export const templatePatch = patchOf(templateInput);
 
@@ -94,6 +95,7 @@ export const templateItemInput = z.object({
   qty_offset_override: offset.nullable().optional(),
   carry_on: z.boolean().default(false),
   pack_type: text(40).optional(),
+  category: text(60).optional(),
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
   assignees: z.array(id).max(50).default([]),
@@ -129,6 +131,7 @@ export const tripInput = z.object({
   notes: text(2000).optional(),
   archived: z.boolean().optional(),
   travelers: z.array(id).max(50).default([]),
+  category_order: z.array(z.string().trim().min(1).max(60)).max(200).optional(),
 });
 export const tripPatch = patchOf(tripInput);
 export const tripSource = z.discriminatedUnion('kind', [
@@ -151,6 +154,7 @@ export const tripItemInput = z.object({
   qty: num.optional(),
   qty_override: num.optional(),
   packed: z.boolean().default(false),
+  category: text(60).optional(),
   notes: text(2000).optional(),
   sort_order: z.number().int().optional(),
 });
@@ -168,9 +172,23 @@ export const tripItemsBulk = z.object({
       no_bag: z.boolean().optional(),
       packed: z.boolean().optional(),
       person_id: id.nullable().optional(),
+      category: text(60).optional(),
     })
     .optional(),
   delete: z.boolean().optional(),
+});
+/** New positions (and groups) for rows after a drag and drop. */
+export const reorderRows = z.object({
+  moves: z
+    .array(
+      z.object({
+        id,
+        sort_order: z.number().int(),
+        category: text(60).optional(),
+      }),
+    )
+    .min(1)
+    .max(1000),
 });
 export const saveAsTemplate = z.object({ name: name() });
 

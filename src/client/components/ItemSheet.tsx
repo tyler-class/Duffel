@@ -3,6 +3,7 @@ import type { Item, Person, TripBag, TripItem } from '@shared/types';
 import { calcQty, displayQty, resolveCalc, rowCalc } from '@shared/logic';
 import { QTY_MODE_LABELS } from '@shared/lookups';
 import { Icon } from './Icon';
+import { SelectSheet } from './fields';
 import {
   DangerButton,
   ErrorText,
@@ -30,6 +31,8 @@ export interface ItemDraft {
   qtyTouched: boolean;
   /** A fixed number instead of the catalog rule; stays put when trip dates change. */
   custom: boolean;
+  /** Item group. Undefined = not chosen yet (adding: the catalog item's). */
+  category?: string | null;
 }
 
 export interface SaveResult {
@@ -43,6 +46,7 @@ export interface SaveResult {
   notes: string | null;
   qty?: number | null;
   qty_override?: number | null;
+  category?: string | null;
 }
 
 function bagHint(bags: TripBag[], draft: ItemDraft): string {
@@ -63,6 +67,7 @@ function blankDraft(row: TripItem | undefined, initial: Partial<ItemDraft> | und
       qty: displayQty(row),
       qtyTouched: false,
       custom: row.qty_override !== null,
+      category: row.category,
     };
   }
   return {
@@ -94,6 +99,8 @@ type ItemSheetProps = {
   onSave: (r: SaveResult) => Promise<void>;
   onDelete?: () => void;
   bagName: (b: TripBag) => string;
+  /** Group names to choose from. */
+  categories: string[];
 };
 
 /** Add or edit one row on a trip's list. */
@@ -143,6 +150,7 @@ function ItemSheetBody(props: ItemSheetProps) {
       ...(mode === 'add' ? { person_ids: draft.people } : {}),
       trip_bag_id: draft.no_bag ? null : draft.trip_bag_id,
       no_bag: draft.no_bag,
+      ...(draft.category !== undefined ? { category: draft.category } : {}),
       notes: draft.notes.trim() || null,
     };
     let result: SaveResult;
@@ -232,6 +240,16 @@ function ItemSheetBody(props: ItemSheetProps) {
                 <option key={i.id} value={i.name} />
               ))}
           </datalist>
+        </FieldRow>
+        <FieldRow icon="grid" label="Group" htmlFor="item-group">
+          <SelectSheet
+            id="item-group"
+            title="Group"
+            value={draft.category !== undefined ? draft.category : (match?.category ?? null)}
+            onChange={(category) => set({ category })}
+            options={props.categories}
+            placeholder="No group"
+          />
         </FieldRow>
         <FieldRow icon="hash" hint={qtyHint}>
           <div className="flex flex-col gap-2.5">

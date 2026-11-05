@@ -1,20 +1,24 @@
-import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router';
-import { QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
+import { DEFAULT_LOOKUPS, QTY_MODE_LABELS, type QtyMode } from '@shared/lookups';
 import type { AppState, Item, Template, TemplateBag, TemplateItem } from '@shared/types';
 import {
   calcSummary,
+  mergeCategoryOrder,
+  orderCategories,
   packChoice,
   packLabel,
   planFromTemplate,
+  reorderMoves,
   resolveCalc,
   typedBags,
   unplacedSummary,
   type PackChoice,
 } from '@shared/logic';
 import { BagSheet, type BagDraft } from '../components/BagSheet';
-import { api } from '../lib/api';
-import { useAppState } from '../lib/queries';
+import { api, errorMessage } from '../lib/api';
+import { keys, useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
 import { gapText, packHint, plural } from '../lib/format';
 import { Icon } from '../components/Icon';
@@ -25,8 +29,10 @@ import {
   OnePicker,
   PackPicker,
   PeoplePicker,
+  SelectSheet,
   TagPicker,
 } from '../components/fields';
+import { SortableGroups } from '../components/SortableGroups';
 import { SwipeRow } from '../components/SwipeRow';
 import {
   DangerButton,
@@ -41,6 +47,7 @@ import {
   PrimaryButton,
   Segmented,
   Sheet,
+  SlideToggle,
   TextInput,
 } from '../components/ui';
 
@@ -166,6 +173,61 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   const [editing, setEditing] = useState<TemplateItem | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [bagSheet, setBagSheet] = useState<TemplateBag | 'new' | null>(null);
+  const [tab, setTab] = useState<'items' | 'details'>('items');
+  const [moveError, setMoveError] = useState('');
+  const qc = useQueryClient();
+  const sorted = useMemo(
+    () => [...tpl.items].sort((a, b) => a.sort_order - b.sort_order),
+    [tpl.items],
+  );
+
+  /** Writes a change into the cached template right away, then saves it. */
+  async function saveOrder(change: (t: Template) => Template, send: () => Promise<unknown>) {
+    const prev = qc.getQueryData<AppState>(keys.state);
+    if (prev)
+      qc.setQueryData<AppState>(keys.state, {
+        ...prev,
+        templates: prev.templates.map((t) => (t.id === tpl.id ? change(t) : t)),
+      });
+    setMoveError('');
+    try {
+      await send();
+    } catch (e) {
+      setMoveError(errorMessage(e));
+    }
+    qc.invalidateQueries({ queryKey: keys.state });
+  }
+
+  function moveRows(next: { id: string; category: string | null }[]) {
+    const moves = reorderMoves(sorted, next);
+    if (!moves.length) return;
+    const by = new Map(moves.map((m) => [m.id, m]));
+    return saveOrder(
+      (t) => ({
+        ...t,
+        items: t.items.map((i) => {
+          const m = by.get(i.id);
+          if (!m) return i;
+          return {
+            ...i,
+            sort_order: m.sort_order,
+            category: m.category !== undefined ? m.category : i.category,
+          };
+        }),
+      }),
+      () => api.post(`/templates/${tpl.id}/items/reorder`, { moves }),
+    );
+  }
+
+  function moveGroups(order: string[]) {
+    const present = tpl.items.map((i) => i.category?.trim()).filter((c): c is string => !!c);
+    const full = orderCategories(present, tpl.category_order, DEFAULT_LOOKUPS.category);
+    const category_order = mergeCategoryOrder(full, order);
+    return saveOrder(
+      (t) => ({ ...t, category_order }),
+      () => api.patch(`/templates/${tpl.id}`, { category_order }),
+    );
+  }
   const items = new Map(data.items.map((i) => [i.id, i]));
   const people = new Map(data.people.map((p) => [p.id, p]));
   // Where this template's items would go with its bags (all people, any trip length).
@@ -197,175 +259,208 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
           </PrimaryButton>
         }
       />
-
-      <SectionLabel
-        icon="bag"
-        trailing={
-          <button className="text-sm text-accent" onClick={() => setBagSheet('new')}>
-            + Add bag
-          </button>
-        }
-      >
-        Bags
-      </SectionLabel>
-      {!tpl.bags.length && (
-        <p className="px-6 pt-2 text-sm text-soft">
-          Add the bags you usually take. Trips made from this template start with them, and each
-          person’s items go straight into their bags.
-        </p>
-      )}
-      {tpl.bags.map((bg) => (
-        <SwipeRow
-          key={bg.id}
-          id={bg.id}
-          onDelete={() => run(() => api.del(`/template-bags/${bg.id}`))}
-          className="mx-6 border-b border-line"
-        >
-          <button
-            onClick={() => setBagSheet(bg)}
-            className="flex w-full items-center gap-3 py-3 text-left"
-          >
-            <Icon name={bg.carry_on ? 'backpack' : 'bag'} className="text-soft" />
-            <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-              <span className="text-base">{bg.label}</span>
-              <span className="flex items-center gap-2 text-[13px] text-soft">
-                {bg.people.length ? (
-                  <span className="inline-flex items-center gap-1">
-                    {bg.people.map((p) => (
-                      <PersonDot key={p} person={people.get(p)} />
-                    ))}
-                    {bg.people
-                      .map((p) => people.get(p)?.name)
-                      .filter(Boolean)
-                      .join(', ')}
-                  </span>
-                ) : (
-                  <span>Shared</span>
-                )}
-                {bg.carry_on && <span>· Carry-on</span>}
-              </span>
-            </span>
-          </button>
-        </SwipeRow>
-      ))}
-      {gaps.length > 0 && (
-        <div className="mx-6 mt-3 flex flex-col gap-1 rounded-2xl bg-chip px-4 py-3 text-sm text-soft">
-          <span className="font-medium text-ink">Some items won’t have a bag</span>
-          {gaps.map((g) => (
-            <span key={`${g.person_id}|${g.carry}|${g.pack_type}`}>
-              {g.person_id ? (people.get(g.person_id)?.name ?? 'Someone') : 'Shared'}: {gapText(g)}
-            </span>
-          ))}
-          <span className="text-xs text-faint">They’ll start in No bag on new trips.</span>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between px-5 pt-5 pb-2">
-        <span className="text-xs tracking-[0.08em] text-soft uppercase">
-          {plural(tpl.items.length, 'item')}
-        </span>
-        <GhostButton icon="plus" className="-mr-3 py-1" onClick={() => setPicker(true)}>
-          Add from catalog
-        </GhostButton>
+      <div className="px-5 pb-1">
+        <SlideToggle<'items' | 'details'>
+          label="Template sections"
+          value={tab}
+          onChange={setTab}
+          options={[
+            ['items', 'Items'],
+            ['details', 'Template details'],
+          ]}
+        />
       </div>
-      {tpl.items.map((ti) => {
-        const item = items.get(ti.item_id);
-        const who = ti.assignees.length ? ti.assignees : (item?.default_people ?? []);
-        return (
-          <SwipeRow
-            key={ti.id}
-            id={ti.id}
-            onDelete={() => run(() => api.del(`/template-items/${ti.id}`))}
-            className="mx-6 border-b border-line"
-          >
-            <button
-              onClick={() => setEditing(ti)}
-              className="flex w-full items-center gap-3 py-3 text-left"
-            >
-              <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-                <span className="text-base">{item?.name ?? 'Removed item'}</span>
-                <span className="flex items-center gap-2.5 text-[13px] text-soft">
-                  {who.length ? (
-                    <span className="inline-flex items-center gap-1">
-                      {who.map((p) => (
-                        <PersonDot key={p} person={people.get(p)} />
-                      ))}
-                      {!ti.assignees.length && <span className="text-faint">default</span>}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1">
-                      <Icon name="users" size={13} />
-                      Shared
-                    </span>
-                  )}
-                  {(ti.pack_type || ti.carry_on) && (
-                    <span className="inline-flex items-center gap-1">
-                      <Icon name={ti.pack_type ? 'bag' : 'backpack'} size={13} />
-                      {ti.pack_type ?? 'Carry-on'}
-                    </span>
-                  )}
-                  {ti.notes && <span className="truncate">{ti.notes}</span>}
-                </span>
-              </span>
-              <span className="font-mono text-[13px] text-soft tnum">
-                {overrideSummary(ti, item)}
-              </span>
-            </button>
-          </SwipeRow>
-        );
-      })}
 
-      <div className="px-5 pt-6">
-        <FieldRow icon="tag" label="Name" htmlFor="tpl-name">
-          <TextInput
-            id="tpl-name"
-            value={form.name}
-            onChange={(e) => setForm({ ...form, name: e.target.value })}
-          />
-        </FieldRow>
-        <FieldRow icon="plane" label="Trip type">
-          <OnePicker
-            value={form.trip_type}
-            onChange={(trip_type) => setForm({ ...form, trip_type })}
-            options={data.lookups.tripType ?? []}
-          />
-        </FieldRow>
-        <FieldRow icon="weather" label="Weather">
-          <OnePicker
-            value={form.climate}
-            onChange={(climate) => setForm({ ...form, climate })}
-            options={data.lookups.climate ?? []}
-          />
-        </FieldRow>
-        <FieldRow icon="run" label="Activities">
-          <TagPicker
-            value={form.activities}
-            onChange={(activities) => setForm({ ...form, activities })}
-            options={data.lookups.activity ?? []}
-          />
-        </FieldRow>
-        <FieldRow icon="note" label="Notes" htmlFor="tpl-notes">
-          <TextInput
-            id="tpl-notes"
-            value={form.notes}
-            onChange={(e) => setForm({ ...form, notes: e.target.value })}
-          />
-        </FieldRow>
-        <div className="flex flex-col gap-3 pt-5">
-          <ErrorText>{error}</ErrorText>
-          {dirty && (
-            <PrimaryButton
-              disabled={busy || !form.name.trim()}
-              onClick={() => run(() => api.patch(`/templates/${tpl.id}`, form))}
-            >
-              Save changes
-            </PrimaryButton>
+      {tab === 'items' && (
+        <>
+          <SectionLabel
+            icon="bag"
+            trailing={
+              <button className="text-sm text-accent" onClick={() => setBagSheet('new')}>
+                + Add bag
+              </button>
+            }
+          >
+            Bags
+          </SectionLabel>
+          {!tpl.bags.length && (
+            <p className="px-6 pt-2 text-sm text-soft">
+              Add the bags you usually take. Trips made from this template start with them, and each
+              person’s items go straight into their bags.
+            </p>
           )}
-          <DangerButton className="self-start" onClick={() => setConfirmDelete(true)}>
-            Delete template
-          </DangerButton>
+          {tpl.bags.map((bg) => (
+            <SwipeRow
+              key={bg.id}
+              id={bg.id}
+              onDelete={() => run(() => api.del(`/template-bags/${bg.id}`))}
+              className="mx-6 border-b border-line"
+            >
+              <button
+                onClick={() => setBagSheet(bg)}
+                className="flex w-full items-center gap-3 py-3 text-left"
+              >
+                <Icon name={bg.carry_on ? 'backpack' : 'bag'} className="text-soft" />
+                <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                  <span className="text-base">{bg.label}</span>
+                  <span className="flex items-center gap-2 text-[13px] text-soft">
+                    {bg.people.length ? (
+                      <span className="inline-flex items-center gap-1">
+                        {bg.people.map((p) => (
+                          <PersonDot key={p} person={people.get(p)} />
+                        ))}
+                        {bg.people
+                          .map((p) => people.get(p)?.name)
+                          .filter(Boolean)
+                          .join(', ')}
+                      </span>
+                    ) : (
+                      <span>Shared</span>
+                    )}
+                    {bg.carry_on && <span>· Carry-on</span>}
+                  </span>
+                </span>
+              </button>
+            </SwipeRow>
+          ))}
+          {gaps.length > 0 && (
+            <div className="mx-6 mt-3 flex flex-col gap-1 rounded-2xl bg-chip px-4 py-3 text-sm text-soft">
+              <span className="font-medium text-ink">Some items won’t have a bag</span>
+              {gaps.map((g) => (
+                <span key={`${g.person_id}|${g.carry}|${g.pack_type}`}>
+                  {g.person_id ? (people.get(g.person_id)?.name ?? 'Someone') : 'Shared'}:{' '}
+                  {gapText(g)}
+                </span>
+              ))}
+              <span className="text-xs text-faint">They’ll start in No bag on new trips.</span>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between px-5 pt-5 pb-2">
+            <span className="text-xs tracking-[0.08em] text-soft uppercase">
+              {plural(tpl.items.length, 'item')}
+            </span>
+            <GhostButton icon="plus" className="-mr-3 py-1" onClick={() => setPicker(true)}>
+              Add from catalog
+            </GhostButton>
+          </div>
+          <div className="px-5">
+            <ErrorText>{moveError}</ErrorText>
+            <SortableGroups
+              rows={sorted}
+              saved={tpl.category_order}
+              defaults={DEFAULT_LOOKUPS.category}
+              onRowsChange={moveRows}
+              onGroupsChange={moveGroups}
+              renderHeader={(c, rs) => (
+                <div className="flex items-center gap-2 px-1 pt-4 pb-1.5">
+                  <span className="text-[13px] font-semibold text-soft">{c}</span>
+                  <span className="ml-auto font-mono text-[11px] text-faint tnum">{rs.length}</span>
+                </div>
+              )}
+              renderRow={(ti) => {
+                const item = items.get(ti.item_id);
+                const who = ti.assignees.length ? ti.assignees : (item?.default_people ?? []);
+                return (
+                  <SwipeRow
+                    id={ti.id}
+                    onDelete={() => run(() => api.del(`/template-items/${ti.id}`))}
+                    className="border-b border-line"
+                  >
+                    <button
+                      onClick={() => setEditing(ti)}
+                      className="flex w-full items-center gap-3 px-1 py-3 text-left"
+                    >
+                      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+                        <span className="text-base">{item?.name ?? 'Removed item'}</span>
+                        <span className="flex items-center gap-2.5 text-[13px] text-soft">
+                          {who.length ? (
+                            <span className="inline-flex items-center gap-1">
+                              {who.map((p) => (
+                                <PersonDot key={p} person={people.get(p)} />
+                              ))}
+                              {!ti.assignees.length && <span className="text-faint">default</span>}
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name="users" size={13} />
+                              Shared
+                            </span>
+                          )}
+                          {(ti.pack_type || ti.carry_on) && (
+                            <span className="inline-flex items-center gap-1">
+                              <Icon name={ti.pack_type ? 'bag' : 'backpack'} size={13} />
+                              {ti.pack_type ?? 'Carry-on'}
+                            </span>
+                          )}
+                          {ti.notes && <span className="truncate">{ti.notes}</span>}
+                        </span>
+                      </span>
+                      <span className="font-mono text-[13px] text-soft tnum">
+                        {overrideSummary(ti, item)}
+                      </span>
+                    </button>
+                  </SwipeRow>
+                );
+              }}
+            />
+          </div>
+        </>
+      )}
+
+      {tab === 'details' && (
+        <div className="px-5 pt-3">
+          <FieldRow icon="tag" label="Name" htmlFor="tpl-name">
+            <TextInput
+              id="tpl-name"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+          </FieldRow>
+          <FieldRow icon="plane" label="Trip type">
+            <OnePicker
+              value={form.trip_type}
+              onChange={(trip_type) => setForm({ ...form, trip_type })}
+              options={data.lookups.tripType ?? []}
+            />
+          </FieldRow>
+          <FieldRow icon="weather" label="Weather">
+            <OnePicker
+              value={form.climate}
+              onChange={(climate) => setForm({ ...form, climate })}
+              options={data.lookups.climate ?? []}
+            />
+          </FieldRow>
+          <FieldRow icon="run" label="Activities">
+            <TagPicker
+              value={form.activities}
+              onChange={(activities) => setForm({ ...form, activities })}
+              options={data.lookups.activity ?? []}
+            />
+          </FieldRow>
+          <FieldRow icon="note" label="Notes" htmlFor="tpl-notes">
+            <TextInput
+              id="tpl-notes"
+              value={form.notes}
+              onChange={(e) => setForm({ ...form, notes: e.target.value })}
+            />
+          </FieldRow>
+          <div className="flex flex-col gap-3 pt-5">
+            <ErrorText>{error}</ErrorText>
+            {dirty && (
+              <PrimaryButton
+                disabled={busy || !form.name.trim()}
+                onClick={() => run(() => api.patch(`/templates/${tpl.id}`, form))}
+              >
+                Save changes
+              </PrimaryButton>
+            )}
+            <DangerButton className="self-start" onClick={() => setConfirmDelete(true)}>
+              Delete template
+            </DangerButton>
+          </div>
         </div>
-      </div>
+      )}
 
       <CatalogPicker
         open={picker}
@@ -421,6 +516,7 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
           key={editing.id}
           ti={editing}
           item={items.get(editing.item_id)}
+          categories={data.lookups.category ?? []}
           onClose={() => setEditing(null)}
         />
       )}
@@ -455,10 +551,12 @@ const signedText = (n: number) => (n > 0 ? `+${n}` : n < 0 ? `−${Math.abs(n)}`
 function TemplateItemSheet({
   ti,
   item,
+  categories,
   onClose,
 }: {
   ti: TemplateItem;
   item?: Item;
+  categories: string[];
   onClose: () => void;
 }) {
   const { data } = useAppState();
@@ -472,6 +570,7 @@ function TemplateItemSheet({
     ti.pack_type ? { type: ti.pack_type } : ti.carry_on ? 'carry_on' : null,
   );
   const [notes, setNotes] = useState(ti.notes ?? '');
+  const [category, setCategory] = useState(ti.category);
   if (!data) return null;
   const effMode = mode === 'default' ? (item?.qty_mode ?? 'fixed') : mode;
   return (
@@ -501,6 +600,7 @@ function TemplateItemSheet({
                     assignees,
                     carry_on: pack === 'carry_on',
                     pack_type: typeof pack === 'object' && pack ? pack.type : null,
+                    category,
                     notes,
                   }),
                 );
@@ -513,6 +613,16 @@ function TemplateItemSheet({
         </>
       }
     >
+      <FieldRow icon="grid" label="Group" htmlFor="ti-group">
+        <SelectSheet
+          id="ti-group"
+          title="Group"
+          value={category}
+          onChange={setCategory}
+          options={categories}
+          placeholder="No group"
+        />
+      </FieldRow>
       <FieldRow
         icon="hash"
         label="How many"

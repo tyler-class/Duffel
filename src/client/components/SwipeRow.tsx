@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { DragActive } from '../lib/dragActive';
 import { cx } from './ui';
 
 const REVEAL = 88;
@@ -27,6 +28,9 @@ export function SwipeRow({
   /** Tints the row (e.g. when selected). */
   highlight?: boolean;
 }) {
+  // Swiping is off while a row is being dragged into a new order.
+  const listDrag = useContext(DragActive);
+  const off = disabled || listDrag;
   const [dx, setDx] = useState(0);
   const [dragging, setDragging] = useState(false);
   const [open, setOpen] = useState(false);
@@ -47,7 +51,7 @@ export function SwipeRow({
 
   return (
     <div className={cx('relative overflow-hidden', className)}>
-      {!disabled && (
+      {!off && (
         <button
           type="button"
           className="absolute inset-y-0 right-0 flex items-center justify-center bg-danger text-sm font-medium text-white"
@@ -70,13 +74,13 @@ export function SwipeRow({
           touchAction: 'pan-y',
         }}
         onPointerDown={(e) => {
-          if (e.pointerType === 'mouse' || disabled) return;
+          if (e.pointerType === 'mouse' || off) return;
           start.current = { x: e.clientX, y: e.clientY, swiping: false };
           moved.current = false;
         }}
         onPointerMove={(e) => {
           const s = start.current;
-          if (!s) return;
+          if (!s || off) return;
           const ddx = e.clientX - s.x;
           const ddy = e.clientY - s.y;
           if (!s.swiping && Math.abs(ddx) > 10 && Math.abs(ddx) > Math.abs(ddy)) {
