@@ -16,7 +16,8 @@ export default defineConfig({
     tailwindcss(),
     cloudflare(),
     VitePWA({
-      registerType: 'autoUpdate',
+      // 'prompt' so lib/pwa.ts decides when to switch (never mid-edit); it reloads on its own.
+      registerType: 'prompt',
       injectRegister: false,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
@@ -41,15 +42,28 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
-        navigateFallback: '/index.html',
-        navigateFallbackDenylist: [
-          /^\/api\//,
-          /^\/mcp/,
-          /^\/authorize/,
-          /^\/oauth\//,
-          /^\/\.well-known\//,
-        ],
+        // Pages are network-first (below), so a deploy shows up on the next load instead of
+        // waiting for the service worker. index.html stays precached only as the offline copy.
+        navigateFallback: null,
+        directoryIndex: null,
+        cleanupOutdatedCaches: true,
+        // Take over on first install (offline from the first visit). Updates still wait for
+        // lib/pwa.ts to say when (it sends skipWaiting).
+        clientsClaim: true,
         runtimeCaching: [
+          {
+            urlPattern: ({ request, url }) =>
+              request.mode === 'navigate' &&
+              !/^\/(api|mcp|authorize|oauth|\.well-known|upload)(\/|$)/.test(url.pathname),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'duffel-pages',
+              networkTimeoutSeconds: 4,
+              expiration: { maxEntries: 10 },
+              cacheableResponse: { statuses: [200] },
+              precacheFallback: { fallbackURL: '/index.html' },
+            },
+          },
           {
             // Last-seen app state and trip lists stay readable offline.
             urlPattern: ({ url, request }) =>

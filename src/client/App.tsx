@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { registerSW } from 'virtual:pwa-register';
 import { startOfflineSync } from './lib/offline';
+import { startPwa } from './lib/pwa';
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { api, ApiError, onUnauthorized } from './lib/api';
 import { ToastProvider } from './components/Toast';
@@ -26,7 +26,7 @@ const queryClient = new QueryClient({
   },
 });
 
-registerSW({ immediate: true });
+startPwa();
 startOfflineSync(queryClient);
 
 const router = createBrowserRouter([

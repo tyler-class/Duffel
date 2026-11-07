@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { checkForUpdate } from '../lib/pwa';
+import { useToast } from './Toast';
 import { Icon, type IconName } from './Icon';
 import { cx, Sheet } from './ui';
 
@@ -15,6 +17,8 @@ const LINKS: [string, string, IconName][] = [
 
 /** About Duffel: version, what it is, who built it, and links. */
 export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const toast = useToast();
+  const [checking, setChecking] = useState(false);
   return (
     <Sheet
       open={open}
@@ -30,6 +34,25 @@ export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => vo
           stays yours.
         </p>
         <p className="text-sm text-soft">Built by Tyler Class.</p>
+        <button
+          type="button"
+          disabled={checking}
+          className="inline-flex items-center gap-1.5 self-start rounded-full bg-chip px-3.5 py-2 text-sm text-ink disabled:opacity-60"
+          onClick={async () => {
+            setChecking(true);
+            try {
+              if ((await checkForUpdate()) === 'latest')
+                toast({ text: 'You’re on the latest version.' });
+            } catch {
+              toast({ text: 'Couldn’t check. Are you online?' });
+            } finally {
+              setChecking(false);
+            }
+          }}
+        >
+          <Icon name="reset" size={15} />
+          {checking ? 'Checking…' : 'Check for updates'}
+        </button>
       </div>
       <div className="pt-3 pb-2">
         {LINKS.map(([href, label, icon]) => (
