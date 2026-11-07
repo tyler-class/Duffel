@@ -25,6 +25,8 @@ import { CatalogPicker } from '../components/CatalogPicker';
 import { SwipeRow } from '../components/SwipeRow';
 import { SortableGroups } from '../components/SortableGroups';
 import { TripTodos } from '../components/Todos';
+import { SearchToggle } from '../components/SearchToggle';
+import { matches } from '../lib/search';
 import { useToast } from '../components/Toast';
 import {
   ActionList,
@@ -178,8 +180,13 @@ function PackTrip(props: {
   // On the trip (or after it), open on its to-dos when there are any.
   const shown = view ?? (nowTodos.length ? 'todos' : 'packing');
 
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   const filtered = status !== 'all' || where !== 'all';
+  // Searching or filtering: hide what's empty and open everything that has matches.
+  const narrowed = filtered || !!query.trim();
   const visible = rows.filter((r) => {
+    if (!matches(query, r.name, r.category, r.notes)) return false;
     if (status === 'packed' && !r.packed) return false;
     if (status === 'todo' && r.packed) return false;
     const carry = isCarryOn(r, bagMap);
@@ -229,10 +236,10 @@ function PackTrip(props: {
     // With filters on, hide empty groups. Without, keep people and bags (so + is always there),
     // but hide the catch-all groups when they're empty.
     return out.filter((g) =>
-      filtered ? g.rows.length > 0 : g.rows.length > 0 || g.kind === 'person' || g.kind === 'bag',
+      narrowed ? g.rows.length > 0 : g.rows.length > 0 || g.kind === 'person' || g.kind === 'bag',
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [groupBy, rows, visible.length, status, where, people, bags, trip?.travelers]);
+  }, [groupBy, rows, visible.length, status, where, query, people, bags, trip?.travelers]);
 
   const refresh = () => {
     if (!props.tripId) return;
@@ -490,36 +497,58 @@ function PackTrip(props: {
         <>
           <div className="flex flex-col gap-2 px-5 pt-3 pb-1">
             <div className="flex items-center gap-2">
-              <SlideToggle<GroupBy>
-                label="Group by"
-                value={groupBy}
-                onChange={setGroupBy}
-                options={[
-                  ['person', 'By person'],
-                  ['bag', 'By bag'],
-                ]}
+              {/* The search field grows leftward over the toggle. */}
+              <div
+                className={cx(
+                  'flex-none overflow-hidden transition-[max-width,opacity] duration-200',
+                  searchOpen || query ? '-mr-2 max-w-0 opacity-0' : 'max-w-[320px]',
+                )}
+                aria-hidden={searchOpen || !!query}
+              >
+                <SlideToggle<GroupBy>
+                  label="Group by"
+                  value={groupBy}
+                  onChange={setGroupBy}
+                  options={[
+                    ['person', 'By person'],
+                    ['bag', 'By bag'],
+                  ]}
+                />
+              </div>
+              <SearchToggle
+                value={query}
+                onChange={setQuery}
+                label="Search this trip"
+                onOpenChange={setSearchOpen}
               />
               <button
                 className={cx(
-                  'ml-auto inline-flex h-[38px] items-center rounded-full px-3.5 text-sm',
-                  selecting ? 'bg-accent font-semibold text-accent-ink' : 'bg-chip text-soft',
+                  'grid h-[38px] w-[38px] flex-none place-items-center rounded-full',
+                  selecting ? 'bg-accent text-accent-ink' : 'bg-chip text-soft',
                 )}
                 onClick={() => (selecting ? stopSelecting() : setSelecting(true))}
                 aria-pressed={selecting}
+                aria-label={selecting ? 'Done selecting' : 'Select items'}
+                title={selecting ? 'Done selecting' : 'Select items'}
               >
-                {selecting ? 'Done' : 'Select'}
+                <Icon name="hand" size={17} />
               </button>
               <button
                 className={cx(
-                  'inline-flex h-[38px] items-center gap-1.5 rounded-full px-3.5 text-sm',
-                  filtered ? 'bg-accent-tint font-semibold text-accent' : 'bg-chip text-soft',
+                  'relative grid h-[38px] w-[38px] flex-none place-items-center rounded-full',
+                  filtered ? 'bg-accent-tint text-accent' : 'bg-chip text-soft',
                 )}
                 onClick={(e) => setFilterAnchor(e.currentTarget.getBoundingClientRect())}
                 aria-haspopup="menu"
+                aria-label="Filter"
+                title="Filter"
               >
-                <Icon name="filter" size={15} />
-                Filter
-                {filtered ? ` (${(status !== 'all' ? 1 : 0) + (where !== 'all' ? 1 : 0)})` : ''}
+                <Icon name="filter" size={17} />
+                {filtered && (
+                  <span className="absolute -top-0.5 -right-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-accent px-1 text-[10px] font-semibold text-accent-ink tnum">
+                    {(status !== 'all' ? 1 : 0) + (where !== 'all' ? 1 : 0)}
+                  </span>
+                )}
               </button>
             </div>
             {filtered && (
@@ -599,18 +628,20 @@ function PackTrip(props: {
               Add items from your catalog, or tap + next to a person.
             </Empty>
           ) : null}
-          {filtered && rows.length > 0 && !groups.length && (
+          {narrowed && rows.length > 0 && !groups.length && (
             <p className="px-5 py-12 text-center text-sm text-soft">
-              {status === 'todo' && where === 'all'
-                ? 'Everything is packed.'
-                : 'Nothing matches these filters.'}
+              {query.trim()
+                ? `Nothing matches “${query.trim()}”.`
+                : status === 'todo' && where === 'all'
+                  ? 'Everything is packed.'
+                  : 'Nothing matches these filters.'}
             </p>
           )}
 
           {(rows.length > 0 || !detail) &&
             groups.map((g) => {
               const ck = `${groupBy}:${g.key}`;
-              const isCollapsed = !!collapsed[ck];
+              const isCollapsed = !query.trim() && !!collapsed[ck];
               const done = g.rows.filter((r) => r.packed).length;
               return (
                 <section key={g.key} className="mt-5 px-5">
@@ -691,7 +722,7 @@ function PackTrip(props: {
                       disabled={selecting}
                       onRowsChange={moveRows}
                       onGroupsChange={moveGroups}
-                      isCollapsed={(c) => !!collapsed[`${ck}:${c}`]}
+                      isCollapsed={(c) => !query.trim() && !!collapsed[`${ck}:${c}`]}
                       onToggle={(c) => toggleCollapsed(`${ck}:${c}`)}
                       renderHeader={(c, rs, folded) => (
                         <div className="flex items-center gap-2 pt-4 pr-3 pb-1.5 pl-1.5">

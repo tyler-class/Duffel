@@ -35,6 +35,8 @@ import {
 } from '../components/fields';
 import { SortableGroups } from '../components/SortableGroups';
 import { TemplateTodos } from '../components/Todos';
+import { SearchToggle } from '../components/SearchToggle';
+import { matches } from '../lib/search';
 import { SwipeRow } from '../components/SwipeRow';
 import {
   cx,
@@ -178,6 +180,8 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   const [bagSheet, setBagSheet] = useState<TemplateBag | 'new' | null>(null);
   const [tab, setTab] = useState<'details' | 'items' | 'todos'>('details');
   const [moveError, setMoveError] = useState('');
+  const [query, setQuery] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
   // Folded groups, remembered per template on this device.
   const foldKey = `templateFolded:${tpl.id}`;
   const [folded, setFolded] = useState<Record<string, boolean>>(() => load(foldKey, {}));
@@ -241,6 +245,10 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
     );
   }
   const items = new Map(data.items.map((i) => [i.id, i]));
+  // Search narrows the packing list by item name, group or notes.
+  const shown = sorted.filter((ti) =>
+    matches(query, items.get(ti.item_id)?.name, ti.category, ti.notes),
+  );
   const people = new Map(data.people.map((p) => [p.id, p]));
   // Where this template's items would go with its bags (all people, any trip length).
   const gaps = tpl.items.length
@@ -349,23 +357,40 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
             </div>
           )}
 
-          <div className="flex items-center justify-between px-5 pt-5 pb-2">
-            <span className="text-xs tracking-[0.08em] text-soft uppercase">
-              {plural(tpl.items.length, 'item')}
-            </span>
-            <GhostButton icon="plus" className="-mr-3 py-1" onClick={() => setPicker(true)}>
+          <div className="flex items-center gap-2 px-5 pt-5 pb-2">
+            {!searchOpen && !query && (
+              <span className="text-xs tracking-[0.08em] whitespace-nowrap text-soft uppercase">
+                {plural(tpl.items.length, 'item')}
+              </span>
+            )}
+            <SearchToggle
+              value={query}
+              onChange={setQuery}
+              label="Search this template"
+              onOpenChange={setSearchOpen}
+            />
+            <GhostButton
+              icon="plus"
+              className="-mr-3 py-1 whitespace-nowrap"
+              onClick={() => setPicker(true)}
+            >
               Add from catalog
             </GhostButton>
           </div>
+          {query.trim() && !shown.length && (
+            <p className="px-5 py-10 text-center text-sm text-soft">
+              Nothing matches “{query.trim()}”.
+            </p>
+          )}
           <div className="px-5">
             <ErrorText>{moveError}</ErrorText>
             <SortableGroups
-              rows={sorted}
+              rows={shown}
               saved={tpl.category_order}
               defaults={DEFAULT_LOOKUPS.category}
               onRowsChange={moveRows}
               onGroupsChange={moveGroups}
-              isCollapsed={(c) => !!folded[c]}
+              isCollapsed={(c) => !query.trim() && !!folded[c]}
               onToggle={(c) => toggleFolded(c)}
               renderHeader={(c, rs, isFolded) => (
                 <div className="flex items-center gap-2 px-1 pt-4 pb-1.5">
