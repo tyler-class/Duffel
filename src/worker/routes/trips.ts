@@ -33,6 +33,7 @@ import {
   type TodoDraft,
   resolveCalc,
   rewriteLabelPrefix,
+  shortBagLabel,
   suggestItems,
   suggestPlacements,
   unplacedSummary,
@@ -387,6 +388,10 @@ trips.patch('/trips/:id', async (c) => {
       stmts.push(
         db.prepare('INSERT INTO trip_travelers (trip_id, person_id) VALUES (?, ?)').bind(id, p),
       );
+    // Someone added after the trip was made gets their entries from its template (or the
+    // trip it was copied from), as if they'd been picked at the start.
+    const added = [...valid].filter((p) => !old.travelers.includes(p));
+    if (added.length) stmts.push(...(await rowsForNewTravelers(db, old, added, lenOf(newLen))));
   }
   if (stmts.length) await db.batch(stmts);
   return c.json(await tripDetail(db, id));
@@ -490,6 +495,31 @@ trips.post('/trips/:id/save-as-template', async (c) => {
       updated_at: now,
     }),
   ];
+  // The trip's bags become the template's bag setup, without the trip's name in front.
+  bags.forEach((bg, i) => {
+    const tbId = newId();
+    stmts.push(
+      insertStmt(db, 'template_bags', {
+        id: tbId,
+        template_id: templateId,
+        suitcase_id: bg.suitcase_id,
+        label: shortBagLabel(bg.label, trip.name),
+        role: bg.role,
+        carry_on: b(bg.carry_on),
+        notes: bg.notes,
+        sort_order: i,
+        created_at: now,
+        updated_at: now,
+      }),
+      ...bg.people.map((p) =>
+        db
+          .prepare(
+            'INSERT OR IGNORE INTO template_bag_people (template_bag_id, person_id) VALUES (?, ?)',
+          )
+          .bind(tbId, p),
+      ),
+    );
+  });
   for (const t of planTemplateTodos(tripTodos, trip)) {
     stmts.push(
       insertStmt(db, 'template_todos', {
@@ -676,6 +706,57 @@ trips.delete('/trip-bags/:id', async (c) => {
 });
 
 /** A trip's bags with their catalog type, for auto pack. */
+/** Entries for people added to a trip later: theirs from the template or the copied trip. */
+async function rowsForNewTravelers(
+  db: D1Database,
+  trip: Trip,
+  people: string[],
+  len: ReturnType<typeof lenOf>,
+): Promise<D1PreparedStatement[]> {
+  const rows = await loadTripItems(db, trip.id);
+  // Only people with nothing on the list yet, so nobody gets things twice.
+  const fresh = people.filter((p) => !rows.some((r) => r.person_id === p));
+  if (!fresh.length) return [];
+  const [bags, fallback] = await Promise.all([placeableBags(db, trip.id), getAutoPackFallback(db)]);
+  let drafts: TripItemDraft[] = [];
+  const tpl = trip.template_id ? (await loadTemplates(db, trip.template_id))[0] : undefined;
+  if (tpl) {
+    const items = new Map((await loadItems(db)).map((i) => [i.id, i]));
+    drafts = planFromTemplate(tpl.items, items, { len, travelers: fresh, bags, fallback }).filter(
+      (d) => d.person_id && fresh.includes(d.person_id),
+    );
+  } else if (trip.cloned_from_trip_id) {
+    const src = await loadTripItems(db, trip.cloned_from_trip_id).catch(() => []);
+    const plan = planClone({
+      sourceName: '',
+      newName: '',
+      bags: [],
+      items: src.filter((r) => r.person_id && fresh.includes(r.person_id)),
+      len,
+      newId,
+    });
+    drafts = plan.items.map((d) => ({
+      ...d,
+      ...(d.no_bag
+        ? { trip_bag_id: null }
+        : placeRow(
+            {
+              person_id: d.person_id,
+              carry: d.carry_hint,
+              not_in_suitcase: false,
+              pack_type: d.pack_type,
+            },
+            bags,
+            fallback,
+          )),
+    }));
+  }
+  if (!drafts.length) return [];
+  const start = await nextSortOrder(db, trip.id);
+  const now = nowIso();
+  return drafts.map((d, i) => tripItemStmt(db, trip.id, d, start + i, now));
+}
+
 async function placeableBags(db: D1Database, tripId: string) {
   const [bags, suitcases] = await Promise.all([loadTripBags(db, tripId), loadSuitcases(db)]);
   return typedBags(bags, new Map(suitcases.map((s) => [s.id, s])));
@@ -872,6 +953,10 @@ trips.post('/trips/:id/items/bulk', async (c) => {
     await db.batch(ids.map((x) => db.prepare('DELETE FROM trip_items WHERE id = ?').bind(x)));
     return c.json(await tripDetail(db, tripId));
   }
+  if (input.assign) {
+    await db.batch(await assignRows(db, tripId, ids, input.assign));
+    return c.json(await tripDetail(db, tripId));
+  }
   const patch = input.patch ?? {};
   await checkPlacement(db, tripId, patch);
   const f: Record<string, unknown> = defined({
@@ -987,6 +1072,81 @@ trips.delete('/trip-todos/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM trip_todos WHERE id = ?').bind(c.req.param('id')).run();
   return c.json({ ok: true });
 });
+
+/**
+ * Gives rows to one person, to nobody (Shared), or to several people (each their own copy).
+ * A row keeps its bag if it's shared or already theirs; otherwise it goes to their bag.
+ */
+async function assignRows(
+  db: D1Database,
+  tripId: string,
+  ids: string[],
+  assign: string[],
+): Promise<D1PreparedStatement[]> {
+  const valid = await existingIds(db, 'people', assign);
+  const people: (string | null)[] = assign.filter((p) => valid.has(p));
+  if (!people.length) people.push(null);
+  const [rows, bags, fallback] = await Promise.all([
+    loadTripItems(db, tripId),
+    placeableBags(db, tripId),
+    getAutoPackFallback(db),
+  ]);
+  const bagById = new Map(bags.map((bg) => [bg.id, bg]));
+  const now = nowIso();
+  const stmts: D1PreparedStatement[] = [];
+  for (const r of rows.filter((x) => ids.includes(x.id))) {
+    const bagFor = (person: string | null) => {
+      if (r.no_bag) return { trip_bag_id: null, no_bag: true };
+      const cur = r.trip_bag_id ? bagById.get(r.trip_bag_id) : undefined;
+      if (cur && (!cur.people.length || (person && cur.people.includes(person))))
+        return { trip_bag_id: cur.id, no_bag: false };
+      return placeRow(
+        { person_id: person, carry: r.carry_hint, not_in_suitcase: false, pack_type: r.pack_type },
+        bags,
+        fallback,
+      );
+    };
+    const [first, ...rest] = people;
+    const place = bagFor(first!);
+    stmts.push(
+      updateStmt(db, 'trip_items', r.id, {
+        person_id: first,
+        trip_bag_id: place.trip_bag_id,
+        no_bag: b(place.no_bag),
+      }),
+    );
+    for (const person of rest) {
+      const p = bagFor(person);
+      stmts.push(
+        insertStmt(db, 'trip_items', {
+          id: newId(),
+          trip_id: tripId,
+          item_id: r.item_id,
+          name: r.name,
+          person_id: person,
+          trip_bag_id: p.trip_bag_id,
+          no_bag: b(p.no_bag),
+          calc_mode: r.calc_mode,
+          calc_unit_qty: r.calc_unit_qty,
+          calc_max: r.calc_max,
+          calc_offset: r.calc_offset,
+          qty: r.qty,
+          qty_override: r.qty_override,
+          packed: 0,
+          packed_at: null,
+          carry_hint: b(r.carry_hint),
+          pack_type: r.pack_type,
+          category: r.category,
+          notes: r.notes,
+          sort_order: r.sort_order,
+          created_at: now,
+          updated_at: now,
+        }),
+      );
+    }
+  }
+  return stmts;
+}
 
 trips.delete('/trip-items/:id', async (c) => {
   await c.env.DB.prepare('DELETE FROM trip_items WHERE id = ?').bind(c.req.param('id')).run();

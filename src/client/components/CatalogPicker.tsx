@@ -1,5 +1,9 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useMemo, useState } from 'react';
-import type { Item } from '@shared/types';
+import type { Item, Person } from '@shared/types';
+import { api, errorMessage } from '../lib/api';
+import { keys } from '../lib/queries';
+import { PeoplePicker } from './fields';
 import { Icon } from './Icon';
 import { cx, ErrorText, GhostButton, PrimaryButton, Sheet } from './ui';
 
@@ -11,8 +15,11 @@ type PickerProps = {
   /** How many of each item are already there (shown, not hidden: duplicates are fine). */
   existing?: Map<string, number>;
   existingLabel?: string;
+  /** Offer "Who packs these" for the whole selection. */
+  people?: Person[];
   onClose: () => void;
-  onAdd: (ids: string[]) => Promise<void>;
+  /** `people`: who packs them; empty = each item's usual people. */
+  onAdd: (ids: string[], people: string[]) => Promise<void>;
 };
 
 /** Multi-select catalog items, with optional suggestions pinned on top. */
@@ -26,6 +33,26 @@ function PickerBody(props: PickerProps) {
   const [picked, setPicked] = useState<Set<string>>(new Set());
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [people, setPeople] = useState<string[]>([]);
+  const qc = useQueryClient();
+  const name = q.trim();
+  // Not in the catalog yet: offer to add it, so nothing has to be set up first.
+  const canCreate =
+    !!name && !props.items.some((i) => i.name.trim().toLowerCase() === name.toLowerCase());
+
+  async function create() {
+    setBusy(true);
+    setError('');
+    try {
+      const item = await api.post<Item>('/items', { name });
+      await qc.invalidateQueries({ queryKey: keys.state });
+      setPicked((p) => new Set(p).add(item.id));
+    } catch (e) {
+      setError(errorMessage(e));
+    } finally {
+      setBusy(false);
+    }
+  }
 
   const suggestedIds = useMemo(
     () => new Set((props.suggested ?? []).map((i) => i.id)),
@@ -70,7 +97,7 @@ function PickerBody(props: PickerProps) {
     setBusy(true);
     setError('');
     try {
-      await props.onAdd([...picked]);
+      await props.onAdd([...picked], people);
       props.onClose();
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Could not add those.');
@@ -102,13 +129,33 @@ function PickerBody(props: PickerProps) {
           aria-label="Search the catalog"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Search"
+          placeholder="Search, or type a new item"
           className="w-full bg-transparent text-base focus:outline-none"
         />
       </div>
-      {groups.length === 0 && (
+      {props.people && props.people.length > 0 && (
+        <div className="flex flex-col gap-1.5 border-b border-line py-3">
+          <span className="text-xs text-soft">Who packs these</span>
+          <PeoplePicker people={props.people} value={people} onChange={setPeople} />
+          <span className="text-xs text-faint">
+            {people.length ? 'One entry each.' : 'Nobody picked: each item’s usual people.'}
+          </span>
+        </div>
+      )}
+      {canCreate && (
+        <button
+          type="button"
+          onClick={create}
+          disabled={busy}
+          className="flex w-full items-center gap-3 border-b border-line py-2.5 text-left text-accent"
+        >
+          <Icon name="plus" size={18} className="flex-none" />
+          <span className="flex-1 text-base">Add “{name}” to the catalog</span>
+        </button>
+      )}
+      {groups.length === 0 && !canCreate && (
         <p className="py-10 text-center text-sm text-soft">
-          {props.items.length ? 'Nothing matches.' : 'Your catalog is empty.'}
+          {props.items.length ? 'Nothing matches.' : 'Your catalog is empty. Search to add one.'}
         </p>
       )}
       {groups.map(([group, list]) => (

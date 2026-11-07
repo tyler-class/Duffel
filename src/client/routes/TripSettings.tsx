@@ -124,8 +124,15 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
     // Manual days/nights win until the dates change again.
     if (lengthEdited && !datesChanged)
       Object.assign(body, { days: form.days, nights: form.nights });
-    const saved = await run(() => api.patch(`/trips/${trip.id}`, body), [keys.trip(trip.id)]);
+    const saved = await run(
+      () => api.patch<TripDetail>(`/trips/${trip.id}`, body),
+      [keys.trip(trip.id)],
+    );
     if (saved) {
+      // People added to the trip get their things from its template or the trip it copied.
+      const added = saved.items.length - detail.items.length;
+      if (added > 0)
+        toast({ text: `Added ${added} item${added === 1 ? '' : 's'} for the new travelers` });
       nav(`/trips/${trip.id}`);
     }
   }

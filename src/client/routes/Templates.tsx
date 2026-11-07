@@ -478,8 +478,11 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
         )}
         existingLabel="On template"
         onClose={() => setPicker(false)}
-        onAdd={async (ids) => {
-          await run(() => api.post(`/templates/${tpl.id}/items`, { item_ids: ids }));
+        people={data.people}
+        onAdd={async (ids, people) => {
+          await run(() =>
+            api.post(`/templates/${tpl.id}/items`, { item_ids: ids, assignees: people }),
+          );
         }}
       />
       <BagSheet

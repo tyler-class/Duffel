@@ -314,11 +314,12 @@ function SortableRow({
     <div
       ref={setNodeRef}
       style={{ transform: CSS.Translate.toString(transform), transition }}
-      {...attributes}
+      // Drag attributes only while dragging is on; otherwise the row would read as disabled.
+      {...(disabled ? {} : attributes)}
       // The row holds its own buttons, so the wrapper is a group, not a button.
       role="group"
       {...listeners}
-      tabIndex={disabled ? -1 : attributes.tabIndex}
+      tabIndex={disabled ? undefined : attributes.tabIndex}
       className={cx(
         'relative touch-manipulation outline-none select-none [-webkit-touch-callout:none]',
         isDragging && SLOT,
@@ -358,9 +359,9 @@ function SortableGroup({
       <div className={cx(isDragging && 'invisible')}>
         <div
           ref={setActivatorNodeRef}
-          {...attributes}
+          {...(disabled ? {} : attributes)}
           {...listeners}
-          tabIndex={disabled ? -1 : attributes.tabIndex}
+          tabIndex={disabled ? undefined : attributes.tabIndex}
           className={cx(
             'touch-manipulation outline-none select-none [-webkit-touch-callout:none]',
             !disabled && 'cursor-grab',

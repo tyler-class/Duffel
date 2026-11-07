@@ -108,7 +108,11 @@ export const templateItemInput = z.object({
   assignees: z.array(id).max(50).default([]),
 });
 export const templateItemPatch = patchOf(templateItemInput.omit({ item_id: true }));
-export const templateItemsAdd = z.object({ item_ids: z.array(id).min(1).max(500) });
+export const templateItemsAdd = z.object({
+  item_ids: z.array(id).min(1).max(500),
+  /** Who packs the new items. Empty = the catalog item's people. */
+  assignees: z.array(id).max(50).optional(),
+});
 
 export const tripBagInput = z.object({
   suitcase_id: id.nullable().optional(),
@@ -182,6 +186,11 @@ export const tripItemsBulk = z.object({
       category: text(60).optional(),
     })
     .optional(),
+  /**
+   * Who the rows are for: one person, [] for Shared, or several to give each person their own
+   * copy. Rows move to the new person's bag unless they're in a bag that's already theirs.
+   */
+  assign: z.array(id).max(50).optional(),
   delete: z.boolean().optional(),
 });
 /** New positions (and groups) for rows after a drag and drop. */

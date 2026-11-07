@@ -22,6 +22,7 @@ import { SwipeRow } from '../components/SwipeRow';
 import { useToast } from '../components/Toast';
 import {
   DangerButton,
+  GhostButton,
   Empty,
   ErrorText,
   FieldRow,
@@ -29,6 +30,7 @@ import {
   PersonDot,
   PrimaryButton,
   Segmented,
+  Sheet,
   Switch,
   TextInput,
   SectionLabel,
@@ -44,8 +46,20 @@ export function Catalog() {
   const { data } = useAppState();
   const { run } = useSave();
   const toast = useToast();
-  const removeItem = async (i: Item) => {
+  // An item on templates disappears from them when deleted, so say so and offer to archive.
+  const [confirmDelete, setConfirmDelete] = useState<{ item: Item; templates: number } | null>(
+    null,
+  );
+  const deleteItem = async (i: Item) => {
+    setConfirmDelete(null);
     if (await run(() => api.del(`/items/${i.id}`))) toast({ text: `Deleted ${i.name}` });
+  };
+  const removeItem = (i: Item) => {
+    const templates = (data?.templates ?? []).filter((t) =>
+      t.items.some((ti) => ti.item_id === i.id),
+    ).length;
+    if (templates) setConfirmDelete({ item: i, templates });
+    else void deleteItem(i);
   };
   const [q, setQ] = useState('');
   const [showArchived, setShowArchived] = useState(() => load('showArchived', false));
@@ -76,6 +90,35 @@ export function Catalog() {
   return (
     <div className="pb-10">
       <CatalogHeader addLabel="Item" onAdd={() => nav('/catalog/item/new')} />
+      <Sheet
+        open={!!confirmDelete}
+        onClose={() => setConfirmDelete(null)}
+        title={`Delete ${confirmDelete?.item.name ?? 'item'}?`}
+        footer={
+          <>
+            <GhostButton
+              onClick={async () => {
+                const i = confirmDelete!.item;
+                setConfirmDelete(null);
+                if (await run(() => api.patch(`/items/${i.id}`, { archived: true })))
+                  toast({ text: `Archived ${i.name}` });
+              }}
+            >
+              Archive instead
+            </GhostButton>
+            <PrimaryButton tone="danger" onClick={() => deleteItem(confirmDelete!.item)}>
+              Delete
+            </PrimaryButton>
+          </>
+        }
+      >
+        <p className="py-2 text-sm text-soft">
+          It’s on{' '}
+          {confirmDelete?.templates === 1 ? 'a template' : `${confirmDelete?.templates} templates`}{' '}
+          and will be removed from {confirmDelete?.templates === 1 ? 'it' : 'them'}. Archiving hides
+          it from the catalog but keeps it on templates.
+        </p>
+      </Sheet>
       <div className="mx-5 flex items-center gap-2 border-b border-line py-2.5">
         <Icon name="search" className="text-faint" />
         <input

@@ -106,6 +106,7 @@ function PackTrip(props: {
   const [selecting, setSelecting] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [moveOpen, setMoveOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   // Packing or To-dos. Unset = pick by where the trip is (see below).
   const [view, setView] = useState<'packing' | 'todos' | null>(null);
   const [params, setParams] = useSearchParams();
@@ -124,7 +125,10 @@ function PackTrip(props: {
     setSelecting(false);
     setSelected(new Set());
   };
-  async function bulk(body: { patch?: Record<string, unknown>; delete?: boolean }, done: string) {
+  async function bulk(
+    body: { patch?: Record<string, unknown>; delete?: boolean; assign?: string[] },
+    done: string,
+  ) {
     if (!props.tripId || !selected.size) return;
     setError('');
     try {
@@ -132,6 +136,7 @@ function PackTrip(props: {
       toast({ text: done });
       stopSelecting();
       setMoveOpen(false);
+      setAssignOpen(false);
     } catch (e) {
       setError(errorMessage(e));
     }
@@ -150,6 +155,10 @@ function PackTrip(props: {
     });
 
   const trip = detail?.trip ?? trips.find((t) => t.id === props.tripId);
+  // Who's going: the trip's travelers, or everyone when none are picked.
+  const travelersList = trip?.travelers.length
+    ? people.filter((p) => trip.travelers.includes(p.id))
+    : people;
   const bags = useMemo(() => detail?.bags ?? [], [detail]);
   const rows = useMemo(() => detail?.items ?? [], [detail]);
   const bagMap = useMemo(() => new Map(bags.map((b) => [b.id, b])), [bags]);
@@ -731,6 +740,15 @@ function PackTrip(props: {
             </button>
             <button
               disabled={!selected.size}
+              onClick={() => setAssignOpen(true)}
+              className="rounded-full px-3 py-2 disabled:opacity-40"
+              aria-label="Who it’s for"
+              title="Who it’s for"
+            >
+              <Icon name="users" size={17} />
+            </button>
+            <button
+              disabled={!selected.size}
               onClick={() => bulk({ patch: { packed: true } }, `Packed ${selected.size}`)}
               className="rounded-full px-3 py-2 disabled:opacity-40"
               aria-label="Mark packed"
@@ -750,6 +768,48 @@ function PackTrip(props: {
           </div>
         </div>
       )}
+      <Sheet
+        open={assignOpen}
+        onClose={() => setAssignOpen(false)}
+        title={`Who ${selected.size === 1 ? 'is it' : 'are they'} for?`}
+      >
+        <div className="flex flex-col pb-2">
+          {travelersList.map((p) => (
+            <button
+              key={p.id}
+              onClick={() => bulk({ assign: [p.id] }, `Gave ${selected.size} to ${p.name}`)}
+              className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
+            >
+              <PersonDot person={p} size={18} />
+              <span className="flex-1">{p.name}</span>
+            </button>
+          ))}
+          <button
+            onClick={() => bulk({ assign: [] }, `Made ${selected.size} shared`)}
+            className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
+          >
+            <Icon name="users" className="text-soft" />
+            Shared
+          </button>
+          {travelersList.length > 1 && (
+            <button
+              onClick={() =>
+                bulk(
+                  { assign: travelersList.map((p) => p.id) },
+                  `Gave everyone their own ${selected.size === 1 ? 'copy' : 'copies'}`,
+                )
+              }
+              className="flex items-center gap-3 border-b border-line py-3.5 text-left text-base"
+            >
+              <Icon name="copy" className="text-soft" />
+              <span className="flex flex-1 flex-col">
+                Everyone, one each
+                <span className="text-[13px] text-soft">Each person gets their own entry.</span>
+              </span>
+            </button>
+          )}
+        </div>
+      </Sheet>
       <Sheet open={moveOpen} onClose={() => setMoveOpen(false)} title={`Move ${selected.size} to…`}>
         <div className="flex flex-col pb-2">
           {bags.map((b) => (

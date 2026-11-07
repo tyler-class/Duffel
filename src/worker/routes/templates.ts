@@ -78,7 +78,8 @@ templates.post('/templates/:id/items', async (c) => {
   const id = c.req.param('id');
   const db = c.env.DB;
   const t = await one(db, id);
-  const { item_ids } = await body(c, templateItemsAdd);
+  const { item_ids, assignees = [] } = await body(c, templateItemsAdd);
+  const people = [...(await existingIds(db, 'people', assignees))];
   const valid = await existingIds(db, 'items', item_ids);
   // Each new row starts in its catalog item's group.
   const cats = new Map(
@@ -92,18 +93,28 @@ templates.post('/templates/:id/items', async (c) => {
   const now = nowIso();
   const stmts = item_ids
     .filter((i) => valid.has(i))
-    .map((itemId) =>
-      insertStmt(db, 'template_items', {
-        id: newId(),
-        template_id: id,
-        item_id: itemId,
-        carry_on: 0,
-        category: cats.get(itemId) ?? null,
-        sort_order: order++,
-        created_at: now,
-        updated_at: now,
-      }),
-    );
+    .flatMap((itemId) => {
+      const tiId = newId();
+      return [
+        insertStmt(db, 'template_items', {
+          id: tiId,
+          template_id: id,
+          item_id: itemId,
+          carry_on: 0,
+          category: cats.get(itemId) ?? null,
+          sort_order: order++,
+          created_at: now,
+          updated_at: now,
+        }),
+        ...people.map((p) =>
+          db
+            .prepare(
+              'INSERT INTO template_item_assignees (template_item_id, person_id) VALUES (?, ?)',
+            )
+            .bind(tiId, p),
+        ),
+      ];
+    });
   if (stmts.length) await db.batch(stmts);
   return c.json(await one(db, id), 201);
 });
