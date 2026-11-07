@@ -8,10 +8,11 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 - **Bags.** Bags belong to people (or are shared), and items land in the right one automatically. Carry-on is a property of the bag, so the carry-on view is always right. **Auto pack** sends an item to a type of bag: diapers into its person’s diaper bag, snacks into the cooler. Car seats and strollers go under “No bag”.
 - **Groups.** Items sit under groups like Clothing, Documents or Food & drink, on every person and bag. Drag items and whole groups into the order you pack them (long-press on a phone).
 - **To-dos.** Things to do before, during and after a trip, like booking the pet sitter. Give one a fixed date, or a relative one such as “3 days before the trip starts” that moves when the trip’s dates do. The trip’s bar tracks packing and pre-trip to-dos together, and once you’re away the trip opens on its to-dos.
+- **Itinerary.** Each trip’s plan in order: travel sections (“Getting there”, “Lisbon → Porto”) and stays. Add flights, trains, buses, boats and drives with their departure and arrival, plus lodging, reservations and notes with booking numbers. Times are local, as on the ticket; type an airport code and the city and time zone fill in, and flight times and layovers are worked out across time zones. Itineraries stay with their trip and aren’t copied.
 - **Templates and past trips.** Start a trip from a template, copy last year’s trip (everything starts unpacked and undone), or save any trip as a new template. Lists, groups, bags and to-dos come along.
 - **Built for phones.** Install it to your home screen. The last trip you opened works offline, and check-offs sync when you’re back online.
 - **Pack together.** Everyone in the household signs in with one shared password and sees changes within seconds.
-- **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant and ask it to build or update your lists, groups and to-dos.
+- **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant and ask it to build or update your lists, groups, to-dos and itineraries. Connect your email to the same assistant and it can add bookings from confirmation emails.
 - **Yours.** It runs on your own Cloudflare account. The free plan is plenty. Your data stays in your database.
 
 One deployment is one household.
@@ -51,13 +52,13 @@ It opens full screen like a regular app.
 
 Duffel includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-duffel>/mcp`. In Duffel, open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, Duffel shows a sign-in page; enter your household password to approve it. **Settings → Connect an AI assistant → Disconnect all** revokes every connected assistant.
 
-Assistants can read and change trips, packing lists, groups, templates and to-dos. Ask one “what can you do with Duffel?” and it calls `get_started`, which looks at your trips and suggests things to ask, such as:
+Assistants can read and change trips, packing lists, groups, templates, to-dos and itineraries. Ask one “what can you do with Duffel?” and it calls `get_started`, which looks at your trips and suggests things to ask, such as:
 
 - “Make a packing list for our trip to \<place>, \<start date> to \<end date>, from our \<template> template.”
 - “What’s still not packed for \<trip>? Group it by person.”
 - “Add to-dos for \<trip>: book the pet sitter two weeks before, hold the mail, and check in online the day before we leave.”
 
-Ready-made prompts for longer jobs appear in the assistant’s prompt menu (the + menu in Claude): **Plan a trip**, **What’s left to pack**, **Add the usual to-dos** and **Organize into groups**. Settings lists more examples under **Try asking**, tap one to copy it.
+Ready-made prompts for longer jobs appear in the assistant’s prompt menu (the + menu in Claude): **Plan a trip**, **What’s left to pack**, **Add the usual to-dos**, **Add bookings to the itinerary** and **Organize into groups**. Settings lists more examples under **Try asking**, tap one to copy it.
 
 ## Change the password
 
@@ -122,3 +123,5 @@ Duffel is free and built by [Tyler Class](https://tylerclass.net). If you want t
 ## License
 
 [MIT](LICENSE)
+
+Airport data comes from [OurAirports](https://ourairports.com/data/) (public domain) and [mwgg/Airports](https://github.com/mwgg/Airports) (MIT). Refresh it with `npm run airports`.

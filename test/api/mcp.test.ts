@@ -173,6 +173,13 @@ describe('MCP', () => {
         'update_template_item',
         'set_group_order',
         'get_started',
+        'get_itinerary',
+        'add_itinerary_section',
+        'update_itinerary_section',
+        'remove_itinerary_section',
+        'add_itinerary_entries',
+        'update_itinerary_entry',
+        'remove_itinerary_entry',
       ]),
     );
 
@@ -323,6 +330,121 @@ describe('MCP', () => {
     expect(
       (await call('update_template_item', { template_item_id: 'nope', group: 'x' })).error,
     ).toBe(true);
+
+    // Itinerary: bookings as an assistant would read them from a confirmation email.
+    const flights = {
+      trip: 'Lisbon',
+      section: 'Getting there',
+      section_kind: 'travel',
+      entries: [
+        {
+          kind: 'transport',
+          mode: 'plane',
+          carrier: 'TAP',
+          number: '204',
+          start: { code: 'BOS', date: '2027-06-02', time: '21:40' },
+          end: { code: 'LIS', date: '2027-06-03', time: '09:05' },
+          confirmation: 'QX7P2L',
+          details: 'Seats 23A–D',
+        },
+        {
+          kind: 'transport',
+          carrier: 'TAP',
+          number: '1944',
+          start: { code: 'LIS', date: '2027-06-03', time: '10:55' },
+          end: { code: 'OPO', date: '2027-06-03', time: '11:50' },
+          confirmation: 'QX7P2L',
+        },
+      ],
+    };
+    const addFlights = JSON.parse((await call('add_itinerary_entries', flights)).text) as {
+      added: string[];
+      entries: { name: string; duration?: string; layover_after?: string; depart: object }[];
+    };
+    expect(addFlights.added).toEqual(['TAP 204', 'TAP 1944']);
+    expect(addFlights.entries[0]).toMatchObject({
+      name: 'TAP 204',
+      duration: '6h 25m',
+      layover_after: '1h 50m in Lisbon',
+      depart: { code: 'BOS', place: 'Boston', time_zone: 'America/New_York' },
+    });
+    // Running it again adds nothing.
+    const again = JSON.parse((await call('add_itinerary_entries', flights)).text) as {
+      added: string[];
+      skipped_as_already_there: string[];
+    };
+    expect(again.added).toEqual([]);
+    expect(again.skipped_as_already_there).toHaveLength(2);
+    await call('add_itinerary_entries', {
+      trip: 'Lisbon',
+      section: 'Porto',
+      entries: [
+        {
+          kind: 'lodging',
+          title: 'Casa do Rio',
+          start: { date: '2027-06-03', time: '15:00', time_zone: 'Europe/Lisbon' },
+          end: { date: '2027-06-07', time: '11:00', time_zone: 'Europe/Lisbon' },
+          confirmation: 'HB-889',
+        },
+      ],
+    });
+    expect(
+      (
+        await call('add_itinerary_section', {
+          trip: 'Lisbon',
+          kind: 'travel',
+          title: 'Heading home',
+        })
+      ).error,
+    ).toBe(false);
+    await call('update_itinerary_section', {
+      trip: 'Lisbon',
+      section: 'Heading home',
+      position: 1,
+    });
+    type Itin = {
+      sections: { title: string; kind: string; entries: { entry_id: string; name: string }[] }[];
+    };
+    let itin = JSON.parse((await call('get_itinerary', { trip: 'Lisbon' })).text) as Itin;
+    expect(itin.sections.map((x) => [x.title, x.kind])).toEqual([
+      ['Heading home', 'travel'],
+      ['Getting there', 'travel'],
+      ['Porto', 'stay'],
+    ]);
+    await call('update_itinerary_section', {
+      trip: 'Lisbon',
+      section: 'Heading home',
+      position: 3,
+    });
+    const hotel = itin.sections[2]!.entries[0]!;
+    const moved = await call('update_itinerary_entry', {
+      entry_id: hotel.entry_id,
+      end: { time: '12:00' },
+      notes: 'Late checkout',
+    });
+    expect(JSON.parse(moved.text).updated).toMatchObject({
+      end: { date: '2027-06-07', time: '12:00' },
+      notes: 'Late checkout',
+    });
+    expect(
+      (
+        await call('update_itinerary_entry', {
+          entry_id: hotel.entry_id,
+          end: { date: '2027-06-01' },
+        })
+      ).error,
+    ).toBe(true);
+    expect((await call('remove_itinerary_entry', { entry_id: hotel.entry_id })).error).toBe(false);
+    expect(
+      (await call('remove_itinerary_section', { trip: 'Lisbon', section: 'Heading home' })).error,
+    ).toBe(false);
+    itin = JSON.parse((await call('get_itinerary', { trip: 'Lisbon' })).text) as Itin;
+    expect(itin.sections.map((x) => x.title)).toEqual(['Getting there', 'Porto']);
+    const bookings = await rpc(token!, 'prompts/get', {
+      name: 'add_bookings',
+      arguments: { trip: 'Lisbon' },
+    });
+    expect(JSON.stringify(bookings.data.result)).toContain('connected email');
 
     // Orientation: ready-made prompts and get_started.
     const prompts = (await rpc(token!, 'prompts/list')).data.result as unknown as {

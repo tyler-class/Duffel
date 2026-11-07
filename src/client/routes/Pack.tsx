@@ -24,6 +24,7 @@ import { ItemSheet, type ItemDraft, type SaveResult } from '../components/ItemSh
 import { CatalogPicker } from '../components/CatalogPicker';
 import { SwipeRow } from '../components/SwipeRow';
 import { SortableGroups } from '../components/SortableGroups';
+import { TripItinerary } from '../components/Itinerary';
 import { TripTodos } from '../components/Todos';
 import { SearchToggle } from '../components/SearchToggle';
 import { matches } from '../lib/search';
@@ -110,7 +111,7 @@ function PackTrip(props: {
   const [moveOpen, setMoveOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
   // Packing or To-dos. Unset = pick by where the trip is (see below).
-  const [view, setView] = useState<'packing' | 'todos' | null>(null);
+  const [view, setView] = useState<'packing' | 'todos' | 'itinerary' | null>(null);
   const [params, setParams] = useSearchParams();
   // "Sort them now" from trip details: open select mode with the waiting rows picked.
   useEffect(() => {
@@ -467,12 +468,12 @@ function PackTrip(props: {
       </header>
 
       <div className="px-5 pt-3">
-        <SlideToggle<'packing' | 'todos'>
+        <SlideToggle<'packing' | 'todos' | 'itinerary'>
           label="Trip sections"
           value={shown}
           onChange={(v) => {
             setView(v);
-            if (v === 'todos') stopSelecting();
+            if (v !== 'packing') stopSelecting();
           }}
           options={[
             ['packing', 'Packing'],
@@ -487,11 +488,13 @@ function PackTrip(props: {
                 )}
               </span>,
             ],
+            ['itinerary', 'Itinerary'],
           ]}
         />
       </div>
 
       {shown === 'todos' && detail && <TripTodos detail={detail} stage={stage} />}
+      {shown === 'itinerary' && detail && <TripItinerary detail={detail} stage={stage} />}
 
       {shown === 'packing' && (
         <>
@@ -510,8 +513,8 @@ function PackTrip(props: {
                   value={groupBy}
                   onChange={setGroupBy}
                   options={[
-                    ['person', 'By person'],
-                    ['bag', 'By bag'],
+                    ['person', 'Person'],
+                    ['bag', 'Bag'],
                   ]}
                 />
               </div>
@@ -532,6 +535,14 @@ function PackTrip(props: {
                 title={selecting ? 'Done selecting' : 'Select items'}
               >
                 <Icon name="hand" size={17} />
+              </button>
+              <button
+                className="grid h-[38px] w-[38px] flex-none place-items-center rounded-full bg-chip text-soft"
+                onClick={() => setMenu('catalog')}
+                aria-label="Add from catalog"
+                title="Add from catalog"
+              >
+                <Icon name="plus" size={18} />
               </button>
               <button
                 className={cx(
@@ -1136,21 +1147,24 @@ function TripMenu(props: {
     }
   }
 
-  async function openCatalog() {
-    setOpen('catalog');
-    try {
-      setSuggested(await api.get<Item[]>(`/trips/${trip.id}/suggestions`));
-    } catch {
-      setSuggested([]);
-    }
-  }
+  // Suggestions for the catalog picker, fetched each time it opens.
+  useEffect(() => {
+    if (open !== 'catalog') return;
+    let live = true;
+    api
+      .get<Item[]>(`/trips/${trip.id}/suggestions`)
+      .then((r) => live && setSuggested(r))
+      .catch(() => live && setSuggested([]));
+    return () => {
+      live = false;
+    };
+  }, [open, trip.id]);
 
   return (
     <>
       <Menu open={open === 'menu'} onClose={close} anchor={props.anchor} title={trip.name}>
         <ActionList
           actions={[
-            { icon: 'plus', label: 'Add from catalog', onClick: openCatalog },
             {
               icon: 'settings',
               label: 'Trip details and bags',

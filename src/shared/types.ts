@@ -1,5 +1,8 @@
 import type {
   AutoPackFallback,
+  EntryKind,
+  SectionKind,
+  TransportMode,
   QtyMode,
   RelAnchor,
   RelDir,
@@ -213,9 +216,49 @@ export interface AppState {
   lookups: Record<string, string[]>;
 }
 
+/** One end of an itinerary entry: a departure or arrival, check-in or check-out, start or end. */
+export interface EntryEnd {
+  place: string | null;
+  /** Airport or station code, like "BOS". */
+  code: string | null;
+  date: string | null;
+  /** Local "HH:MM", as printed on the booking. */
+  time: string | null;
+  /** IANA time zone of the place, like "America/New_York". */
+  tz: string | null;
+}
+
+export interface ItineraryEntry {
+  id: string;
+  section_id: string;
+  kind: EntryKind;
+  mode: TransportMode | null;
+  title: string | null;
+  carrier: string | null;
+  number: string | null;
+  start: EntryEnd;
+  end: EntryEnd;
+  address: string | null;
+  confirmation: string | null;
+  details: string | null;
+  notes: string | null;
+  sort_order: number;
+}
+
+export interface ItinerarySection {
+  id: string;
+  trip_id: string;
+  kind: SectionKind;
+  title: string;
+  notes: string | null;
+  sort_order: number;
+  entries: ItineraryEntry[];
+}
+
 export interface TripDetail {
   trip: Trip;
   bags: TripBag[];
   items: TripItem[];
   todos: TripTodo[];
+  itinerary: ItinerarySection[];
 }

@@ -129,7 +129,7 @@ export function TextInput(p: InputHTMLAttributes<HTMLInputElement>) {
     <input
       {...p}
       className={cx(
-        'w-full rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink transition-colors placeholder:text-faint focus:border-accent focus:outline-none',
+        'w-full rounded-xl border border-line bg-surface px-3 py-2 text-base text-ink transition-colors placeholder:text-faint/55 focus:border-accent focus:outline-none',
         p.className,
       )}
     />
@@ -682,12 +682,15 @@ export function SlideToggle<T extends string>({
   onChange,
   label,
   className,
+  size,
 }: {
   value: T;
   options: [T, ReactNode][];
   onChange: (v: T) => void;
   label: string;
   className?: string;
+  /** Smaller, for a secondary switch beside other controls. */
+  size?: 'sm';
 }) {
   const index = Math.max(
     0,
@@ -703,7 +706,7 @@ export function SlideToggle<T extends string>({
     >
       <span
         aria-hidden="true"
-        className="absolute inset-y-1 left-1 rounded-full bg-surface shadow-[0_1px_3px_rgba(0,0,0,.12)] transition-transform duration-200 ease-out"
+        className="absolute inset-y-1 left-1 rounded-full bg-seg shadow-[0_1px_3px_rgba(0,0,0,.12)] transition-transform duration-200 ease-out"
         style={{ width: `calc((100% - 0.5rem) / ${n})`, transform: `translateX(${index * 100}%)` }}
       />
       {options.map(([v, text], i) => (
@@ -713,7 +716,8 @@ export function SlideToggle<T extends string>({
           aria-selected={i === index}
           onClick={() => onChange(v)}
           className={cx(
-            'relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors',
+            'relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full whitespace-nowrap transition-colors',
+            size === 'sm' ? 'px-2.5 py-1 text-[13px]' : 'px-3 py-1.5 text-sm',
             i === index ? 'font-semibold text-accent' : 'text-soft',
           )}
         >

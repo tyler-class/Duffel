@@ -59,7 +59,7 @@ export function SearchToggle({
             onBlur={() => !value && setOpen(false)}
             placeholder="Search"
             aria-label={label}
-            className="h-full min-w-0 flex-1 bg-transparent pr-1 text-base text-ink placeholder:text-faint focus:outline-none"
+            className="h-full min-w-0 flex-1 bg-transparent pr-1 text-base text-ink placeholder:text-faint/55 focus:outline-none"
           />
           <button
             type="button"

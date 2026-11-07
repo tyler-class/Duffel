@@ -177,7 +177,9 @@ function TryAsking() {
           </button>
         ))}
         <p className="pt-2.5 text-xs text-faint">
-          Claude also lists ready-made Duffel prompts in its + menu.
+          Claude also lists ready-made Duffel prompts in its + menu. Connect your email (Gmail,
+          Outlook, Fastmail) to the same assistant and it can fill in the itinerary from your
+          booking confirmations.
         </p>
       </div>
     </>

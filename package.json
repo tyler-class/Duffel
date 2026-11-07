@@ -1,6 +1,6 @@
 {
   "name": "duffel",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "private": true,
   "description": "A family packing-list app you host yourself on Cloudflare.",
   "license": "MIT",
@@ -20,7 +20,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "icons": "tsx scripts/generate-icons.ts",
-    "sample:build": "tsx scripts/build-sample.ts"
+    "sample:build": "tsx scripts/build-sample.ts",
+    "airports": "tsx scripts/build-airports.ts"
   },
   "cloudflare": {
     "bindings": {

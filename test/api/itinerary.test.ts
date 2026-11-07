@@ -1,0 +1,128 @@
+import { describe, expect, it } from 'vitest';
+import { connections, entryMinutes, sortEntries } from '../../src/shared/logic';
+import type { TripDetail } from '../../src/shared/types';
+import { session } from './helpers';
+
+describe('itinerary', () => {
+  it('holds sections and entries, fills airports, and stays with its trip', async () => {
+    const api = await session();
+    let d = (
+      await api.post<TripDetail>('/trips', {
+        name: 'Portugal',
+        start_date: '2027-06-03',
+        end_date: '2027-06-10',
+        source: { kind: 'blank' },
+      })
+    ).data;
+    expect(d.itinerary).toEqual([]);
+    const tripId = d.trip.id;
+
+    await api.post<TripDetail>(`/trips/${tripId}/itinerary`, {
+      kind: 'travel',
+      title: 'Getting there',
+    });
+    d = (
+      await api.post<TripDetail>(`/trips/${tripId}/itinerary`, { kind: 'stay', title: 'Lisbon' })
+    ).data;
+    const [there, lisbon] = d.itinerary;
+    expect(there).toMatchObject({ kind: 'travel', title: 'Getting there', sort_order: 0 });
+    expect(lisbon).toMatchObject({ kind: 'stay', sort_order: 1 });
+
+    // Two flights with a connection; codes fill in the city and time zone.
+    await api.post(`/itinerary-sections/${there!.id}/entries`, {
+      kind: 'transport',
+      carrier: 'TAP',
+      number: '204',
+      start: { code: 'bos', date: '2027-06-02', time: '21:40' },
+      end: { code: 'LIS', date: '2027-06-03', time: '09:05' },
+      confirmation: 'ABC123',
+    });
+    d = (
+      await api.post<TripDetail>(`/itinerary-sections/${there!.id}/entries`, {
+        kind: 'transport',
+        carrier: 'TAP',
+        number: '1944',
+        start: { code: 'LIS', date: '2027-06-03', time: '10:55' },
+        end: { code: 'OPO', date: '2027-06-03', time: '11:50' },
+      })
+    ).data;
+    const flights = sortEntries(d.itinerary[0]!.entries);
+    expect(flights[0]).toMatchObject({
+      mode: 'plane',
+      start: { code: 'BOS', place: 'Boston', tz: 'America/New_York' },
+      end: { code: 'LIS', place: 'Lisbon', tz: 'Europe/Lisbon' },
+    });
+    // 21:40 EDT is 01:40 UTC; 09:05 WEST is 08:05 UTC: 6h 25m.
+    expect(entryMinutes(flights[0]!)).toBe(385);
+    expect(connections(flights)).toEqual([
+      { after: flights[0]!.id, minutes: 110, at: 'Lisbon', change: null },
+    ]);
+
+    // An arrival before the departure is refused.
+    const bad = await api.post(`/itinerary-sections/${lisbon!.id}/entries`, {
+      kind: 'transport',
+      start: { code: 'LIS', date: '2027-06-07', time: '10:00' },
+      end: { code: 'OPO', date: '2027-06-07', time: '09:00' },
+    });
+    expect(bad.status).toBe(400);
+    expect(
+      (
+        await api.post(`/itinerary-sections/${lisbon!.id}/entries`, {
+          kind: 'plan',
+          start: { time: '7pm' },
+        })
+      ).status,
+    ).toBe(400);
+
+    d = (
+      await api.post<TripDetail>(`/itinerary-sections/${lisbon!.id}/entries`, {
+        kind: 'lodging',
+        title: 'Casa do Rio',
+        start: { date: '2027-06-03', time: '15:00' },
+        end: { date: '2027-06-07', time: '11:00' },
+        address: 'Rua 1',
+        confirmation: 'HB-889',
+      })
+    ).data;
+    const hotel = d.itinerary[1]!.entries[0]!;
+
+    // Move it to the other section, then edit just its check-out time.
+    d = (await api.patch<TripDetail>(`/itinerary-entries/${hotel.id}`, { section_id: there!.id }))
+      .data;
+    expect(d.itinerary[0]!.entries).toHaveLength(3);
+    d = (await api.patch<TripDetail>(`/itinerary-entries/${hotel.id}`, { end: { time: '12:00' } }))
+      .data;
+    expect(d.itinerary[0]!.entries.find((e) => e.id === hotel.id)!.end).toMatchObject({
+      date: '2027-06-07',
+      time: '12:00',
+    });
+
+    // Reorder sections.
+    d = (
+      await api.post<TripDetail>(`/trips/${tripId}/itinerary/order`, {
+        ids: [lisbon!.id, there!.id],
+      })
+    ).data;
+    expect(d.itinerary.map((s) => s.title)).toEqual(['Lisbon', 'Getting there']);
+
+    // Not copied to a clone.
+    const clone = (
+      await api.post<TripDetail>('/trips', {
+        name: 'Portugal again',
+        source: { kind: 'clone', trip_id: tripId },
+      })
+    ).data;
+    expect(clone.itinerary).toEqual([]);
+
+    // In backups.
+    const backup = (await api.get<{ tables: Record<string, unknown[]> }>('/export')).data;
+    expect(backup.tables.itinerary_entries).toHaveLength(3);
+
+    // Deleting a section deletes its entries; deleting the trip deletes the rest.
+    d = (await api.del<TripDetail>(`/itinerary-sections/${there!.id}`)).data;
+    expect(d.itinerary.map((s) => s.title)).toEqual(['Lisbon']);
+    await api.del(`/trips/${tripId}`);
+    const after = (await api.get<{ tables: Record<string, unknown[]> }>('/export')).data;
+    expect(after.tables.itinerary_sections).toHaveLength(0);
+  });
+});

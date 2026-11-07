@@ -6,3 +6,5 @@ export * from './summary';
 export * from './colors';
 export * from './groups';
 export * from './todos';
+export * from './itinerary';
+export * from './airports';

@@ -20,6 +20,7 @@ import { admin, DEFAULT_INSTANCE_NAME } from './routes/admin';
 import { connections } from './routes/connections';
 import { catalog } from './routes/catalog';
 import { templates } from './routes/templates';
+import { itinerary } from './routes/itinerary';
 import { trips } from './routes/trips';
 import { ApiError, body, type AppEnv } from './routes/util';
 
@@ -66,6 +67,7 @@ app.route('/', admin);
 app.route('/', catalog);
 app.route('/', templates);
 app.route('/', trips);
+app.route('/', itinerary);
 app.route('/', connections);
 
 app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));

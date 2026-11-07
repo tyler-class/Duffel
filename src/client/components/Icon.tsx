@@ -69,6 +69,19 @@ const P = {
   filter: '<path d="M4 6h16M7 12h10M10 18h4"/>',
   chevDown: '<path d="M6 9l6 6 6-6"/>',
   ai: '<path d="M12 3v3M12 18v3M3 12h3M18 12h3"/><rect x="7" y="7" width="10" height="10" rx="3"/><path d="M10 12h4"/>',
+  train:
+    '<rect x="6" y="3" width="12" height="14" rx="3"/><path d="M6 11h12M9 21l1.5-4M15 21l-1.5-4M9.5 14h.01M14.5 14h.01"/>',
+  bus: '<rect x="4" y="3" width="16" height="15" rx="2.5"/><path d="M4 11h16M7 18v3M17 18v3M8 14.5h.01M16 14.5h.01"/>',
+  boat: '<path d="M3 17l2 3h14l2-3H3zM5 17V11l7-3 7 3v6M12 8V3M12 3l4 2-4 1"/>',
+  bed: '<path d="M3 18V6M3 13h18v5M21 13a3 3 0 0 0-3-3h-7v3"/><circle cx="7" cy="10" r="1.6"/>',
+  ticket:
+    '<path d="M4 7a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v3a2 2 0 0 0 0 4v3a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-3a2 2 0 0 0 0-4z"/><path d="M14 6v2M14 11v2M14 16v2"/>',
+  route:
+    '<circle cx="6" cy="19" r="2"/><circle cx="18" cy="5" r="2"/><path d="M8 19h8a3 3 0 0 0 0-6H8a3 3 0 0 1 0-6h8"/>',
+  up: '<path d="M6 15l6-6 6 6"/>',
+  printer:
+    '<path d="M7 9V3h10v6"/><rect x="3" y="9" width="18" height="8" rx="2"/><path d="M7 14h10v7H7z"/>',
+  grip: '<circle cx="9" cy="6" r="1"/><circle cx="15" cy="6" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="9" cy="18" r="1"/><circle cx="15" cy="18" r="1"/>',
 } as const;
 
 export type IconName = keyof typeof P;

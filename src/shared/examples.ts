@@ -15,6 +15,11 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
     why: 'A full list for everyone, in their bags.',
   },
   {
+    prompt:
+      'Find our flight, hotel and reservation confirmations for <trip> in my email and add them to the itinerary.',
+    why: 'Needs your email connected to the same assistant.',
+  },
+  {
     prompt: 'What’s still not packed for <trip>? Group it by person.',
     why: 'See what’s left before zipping up.',
   },
@@ -31,6 +36,10 @@ export const EXAMPLE_PROMPTS: ExamplePrompt[] = [
   {
     prompt: 'It’ll be <cold / rainy / hot> on <trip>. What from our catalog should we add?',
     why: 'Catches what the weather calls for.',
+  },
+  {
+    prompt: 'Here’s my booking confirmation: <paste it>. Add it to <trip>’s itinerary.',
+    why: 'Flights, layovers and booking numbers, filled in.',
   },
   {
     prompt: 'Mark everything in <bag> on <trip> as packed.',
@@ -63,6 +72,11 @@ export const MCP_PROMPTS: { name: string; title: string; does: string }[] = [
     name: 'add_trip_todos',
     title: 'Add the usual to-dos',
     does: 'Proposes to-dos before, during and after a trip, with dates that follow it.',
+  },
+  {
+    name: 'add_bookings',
+    title: 'Add bookings to the itinerary',
+    does: 'Finds confirmations in your connected email (or ones you paste) and adds flights, stays and reservations.',
   },
   {
     name: 'organize_groups',

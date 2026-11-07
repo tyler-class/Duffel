@@ -2,6 +2,9 @@
 import { z } from 'zod';
 import {
   AUTOPACK_FALLBACKS,
+  ENTRY_KINDS,
+  SECTION_KINDS,
+  TRANSPORT_MODES,
   QTY_MODES,
   REL_ANCHORS,
   REL_DIRS,
@@ -226,6 +229,64 @@ export const templateTodoPatch = patchOf(templateTodoInput);
 export const tripTodoInput = templateTodoInput.extend({ done: z.boolean().default(false) });
 export const tripTodoPatch = patchOf(tripTodoInput);
 
+export const sectionInput = z.object({
+  kind: z.enum(SECTION_KINDS).default('stay'),
+  title: name(120),
+  notes: text(2000).optional(),
+  sort_order: z.number().int().optional(),
+});
+export const sectionPatch = patchOf(sectionInput);
+
+const time = z.preprocess(
+  blankToNull,
+  z
+    .string()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'Use a 24-hour HH:MM time')
+    .nullable(),
+);
+const timeZone = z.preprocess(
+  blankToNull,
+  z
+    .string()
+    .max(64)
+    .refine((tz) => {
+      try {
+        new Intl.DateTimeFormat('en-US', { timeZone: tz });
+        return true;
+      } catch {
+        return false;
+      }
+    }, 'Use an IANA time zone like America/New_York')
+    .nullable(),
+);
+const code = z.preprocess(
+  (v) => (typeof v === 'string' ? v.trim().toUpperCase() || null : v),
+  z.string().max(8).nullable(),
+);
+const entryEnd = z.object({
+  place: text(200).optional(),
+  code: code.optional(),
+  date: date.optional(),
+  time: time.optional(),
+  tz: timeZone.optional(),
+});
+export const entryInput = z.object({
+  kind: z.enum(ENTRY_KINDS).default('plan'),
+  mode: z.enum(TRANSPORT_MODES).nullable().optional(),
+  title: text(200).optional(),
+  carrier: text(80).optional(),
+  number: text(40).optional(),
+  start: entryEnd.optional(),
+  end: entryEnd.optional(),
+  address: text(400).optional(),
+  confirmation: text(120).optional(),
+  details: text(200).optional(),
+  notes: text(4000).optional(),
+  sort_order: z.number().int().optional(),
+});
+export const entryPatch = patchOf(entryInput).extend({ section_id: id.optional() });
+export const reorderSections = z.object({ ids: z.array(id).min(1).max(200) });
+
 export const saveAsTemplate = z.object({ name: name() });
 
 export const settingsPatch = z.object({
@@ -243,3 +304,4 @@ export type TripInput = z.input<typeof tripInput>;
 export type TripCreate = z.input<typeof tripCreate>;
 export type TripBagInput = z.input<typeof tripBagInput>;
 export type TripItemInput = z.input<typeof tripItemInput>;
+export type EntryInput = z.input<typeof entryInput>;

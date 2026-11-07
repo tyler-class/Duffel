@@ -26,6 +26,31 @@ export type RelDir = (typeof REL_DIRS)[number];
 export const REL_ANCHORS = ['start', 'middle', 'end'] as const;
 export type RelAnchor = (typeof REL_ANCHORS)[number];
 
+/** Itinerary sections: getting from one place to another, or time in one place. */
+export const SECTION_KINDS = ['travel', 'stay'] as const;
+export type SectionKind = (typeof SECTION_KINDS)[number];
+
+/** Itinerary entries. Transport is a departure and its arrival; lodging a check-in and out. */
+export const ENTRY_KINDS = ['transport', 'lodging', 'plan', 'note'] as const;
+export type EntryKind = (typeof ENTRY_KINDS)[number];
+export const ENTRY_KIND_LABELS: Record<EntryKind, string> = {
+  transport: 'Transport',
+  lodging: 'Lodging',
+  plan: 'Plan',
+  note: 'Note',
+};
+
+export const TRANSPORT_MODES = ['plane', 'train', 'bus', 'boat', 'car', 'other'] as const;
+export type TransportMode = (typeof TRANSPORT_MODES)[number];
+export const TRANSPORT_MODE_LABELS: Record<TransportMode, string> = {
+  plane: 'Flight',
+  train: 'Train',
+  bus: 'Bus',
+  boat: 'Boat',
+  car: 'Car',
+  other: 'Other',
+};
+
 export const DEFAULT_LOOKUPS = {
   role: ['Adult', 'Child', 'Baby'],
   category: [

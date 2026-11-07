@@ -1,6 +1,10 @@
 import type { RelAnchor, RelDir, TodoDateMode, TodoPhase } from '@shared/lookups';
+import type { EntryKind, SectionKind, TransportMode } from '@shared/lookups';
 import type {
+  EntryEnd,
   Item,
+  ItineraryEntry,
+  ItinerarySection,
   Person,
   Suitcase,
   Template,
@@ -472,4 +476,73 @@ export async function existingIds(
 /** Where an item with a bag type goes when its person has no bag of that type. */
 export async function getAutoPackFallback(db: D1Database): Promise<AutoPackFallback> {
   return (await getSetting(db, 'autopack_fallback')) === 'main' ? 'main' : 'unplaced';
+}
+
+function toEnd(r: Row, side: 'start' | 'end'): EntryEnd {
+  return {
+    place: s(r[`${side}_place`]),
+    code: s(r[`${side}_code`]),
+    date: s(r[`${side}_date`]),
+    time: s(r[`${side}_time`]),
+    tz: s(r[`${side}_tz`]),
+  };
+}
+
+export function toEntry(r: Row): ItineraryEntry {
+  return {
+    id: String(r.id),
+    section_id: String(r.section_id),
+    kind: (r.kind as EntryKind) ?? 'plan',
+    mode: (r.mode as TransportMode | null) ?? null,
+    title: s(r.title),
+    carrier: s(r.carrier),
+    number: s(r.number),
+    start: toEnd(r, 'start'),
+    end: toEnd(r, 'end'),
+    address: s(r.address),
+    confirmation: s(r.confirmation),
+    details: s(r.details),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+  };
+}
+
+/** Columns for one end of an entry, from a request (only the fields it sent). */
+export function endCols(side: 'start' | 'end', e: Partial<EntryEnd> | undefined) {
+  const out: Record<string, unknown> = {};
+  if (!e) return out;
+  for (const k of ['place', 'code', 'date', 'time', 'tz'] as const)
+    if (e[k] !== undefined) out[`${side}_${k}`] = e[k];
+  return out;
+}
+
+export async function loadItinerary(db: D1Database, tripId: string): Promise<ItinerarySection[]> {
+  const [sections, entries] = await Promise.all([
+    all(
+      db,
+      'SELECT * FROM itinerary_sections WHERE trip_id = ? ORDER BY sort_order, created_at',
+      tripId,
+    ),
+    all(
+      db,
+      `SELECT e.* FROM itinerary_entries e JOIN itinerary_sections s ON s.id = e.section_id
+       WHERE s.trip_id = ? ORDER BY e.sort_order, e.created_at`,
+      tripId,
+    ),
+  ]);
+  const bySection = new Map<string, ItineraryEntry[]>();
+  for (const r of entries) {
+    const e = toEntry(r);
+    if (!bySection.has(e.section_id)) bySection.set(e.section_id, []);
+    bySection.get(e.section_id)!.push(e);
+  }
+  return sections.map((r) => ({
+    id: String(r.id),
+    trip_id: String(r.trip_id),
+    kind: (r.kind as SectionKind) ?? 'stay',
+    title: String(r.title),
+    notes: s(r.notes),
+    sort_order: Number(r.sort_order),
+    entries: bySection.get(String(r.id)) ?? [],
+  }));
 }

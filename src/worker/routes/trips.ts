@@ -58,6 +58,7 @@ import {
   loadTripBags,
   loadTripItems,
   loadTripTodos,
+  loadItinerary,
   newId,
   setBagPeople,
   nowIso,
@@ -74,13 +75,14 @@ async function getTrip(db: D1Database, id: string): Promise<Trip> {
 }
 
 export async function tripDetail(db: D1Database, id: string): Promise<TripDetail> {
-  const [trip, bags, items, todos] = await Promise.all([
+  const [trip, bags, items, todos, itinerary] = await Promise.all([
     getTrip(db, id),
     loadTripBags(db, id),
     loadTripItems(db, id),
     loadTripTodos(db, id),
+    loadItinerary(db, id),
   ]);
-  return { trip, bags, items, todos };
+  return { trip, bags, items, todos, itinerary };
 }
 
 const lenOf = (t: { days: number | null; nights: number | null }): LengthLike | null =>

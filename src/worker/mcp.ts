@@ -5,6 +5,12 @@ import { createMcpHandler, McpServer } from '@modelcontextprotocol/server';
 import { z } from 'zod';
 import {
   calcSummary,
+  connections,
+  entryMinutes,
+  entryName,
+  formatMinutes,
+  sortEntries,
+  sortSections,
   describeRelative,
   displayQty,
   isCarryOn,
@@ -21,6 +27,9 @@ import {
 } from '@shared/logic';
 import {
   DEFAULT_LOOKUPS,
+  ENTRY_KINDS,
+  SECTION_KINDS,
+  TRANSPORT_MODES,
   REL_ANCHORS,
   REL_DIRS,
   TODO_PHASE_LABELS,
@@ -28,6 +37,8 @@ import {
 } from '@shared/lookups';
 import type {
   AppState,
+  EntryEnd,
+  ItinerarySection,
   Item,
   Person,
   Template,
@@ -188,15 +199,115 @@ function summarizeTrip(d: TripDetail, people: Person[]) {
       notes: r.notes,
     })),
     todos: sortTripTodos(d.todos, d.trip).map((t) => todoView(t, d.trip)),
+    itinerary: `${d.itinerary.length} section${d.itinerary.length === 1 ? '' : 's'}, ${d.itinerary.reduce((n, x) => n + x.entries.length, 0)} entries (see get_itinerary)`,
   };
 }
 
-const INSTRUCTIONS = `Duffel is a household's packing list. Each trip has a packing list (one entry per person per item, placed in bags and sorted into groups like Clothing or Documents) and to-dos before, during and after the trip. Templates are reusable lists; the catalog is everything the household packs.
+const endView = (e: EntryEnd) =>
+  Object.fromEntries(
+    Object.entries({
+      place: e.place,
+      code: e.code,
+      date: e.date,
+      time: e.time,
+      time_zone: e.tz,
+    }).filter(([, v]) => v !== null),
+  );
+
+/** How an assistant sees the itinerary: sections in order, entries by time, with layovers. */
+function itineraryView(sections: ItinerarySection[]) {
+  return sortSections(sections).map((s) => {
+    const entries = sortEntries(s.entries);
+    const layovers = new Map(connections(entries).map((c) => [c.after, c]));
+    return {
+      section_id: s.id,
+      kind: s.kind,
+      title: s.title,
+      ...(s.notes ? { notes: s.notes } : {}),
+      entries: entries.map((e) => {
+        const min = entryMinutes(e);
+        const lay = layovers.get(e.id);
+        return Object.fromEntries(
+          Object.entries({
+            entry_id: e.id,
+            kind: e.kind,
+            name: entryName(e),
+            mode: e.mode,
+            title: e.title,
+            carrier: e.carrier,
+            number: e.number,
+            [e.kind === 'transport' ? 'depart' : 'start']: endView(e.start),
+            [e.kind === 'transport' ? 'arrive' : 'end']: endView(e.end),
+            duration: min !== null ? formatMinutes(min) : null,
+            layover_after: lay
+              ? `${formatMinutes(lay.minutes)}${lay.at ? ` in ${lay.at}` : ''}${lay.change ? `, change ${lay.change.from} → ${lay.change.to}` : ''}`
+              : null,
+            address: e.address,
+            confirmation: e.confirmation,
+            details: e.details,
+            notes: e.notes,
+          }).filter(([, v]) => v !== null && !(typeof v === 'object' && !Object.keys(v).length)),
+        );
+      }),
+    };
+  });
+}
+
+const endInput = z
+  .object({
+    place: z.string().optional().describe('City, station, venue or address name'),
+    code: z
+      .string()
+      .optional()
+      .describe('IATA airport code like "BOS". Fills in the city and time zone when known.'),
+    date: z.string().optional().describe('Local date, YYYY-MM-DD'),
+    time: z.string().optional().describe('Local 24-hour time, HH:MM, as printed on the booking'),
+    time_zone: z
+      .string()
+      .optional()
+      .describe('IANA zone of that place, e.g. "Europe/Lisbon". Not needed with an airport code.'),
+  })
+  .optional();
+type EndArg = z.infer<typeof endInput>;
+const endBody = (e: EndArg) =>
+  e && {
+    ...(e.place !== undefined ? { place: e.place } : {}),
+    ...(e.code !== undefined ? { code: e.code } : {}),
+    ...(e.date !== undefined ? { date: e.date } : {}),
+    ...(e.time !== undefined ? { time: e.time } : {}),
+    ...(e.time_zone !== undefined ? { tz: e.time_zone } : {}),
+  };
+
+const entryFields = {
+  mode: z
+    .enum(TRANSPORT_MODES)
+    .optional()
+    .describe('Transport only: plane, train, bus, boat, car or other'),
+  title: z
+    .string()
+    .optional()
+    .describe(
+      'Hotel or plan name, e.g. "Casa do Rio" or "Dinner at Taberna". Optional for transport.',
+    ),
+  carrier: z.string().optional().describe('Airline, rail or bus company, rental company'),
+  number: z.string().optional().describe('Flight or train number, e.g. "204"'),
+  start: endInput.describe(
+    'Transport: the departure. Lodging: check-in. Plan: when it starts (and where, in place).',
+  ),
+  end: endInput.describe('Transport: the arrival. Lodging: check-out. Plan: when it ends.'),
+  address: z.string().optional(),
+  confirmation: z.string().optional().describe('Confirmation, booking or record locator'),
+  details: z.string().optional().describe('Seats, terminal, gate, room, short'),
+  notes: z.string().optional(),
+};
+
+const INSTRUCTIONS = `Duffel is a household's packing list. Each trip has a packing list (one entry per person per item, placed in bags and sorted into groups like Clothing or Documents) and to-dos before, during and after the trip. Trips also have an itinerary: sections in order (travel, like "Getting there", and stays, like "Lisbon"), each holding transport (a departure and its arrival), lodging, plans and notes. Templates are reusable lists; the catalog is everything the household packs.
 
 How to work with it:
 - Refer to trips, templates, people and bags by name. Item and to-do ids come from get_packing_list, get_template and list_todos.
 - Build trips with create_trip from a template or by copying a past trip: quantities scale with the trip's length, each person gets their own entries, and items go into their bags.
 - Give to-dos relative dates (days before, on or after the start, middle or end of the trip) so they move with the trip.
+- Itinerary times are local, as printed on the booking, with each place's IANA time zone (an airport code fills it in). Add one transport entry per flight segment so layovers show. If the person's email is connected to you too, you can search it for confirmations and add them (see the add_bookings prompt).
 - Ask before removing items or changing many entries at once.
 
 When someone asks what you can do with Duffel (or seems unsure where to start), call get_started: it returns their trips and lists as they stand now, and example requests to offer. Suggest two or three that fit, phrased for their trips, rather than listing tools. Examples:
@@ -977,6 +1088,298 @@ function buildServer(call: Call) {
         return fail(e);
       }
     },
+  );
+
+  // ---------- itinerary ----------
+  async function resolveSection(d: TripDetail, key: string) {
+    return find(d.itinerary, key, (x) => x.title, 'itinerary section');
+  }
+
+  server.registerTool(
+    'get_itinerary',
+    {
+      description:
+        'A trip’s itinerary: sections in order, each with its entries by time (flights and other transport with durations and layovers, lodging, plans, notes), plus ids for editing.',
+      inputSchema: z.object({
+        trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
+      }),
+      annotations: { readOnlyHint: true, openWorldHint: false },
+    },
+    async (a) => {
+      try {
+        const { t } = await resolveTrip(a.trip);
+        const d = await trip(t.id);
+        return text({
+          trip: d.trip.name,
+          start_date: d.trip.start_date,
+          end_date: d.trip.end_date,
+          destination: d.trip.destination,
+          sections: itineraryView(d.itinerary),
+        });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_itinerary_section',
+    {
+      description:
+        'Add a section to a trip’s itinerary: travel (getting from one place to another, e.g. "Getting there", "Lisbon → Porto", "Heading home") or a stay (time in one place, e.g. "Lisbon"). New sections go at the end unless you give a position.',
+      inputSchema: z.object({
+        trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
+        kind: z.enum(SECTION_KINDS),
+        title: z.string().min(1),
+        notes: z.string().optional(),
+        position: z.number().int().min(1).optional().describe('1 = first'),
+      }),
+    },
+    async (a) => {
+      try {
+        const { t } = await resolveTrip(a.trip);
+        let d = await call<TripDetail>('POST', `/trips/${t.id}/itinerary`, {
+          kind: a.kind,
+          title: a.title,
+          notes: a.notes ?? null,
+        });
+        const ordered = sortSections(d.itinerary);
+        const added = ordered.at(-1)!;
+        if (a.position && a.position < ordered.length) {
+          const ids = ordered.slice(0, -1).map((x) => x.id);
+          ids.splice(a.position - 1, 0, added.id);
+          d = await call<TripDetail>('POST', `/trips/${t.id}/itinerary/order`, { ids });
+        }
+        return text({
+          added: { section_id: added.id, title: added.title },
+          sections: sortSections(d.itinerary).map((x) => x.title),
+        });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_itinerary_section',
+    {
+      description:
+        'Rename an itinerary section, change its kind or notes, or move it to another position.',
+      inputSchema: z.object({
+        trip: z.string().optional(),
+        section: z.string().describe('Section title or id'),
+        kind: z.enum(SECTION_KINDS).optional(),
+        title: z.string().min(1).optional(),
+        notes: z.string().nullable().optional(),
+        position: z.number().int().min(1).optional().describe('1 = first'),
+      }),
+    },
+    async (a) => {
+      try {
+        const { t } = await resolveTrip(a.trip);
+        let d = await trip(t.id);
+        const sec = await resolveSection(d, a.section);
+        const body = {
+          ...(a.kind !== undefined ? { kind: a.kind } : {}),
+          ...(a.title !== undefined ? { title: a.title } : {}),
+          ...(a.notes !== undefined ? { notes: a.notes } : {}),
+        };
+        if (Object.keys(body).length)
+          d = await call<TripDetail>('PATCH', `/itinerary-sections/${sec.id}`, body);
+        if (a.position) {
+          const ids = sortSections(d.itinerary)
+            .map((x) => x.id)
+            .filter((x) => x !== sec.id);
+          ids.splice(Math.min(a.position - 1, ids.length), 0, sec.id);
+          d = await call<TripDetail>('POST', `/trips/${t.id}/itinerary/order`, { ids });
+        }
+        return text({ sections: sortSections(d.itinerary).map((x) => x.title) });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'remove_itinerary_section',
+    {
+      description: 'Delete an itinerary section and everything in it. Ask first if it has entries.',
+      inputSchema: z.object({
+        trip: z.string().optional(),
+        section: z.string().describe('Section title or id'),
+      }),
+    },
+    async (a) => {
+      try {
+        const { t } = await resolveTrip(a.trip);
+        const sec = await resolveSection(await trip(t.id), a.section);
+        await call('DELETE', `/itinerary-sections/${sec.id}`);
+        return text(`Removed ${sec.title} and its ${sec.entries.length} entries.`);
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'add_itinerary_entries',
+    {
+      description:
+        'Add entries to an itinerary section: transport (one per flight or train segment, with depart and arrive local times; layovers are worked out), lodging (check-in and check-out), plans (reservations, tickets, tours, rentals) or notes. The section is created if no section has that title (give section_kind). Entries matching an existing one (same confirmation and start, or same carrier, number and date) are skipped, so it is safe to run again.',
+      inputSchema: z.object({
+        trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
+        section: z.string().describe('Section title or id, e.g. "Getting there"'),
+        section_kind: z
+          .enum(SECTION_KINDS)
+          .optional()
+          .describe('If the section is new: travel or stay'),
+        entries: z
+          .array(z.object({ kind: z.enum(ENTRY_KINDS), ...entryFields }))
+          .min(1)
+          .max(50),
+      }),
+    },
+    async (a) => {
+      try {
+        const { t } = await resolveTrip(a.trip);
+        let d = await trip(t.id);
+        let sec = d.itinerary.find(
+          (x) => x.id === a.section || x.title.toLowerCase() === a.section.trim().toLowerCase(),
+        );
+        if (!sec) {
+          d = await call<TripDetail>('POST', `/trips/${t.id}/itinerary`, {
+            kind:
+              a.section_kind ??
+              (a.entries.every((e) => e.kind === 'transport') ? 'travel' : 'stay'),
+            title: a.section.trim(),
+          });
+          sec = sortSections(d.itinerary).at(-1)!;
+        }
+        const existing = d.itinerary.flatMap((x) => x.entries);
+        const same = (e: (typeof a.entries)[number]) =>
+          existing.some(
+            (x) =>
+              x.kind === e.kind &&
+              x.start.date === (e.start?.date ?? null) &&
+              ((e.confirmation &&
+                x.confirmation === e.confirmation &&
+                x.start.time === (e.start?.time ?? null) &&
+                (x.number ?? null) === (e.number ?? null)) ||
+                (e.carrier &&
+                  e.number &&
+                  x.carrier?.toLowerCase() === e.carrier.toLowerCase() &&
+                  x.number === e.number) ||
+                (e.title && x.title?.toLowerCase() === e.title.toLowerCase())),
+          );
+        const added: string[] = [];
+        const skipped: string[] = [];
+        for (const e of a.entries) {
+          const label = e.title ?? ([e.carrier, e.number].filter(Boolean).join(' ') || e.kind);
+          if (same(e)) {
+            skipped.push(label);
+            continue;
+          }
+          d = await call<TripDetail>('POST', `/itinerary-sections/${sec.id}/entries`, {
+            ...e,
+            start: endBody(e.start),
+            end: endBody(e.end),
+          });
+          added.push(label);
+        }
+        const now = d.itinerary.find((x) => x.id === sec.id)!;
+        return text({
+          section: now.title,
+          added,
+          ...(skipped.length ? { skipped_as_already_there: skipped } : {}),
+          entries: itineraryView([now])[0]!.entries,
+        });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'update_itinerary_entry',
+    {
+      description:
+        'Change an itinerary entry (ids from get_itinerary): times, places, booking numbers, notes, or move it to another section. For start and end, only the fields you give change.',
+      inputSchema: z.object({
+        entry_id: z.string(),
+        move_to_section: z.string().optional().describe('Section title or id'),
+        trip: z
+          .string()
+          .optional()
+          .describe('Needed only with move_to_section, if not the next trip'),
+        kind: z.enum(ENTRY_KINDS).optional(),
+        ...entryFields,
+      }),
+    },
+    async (a) => {
+      try {
+        const { entry_id, move_to_section, trip: tripKey, ...f } = a;
+        const body: Record<string, unknown> = Object.fromEntries(
+          Object.entries({ ...f, start: endBody(f.start), end: endBody(f.end) }).filter(
+            ([, v]) => v !== undefined,
+          ),
+        );
+        if (move_to_section) {
+          const { t } = await resolveTrip(tripKey);
+          body.section_id = (await resolveSection(await trip(t.id), move_to_section)).id;
+        }
+        const d = await call<TripDetail>('PATCH', `/itinerary-entries/${entry_id}`, body);
+        const sec = d.itinerary.find((x) => x.entries.some((e) => e.id === entry_id))!;
+        return text({
+          updated: itineraryView([sec])[0]!.entries.find((e) => e.entry_id === entry_id),
+        });
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerTool(
+    'remove_itinerary_entry',
+    {
+      description: 'Delete an itinerary entry.',
+      inputSchema: z.object({ entry_id: z.string() }),
+    },
+    async ({ entry_id }) => {
+      try {
+        await call('DELETE', `/itinerary-entries/${entry_id}`);
+        return text('Removed.');
+      } catch (e) {
+        return fail(e);
+      }
+    },
+  );
+
+  server.registerPrompt(
+    'add_bookings',
+    {
+      title: 'Add bookings to the itinerary',
+      description:
+        'Find flight, train, hotel, rental and reservation confirmations in your connected email (or ones you paste) and add them to a trip’s itinerary.',
+      argsSchema: z.object({
+        trip: tripArg,
+        pasted: z
+          .string()
+          .optional()
+          .describe('Paste a confirmation here instead of searching email.'),
+      }),
+    },
+    ({ trip: t, pasted }) =>
+      ask(`Fill in the itinerary for ${t ? `"${t}"` : 'our next trip'} in Duffel from our booking confirmations.
+
+1. get_itinerary${t ? ` for "${t}"` : ''} to see the trip's dates, destination and what's already there.
+2. ${
+        pasted
+          ? `Read this confirmation:\n\n${pasted}\n\n`
+          : `Search my connected email (Gmail, Outlook, Fastmail or similar) for confirmations around the trip's dates and destination: airline and train tickets, hotels and rentals (Airbnb, VRBO), car rentals, ferries, tours, tickets and restaurant reservations. Prefer the latest email for each booking (changes and cancellations win). If you can't search email, ask me to paste the confirmations.`
+      }
+3. Pull out each booking: carrier and number, airports or stations (IATA codes), local dates and times as printed, each place's IANA time zone, confirmation numbers, seats, terminal, addresses and anything worth noting (baggage, check-in times). One transport entry per flight or train segment.
+4. Propose where each goes: travel sections ("Getting there", "Lisbon → Porto", "Heading home") and a stay section per place, in trip order. Reuse sections already there. Show me the plan as a short list and wait for my OK.
+5. Add them with add_itinerary_section and add_itinerary_entries (entries already there are skipped). Then show the itinerary with get_itinerary, pointing out tight layovers and anything that doesn't line up with the trip's dates.`),
   );
 
   return server;
