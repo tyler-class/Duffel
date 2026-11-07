@@ -166,7 +166,7 @@ export function TripTodos({ detail, stage }: { detail: TripDetail; stage: Stage 
                       <span
                         className={cx(
                           'grid h-5 w-5 place-items-center rounded-md border-[1.5px] transition-colors',
-                          t.done ? 'border-todo bg-todo text-white' : 'border-faint',
+                          t.done ? 'border-accent bg-accent text-accent-ink' : 'border-faint',
                         )}
                       >
                         {t.done && <Icon name="check" size={14} strokeWidth={2.4} />}

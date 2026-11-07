@@ -20,6 +20,7 @@ import { BagSheet, type BagDraft } from '../components/BagSheet';
 import { api, errorMessage } from '../lib/api';
 import { keys, useAppState } from '../lib/queries';
 import { useSave } from '../lib/useSave';
+import { load, save } from '../lib/storage';
 import { gapText, packHint, plural } from '../lib/format';
 import { Icon } from '../components/Icon';
 import { CatalogPicker } from '../components/CatalogPicker';
@@ -36,6 +37,7 @@ import { SortableGroups } from '../components/SortableGroups';
 import { TemplateTodos } from '../components/Todos';
 import { SwipeRow } from '../components/SwipeRow';
 import {
+  cx,
   DangerButton,
   Empty,
   ErrorText,
@@ -176,6 +178,15 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
   const [bagSheet, setBagSheet] = useState<TemplateBag | 'new' | null>(null);
   const [tab, setTab] = useState<'details' | 'items' | 'todos'>('details');
   const [moveError, setMoveError] = useState('');
+  // Folded groups, remembered per template on this device.
+  const foldKey = `templateFolded:${tpl.id}`;
+  const [folded, setFolded] = useState<Record<string, boolean>>(() => load(foldKey, {}));
+  const toggleFolded = (c: string) =>
+    setFolded((f) => {
+      const n = { ...f, [c]: !f[c] };
+      save(foldKey, n);
+      return n;
+    });
   const qc = useQueryClient();
   const sorted = useMemo(
     () => [...tpl.items].sort((a, b) => a.sort_order - b.sort_order),
@@ -354,11 +365,18 @@ function TemplateBody({ data, tpl }: { data: AppState; tpl: Template }) {
               defaults={DEFAULT_LOOKUPS.category}
               onRowsChange={moveRows}
               onGroupsChange={moveGroups}
-              renderHeader={(c, rs) => (
+              isCollapsed={(c) => !!folded[c]}
+              onToggle={(c) => toggleFolded(c)}
+              renderHeader={(c, rs, isFolded) => (
                 <div className="flex items-center gap-2 px-1 pt-4 pb-1.5">
                   <span className="rounded-full bg-chip px-2.5 py-0.5 text-[13px] font-semibold text-soft">
                     {c}
                   </span>
+                  <Icon
+                    name="chev"
+                    size={12}
+                    className={cx('text-faint transition-transform', isFolded && '-rotate-90')}
+                  />
                   <span className="ml-auto font-mono text-[11px] text-faint tnum">{rs.length}</span>
                 </div>
               )}

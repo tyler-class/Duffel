@@ -95,7 +95,10 @@ export function SortableGroups<T extends Sortable>(props: {
   defaults: readonly string[];
   disabled?: boolean;
   renderRow: (row: T) => ReactNode;
-  renderHeader: (category: string, rows: T[]) => ReactNode;
+  renderHeader: (category: string, rows: T[], collapsed: boolean) => ReactNode;
+  /** Folded groups show only their heading. Tapping a heading folds or unfolds it. */
+  isCollapsed?: (category: string) => boolean;
+  onToggle?: (category: string) => void;
   /** New order (and groups) of the rows shown. */
   onRowsChange: (next: { id: string; category: string | null }[]) => void;
   /** New order of the groups shown. */
@@ -228,11 +231,14 @@ export function SortableGroups<T extends Sortable>(props: {
                   key={c}
                   category={c}
                   disabled={props.disabled}
-                  header={props.renderHeader(c, groupRows)}
+                  header={props.renderHeader(c, groupRows, !!props.isCollapsed?.(c))}
+                  expanded={!props.isCollapsed?.(c)}
+                  onToggle={props.onToggle && (() => props.onToggle!(c))}
                 >
                   {/* While a group moves, groups fold to their headings so they swap cleanly. */}
                   <Box id={c} rows={lists.rows[c] ?? []} grow={draggingRow}>
                     {!activeGroup &&
+                      !props.isCollapsed?.(c) &&
                       groupRows.map((r) => (
                         <SortableRow key={r.id} id={r.id} disabled={props.disabled}>
                           {props.renderRow(r)}
@@ -255,6 +261,7 @@ export function SortableGroups<T extends Sortable>(props: {
                   (lists.rows[activeGroup] ?? [])
                     .map((id) => byId.get(id))
                     .filter((r): r is T => !!r),
+                  !!props.isCollapsed?.(activeGroup),
                 )}
               </div>
             ) : null}
@@ -334,11 +341,15 @@ function SortableGroup({
   category,
   header,
   disabled,
+  expanded,
+  onToggle,
   children,
 }: {
   category: string;
   header: ReactNode;
   disabled?: boolean;
+  expanded: boolean;
+  onToggle?: () => void;
   children: ReactNode;
 }) {
   const {
@@ -362,9 +373,11 @@ function SortableGroup({
           {...(disabled ? {} : attributes)}
           {...listeners}
           tabIndex={disabled ? undefined : attributes.tabIndex}
+          aria-expanded={onToggle ? expanded : undefined}
+          onClick={onToggle}
           className={cx(
             'touch-manipulation outline-none select-none [-webkit-touch-callout:none]',
-            !disabled && 'cursor-grab',
+            onToggle ? 'cursor-pointer' : !disabled && 'cursor-grab',
           )}
         >
           {header}

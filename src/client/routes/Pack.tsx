@@ -614,7 +614,13 @@ function PackTrip(props: {
               const done = g.rows.filter((r) => r.packed).length;
               return (
                 <section key={g.key} className="mt-5 px-5">
-                  <div className="flex items-center gap-2 rounded-2xl bg-chip py-1.5 pr-1.5 pl-3.5">
+                  {/* The whole bar folds the section; its buttons (+, Select all) do their own thing. */}
+                  <div
+                    className="flex cursor-pointer items-center gap-2 rounded-2xl bg-chip py-1.5 pr-1.5 pl-3.5 select-none"
+                    onClick={(e) => {
+                      if (!(e.target as HTMLElement).closest('button, a')) toggleCollapsed(ck);
+                    }}
+                  >
                     <button
                       className="flex min-w-0 items-center gap-2 rounded-full py-0.5 text-base font-semibold"
                       aria-expanded={!isCollapsed}
@@ -685,11 +691,21 @@ function PackTrip(props: {
                       disabled={selecting}
                       onRowsChange={moveRows}
                       onGroupsChange={moveGroups}
-                      renderHeader={(c, rs) => (
+                      isCollapsed={(c) => !!collapsed[`${ck}:${c}`]}
+                      onToggle={(c) => toggleCollapsed(`${ck}:${c}`)}
+                      renderHeader={(c, rs, folded) => (
                         <div className="flex items-center gap-2 pt-4 pr-3 pb-1.5 pl-1.5">
                           <span className="rounded-full bg-chip px-2.5 py-0.5 text-[13px] font-semibold text-soft">
                             {c}
                           </span>
+                          <Icon
+                            name="chev"
+                            size={12}
+                            className={cx(
+                              'text-faint transition-transform',
+                              folded && '-rotate-90',
+                            )}
+                          />
                           <span className="ml-auto font-mono text-[11px] text-faint tnum">
                             {rs.filter((r) => r.packed).length}/{rs.length}
                           </span>
