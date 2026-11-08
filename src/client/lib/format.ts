@@ -39,7 +39,7 @@ export function packHint(c: PackChoice, fallback: AutoPackFallback): string {
   return `Goes into its person’s ${t}, or a shared ${t}. If there’s none on the trip, ${
     fallback === 'main'
       ? 'it goes in their luggage instead'
-      : 'it stays in No bag and moves in when one is added'
+      : 'it waits in No bag yet until you add one'
   } (see Settings).`;
 }
 

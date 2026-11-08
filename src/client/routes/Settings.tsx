@@ -1,5 +1,5 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import type { AutoPackFallback } from '@shared/lookups';
 import { api, errorMessage } from '../lib/api';
 import { useAppState } from '../lib/queries';
@@ -65,26 +65,50 @@ export function Settings() {
       </div>
 
       <SectionLabel icon="bag">Auto pack</SectionLabel>
-      <div className="flex flex-col gap-3 px-6 pt-4 pb-2">
-        <p className="text-sm text-soft">
-          A catalog item can auto pack into a type of bag, like diapers into a diaper bag. When it
-          goes on a trip for someone, Duffel puts it in that person’s bag of that type, or the
-          trip’s shared one. A bag’s type is set under Catalog → Bags.
+      <div className="flex flex-col gap-3 px-6 pt-4 pb-2 text-sm text-soft">
+        <p>
+          Each catalog item says where it packs: their luggage, their carry-on, a type of bag (like
+          diapers into a diaper bag), or no bag (a stroller, a car seat). Set it on the item in the
+          Catalog; a template can change it for its trips. Bag types are set under Catalog → Bags.
         </p>
-        <span className="text-sm text-ink">When someone has no bag of that type</span>
+        <AutoPackList title="When it happens">
+          <li>Making a trip from a template, or copying a trip.</li>
+          <li>Adding catalog items to a trip, one or several.</li>
+          <li>
+            Selecting items and assigning them to someone: anything not in a bag they share moves to
+            theirs.
+          </li>
+          <li>Adding a bag to a trip: Duffel offers to move the items waiting for it.</li>
+        </AutoPackList>
+        <AutoPackList title="Where things go">
+          <li>A bag type: that person’s bag of that type, else the trip’s shared one.</li>
+          <li>Carry-on: that person’s carry-on bag, else a shared carry-on.</li>
+          <li>
+            Luggage: that person’s suitcase, else their duffel, backpack or tote, else a shared bag
+            if one clearly fits best. A diaper bag or cooler is used last, only when it’s their only
+            bag.
+          </li>
+          <li>No bag: the No bag group.</li>
+          <li>Nowhere that fits: No bag yet, to sort out by hand.</li>
+        </AutoPackList>
+        <AutoPackList title="It never">
+          <li>Moves something you put in a bag yourself.</li>
+          <li>Places items typed in by name that aren’t in the catalog.</li>
+        </AutoPackList>
+        <span className="pt-1 text-ink">When someone has no bag of an item’s type</span>
         <Segmented<AutoPackFallback>
-          label="When someone has no bag of that type"
+          label="When someone has no bag of an item’s type"
           value={data.settings.autopack_fallback}
           onChange={(autopack_fallback) => run(() => api.patch('/settings', { autopack_fallback }))}
           options={[
-            ['unplaced', 'Leave in No bag'],
+            ['unplaced', 'Leave in No bag yet'],
             ['main', 'Use their luggage'],
           ]}
         />
         <p className="text-xs text-faint">
           {data.settings.autopack_fallback === 'main'
-            ? 'The item goes in their suitcase (or duffel, backpack), so nothing is left without a bag.'
-            : 'The item stays in No bag, so you notice. It moves in when a bag of that type is added.'}
+            ? 'It goes in their luggage instead, so nothing is left without a bag.'
+            : 'It waits in No bag yet, so you notice. Add a bag of that type and Duffel offers to move it in.'}
         </p>
         <ErrorText>{error}</ErrorText>
       </div>
@@ -179,6 +203,15 @@ export function Settings() {
           can’t be undone, so download a backup first if you might need it.
         </p>
       </Sheet>
+    </div>
+  );
+}
+
+function AutoPackList({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div>
+      <p className="font-medium text-ink">{title}</p>
+      <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-5 marker:text-faint">{children}</ul>
     </div>
   );
 }

@@ -220,5 +220,25 @@ describe('auto pack', () => {
     await api.patch('/settings', { autopack_fallback: 'main' });
     const t2 = (await api.post<TripDetail>('/trips', { ...body, name: 'Trip 2' })).data;
     expect(t2.bags.find((b) => b.id === t2.items[0]!.trip_bag_id)?.label).toBe('Main');
+
+    // Adding one catalog item to a trip follows the same rules and setting.
+    const one = async (item_id: string, extra: object = {}) =>
+      (
+        await api.post<{ trip_bag_id: string | null; no_bag: boolean }>(
+          `/trips/${t2.trip.id}/items`,
+          { item_id, name: 'x', person_id: mia.id, ...extra },
+        )
+      ).data;
+    const mainBag = t2.items[0]!.trip_bag_id;
+    expect(await one(diapers.id)).toMatchObject({ trip_bag_id: mainBag, no_bag: false });
+    const socks = (await api.post<Item>('/items', { name: 'Socks' })).data;
+    expect(await one(socks.id)).toMatchObject({ trip_bag_id: mainBag });
+    const stroller = (await api.post<Item>('/items', { name: 'Stroller', not_in_suitcase: true }))
+      .data;
+    expect(await one(stroller.id)).toMatchObject({ trip_bag_id: null, no_bag: true });
+    // A bag picked in the sheet wins.
+    expect(await one(socks.id, { no_bag: true })).toMatchObject({ no_bag: true });
+    await api.patch('/settings', { autopack_fallback: 'unplaced' });
+    expect(await one(diapers.id)).toMatchObject({ trip_bag_id: null, no_bag: false });
   });
 });

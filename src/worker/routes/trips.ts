@@ -846,17 +846,26 @@ trips.post('/trips/:id/items', async (c) => {
   const now = nowIso();
   const id = input.id ?? newId();
   let bagId = input.no_bag ? null : (input.trip_bag_id ?? null);
-  // Auto pack: a catalog item with a bag type goes into its person's bag of that type.
-  if (item?.pack_type && !bagId && !input.no_bag) {
-    bagId = placeRow(
+  let noBag = !!input.no_bag;
+  // Auto pack: a catalog item with no bag chosen goes where it would on a new trip (its
+  // bag type, carry-on or luggage, or No bag). An undo (it has its id) goes back as it was.
+  if (item && !bagId && !noBag && !input.id) {
+    const [bags, fallback] = await Promise.all([
+      placeableBags(db, tripId),
+      getAutoPackFallback(db),
+    ]);
+    const placed = placeRow(
       {
         person_id: input.person_id ?? null,
-        carry: false,
-        not_in_suitcase: false,
-        pack_type: item.pack_type,
+        carry: item.usually_carry_on,
+        not_in_suitcase: item.not_in_suitcase,
+        pack_type: item.not_in_suitcase ? null : item.pack_type,
       },
-      await placeableBags(db, tripId),
-    ).trip_bag_id;
+      bags,
+      fallback,
+    );
+    bagId = placed.trip_bag_id;
+    noBag = placed.no_bag;
   }
   await insertStmt(db, 'trip_items', {
     id,
@@ -865,7 +874,7 @@ trips.post('/trips/:id/items', async (c) => {
     name: input.name,
     person_id: input.person_id ?? null,
     trip_bag_id: bagId,
-    no_bag: b(input.no_bag),
+    no_bag: b(noBag),
     calc_mode: calc?.mode ?? null,
     calc_unit_qty: calc?.unitQty ?? null,
     calc_max: calc?.max ?? null,
