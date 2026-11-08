@@ -217,7 +217,7 @@ export function NewTrip() {
           }
         >
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor="start" className="text-xs text-soft">
                 Leaving
               </label>
@@ -228,7 +228,7 @@ export function NewTrip() {
                 onChange={(e) => setStartDate(e.target.value)}
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor="end" className="text-xs text-soft">
                 Back
               </label>

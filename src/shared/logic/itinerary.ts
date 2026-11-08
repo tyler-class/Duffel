@@ -61,22 +61,98 @@ export function zonedInstant(date: string, time: string, tz: string | null): num
 export const endInstant = (e: EntryEnd): number | null =>
   e.date && e.time ? zonedInstant(e.date, e.time, e.tz) : null;
 
-/** Sort key: the real instant when there's a time, else noon on the date. Undated last. */
-function sortKey(e: ItineraryEntry): number {
+/** Sort key: the real instant when there's a time, else noon on the date. Undated: Infinity. */
+export function sortKey(e: ItineraryEntry): number {
   const at = endInstant(e.start);
   if (at !== null) return at;
   const day = dayNumber(e.start.date);
   return day === null ? Infinity : day * 86_400_000 + 12 * 3_600_000;
 }
 
-/** A section's entries by when they start; undated ones last, in the order they were added. */
-export function sortEntries<T extends ItineraryEntry>(entries: readonly T[]): T[] {
-  return [...entries].sort((a, b) => {
-    const x = sortKey(a);
-    const y = sortKey(b);
-    if (x !== y) return x === Infinity ? 1 : y === Infinity ? -1 : x - y;
-    return a.sort_order - b.sort_order;
-  });
+const DAY_MS = 24 * 60 * MIN_MS;
+
+/**
+ * Flight B continues flight A: B leaves within a day of A landing, and isn't a flight back
+ * to where A started (that's a day trip, not a connection).
+ */
+function continues(a: ItineraryEntry, b: ItineraryEntry): boolean {
+  if (a.id === b.id || a.kind !== 'transport' || b.kind !== 'transport') return false;
+  if (a.mode !== 'plane' || b.mode !== 'plane') return false;
+  const x = endInstant(a.end);
+  const y = endInstant(b.start);
+  if (x === null || y === null || y < x || y - x > DAY_MS) return false;
+  const home = a.start.code;
+  return !(home && b.end.code && home === b.end.code);
+}
+
+/** Connecting flights: each flight that continues another, keyed by the one it continues. */
+export function connectingFlights(entries: readonly ItineraryEntry[]): Map<string, string> {
+  const flights = entries
+    .filter((e) => e.kind === 'transport' && e.mode === 'plane' && endInstant(e.start) !== null)
+    .sort((a, b) => endInstant(a.start)! - endInstant(b.start)!);
+  const next = new Map<string, string>();
+  for (const b of flights) {
+    // The flight it continues: the last one to land before it leaves.
+    let best: ItineraryEntry | null = null;
+    for (const a of flights)
+      if (
+        !next.has(a.id) &&
+        continues(a, b) &&
+        (!best || endInstant(a.end)! > endInstant(best.end)!)
+      )
+        best = a;
+    if (best) next.set(best.id, b.id);
+  }
+  return next;
+}
+
+/** Keeps a list's order, but pulls each connecting flight up to right after the one it continues. */
+export function keepConnections<T extends ItineraryEntry>(list: readonly T[]): T[] {
+  const next = connectingFlights(list);
+  const follows = new Set(next.values());
+  const byId = new Map(list.map((e) => [e.id, e]));
+  const out: T[] = [];
+  const seen = new Set<string>();
+  for (const e of list) {
+    if (follows.has(e.id)) continue;
+    for (let cur: T | undefined = e; cur && !seen.has(cur.id);) {
+      out.push(cur);
+      seen.add(cur.id);
+      const n = next.get(cur.id);
+      cur = n ? byId.get(n) : undefined;
+    }
+  }
+  // Anything left (only possible with odd data): keep it, in place order.
+  for (const e of list) if (!seen.has(e.id)) out.push(e);
+  return out;
+}
+
+/**
+ * A section's entries in order: as arranged (dragged, or placed by time when added), with
+ * each connecting flight right after the flight it continues.
+ */
+export function orderEntries<T extends ItineraryEntry>(entries: readonly T[]): T[] {
+  return keepConnections([...entries].sort((a, b) => a.sort_order - b.sort_order));
+}
+
+/**
+ * Puts an entry into an ordered list where its time falls: before the first dated entry
+ * that starts later, else after the last dated one. Undated entries go last.
+ */
+export function placeByTime<T extends ItineraryEntry>(list: readonly T[], e: T): T[] {
+  const rest = list.filter((x) => x.id !== e.id);
+  const key = sortKey(e);
+  let at = rest.length;
+  if (key !== Infinity) {
+    const later = rest.findIndex((x) => sortKey(x) !== Infinity && sortKey(x) > key);
+    if (later >= 0) at = later;
+    else {
+      let last = -1;
+      rest.forEach((x, i) => sortKey(x) !== Infinity && (last = i));
+      at = last >= 0 ? last + 1 : rest.length;
+    }
+  }
+  return [...rest.slice(0, at), e, ...rest.slice(at)];
 }
 
 export const sortSections = <T extends ItinerarySection>(s: readonly T[]): T[] =>
@@ -117,12 +193,14 @@ export interface Connection {
 }
 
 /** Layovers between back-to-back transport entries in a section (a gap of up to a day). */
-export function connections(sorted: readonly ItineraryEntry[]): Connection[] {
+export function connections(ordered: readonly ItineraryEntry[]): Connection[] {
   const out: Connection[] = [];
-  for (let i = 1; i < sorted.length; i++) {
-    const prev = sorted[i - 1]!;
-    const next = sorted[i]!;
+  for (let i = 1; i < ordered.length; i++) {
+    const prev = ordered[i - 1]!;
+    const next = ordered[i]!;
     if (prev.kind !== 'transport' || next.kind !== 'transport') continue;
+    // A drive or a taxi after a flight isn't a layover.
+    if (prev.mode === 'car' || next.mode === 'car') continue;
     const a = endInstant(prev.end);
     const b = endInstant(next.start);
     if (a === null || b === null || b < a || b - a > 24 * 60 * MIN_MS) continue;
@@ -141,7 +219,7 @@ export function connections(sorted: readonly ItineraryEntry[]): Connection[] {
 /** The first entry that hasn't finished yet: what's next on the trip. */
 export function nextEntry(sections: readonly ItinerarySection[], now: number): string | null {
   for (const s of sortSections(sections))
-    for (const e of sortEntries(s.entries)) {
+    for (const e of orderEntries(s.entries)) {
       const end = endInstant(e.end) ?? endInstant(e.start);
       const day = dayNumber(e.end.date ?? e.start.date);
       if (end !== null ? end >= now : day !== null && (day + 1) * 86_400_000 > now) return e.id;

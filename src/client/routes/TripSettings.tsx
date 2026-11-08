@@ -225,7 +225,7 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
         </FieldRow>
         <FieldRow icon="cal">
           <div className="grid grid-cols-2 gap-4">
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor="t-start" className="text-xs text-soft">
                 Leaving
               </label>
@@ -236,7 +236,7 @@ function TripSettingsBody({ detail, state }: { detail: TripDetail; state: AppSta
                 onChange={(e) => set({ start_date: e.target.value })}
               />
             </div>
-            <div className="flex flex-col gap-1">
+            <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor="t-end" className="text-xs text-soft">
                 Back
               </label>

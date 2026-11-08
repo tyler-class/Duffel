@@ -139,6 +139,22 @@
   textarea {
     font-size: 16px;
   }
+  /* iOS Safari gives date and time fields a fixed native width, so two side by side spill
+     over each other on a phone, and an empty one collapses. Make them size like text fields. */
+  input[type='date'],
+  input[type='time'] {
+    -webkit-appearance: none;
+    appearance: none;
+    min-width: 0;
+    max-width: 100%;
+    min-height: 2.625rem;
+    text-align: left;
+  }
+  input[type='date']::-webkit-date-and-time-value,
+  input[type='time']::-webkit-date-and-time-value {
+    text-align: left;
+    margin: 0;
+  }
   :focus-visible {
     outline: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
     outline-offset: 2px;

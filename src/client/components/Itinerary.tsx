@@ -1,12 +1,19 @@
 import {
   closestCenter,
   DndContext,
+  DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   MouseSensor,
+  pointerWithin,
   TouchSensor,
+  useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -17,7 +24,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { useQueryClient } from '@tanstack/react-query';
-import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { SectionKind } from '@shared/lookups';
 import {
   connections,
@@ -27,7 +34,7 @@ import {
   entryMinutes,
   entryName,
   formatMinutes,
-  sortEntries,
+  orderEntries,
   sortSections,
   type tripStage,
 } from '@shared/logic';
@@ -108,19 +115,25 @@ function when(e: EntryEnd, endOfDay: boolean): number {
   return d === null ? Infinity : d * DAY + (endOfDay ? DAY - 1 : DAY / 2);
 }
 
+/**
+ * The lines of a section, in the entries' order. A check-out goes where its time falls:
+ * after the last line that starts before it.
+ */
 function rowsOf(entries: readonly ItineraryEntry[]): Row[] {
   const rows: Row[] = [];
+  const outs: Row[] = [];
   for (const e of entries) {
-    if (e.kind === 'lodging' && e.end.date) {
-      rows.push({
-        key: `${e.id}:in`,
-        entry: e,
-        part: 'in',
-        date: e.start.date,
-        from: when(e.start, false),
-        until: when(e.start, true),
-      });
-      rows.push({
+    const split = e.kind === 'lodging' && !!e.end.date;
+    rows.push({
+      key: e.id,
+      entry: e,
+      part: split ? 'in' : 'all',
+      date: e.start.date,
+      from: when(e.start, false),
+      until: split || !e.end.date ? when(e.start, true) : when(e.end, true),
+    });
+    if (split)
+      outs.push({
         key: `${e.id}:out`,
         entry: e,
         part: 'out',
@@ -128,24 +141,47 @@ function rowsOf(entries: readonly ItineraryEntry[]): Row[] {
         from: when(e.end, false),
         until: when(e.end, true),
       });
-    } else {
-      rows.push({
-        key: e.id,
-        entry: e,
-        part: 'all',
-        date: e.start.date,
-        from: when(e.start, false),
-        until: e.end.date ? when(e.end, true) : when(e.start, true),
-      });
-    }
   }
-  const rank = { in: 0, all: 1, out: 2 };
-  return rows.sort((a, b) => {
-    if (a.from !== b.from)
-      return a.from === Infinity ? 1 : b.from === Infinity ? -1 : a.from - b.from;
-    return rank[a.part] - rank[b.part] || a.entry.sort_order - b.entry.sort_order;
-  });
+  for (const out of outs) {
+    const own = rows.findIndex((r) => r.entry.id === out.entry.id);
+    let at = own + 1;
+    rows.forEach((r, i) => {
+      if (i > own && r.from !== Infinity && r.from <= out.from) at = i + 1;
+    });
+    rows.splice(at, 0, out);
+  }
+  return rows;
 }
+
+const sectionKey = (id: string) => `s:${id}`;
+const entryKey = (id: string) => `e:${id}`;
+const boxKey = (id: string) => `b:${id}`;
+type Lists = Record<string, string[]>;
+
+// Sections trade places with sections. Entries go to the entry under the pointer, else the
+// section under it, else the nearest.
+const baseCollision: CollisionDetection = (args) => {
+  const kind = String(args.active.id).slice(0, 2);
+  const of = (p: string) => args.droppableContainers.filter((c) => String(c.id).startsWith(p));
+  if (kind === 's:') return closestCenter({ ...args, droppableContainers: of('s:') });
+  const rows = of('e:');
+  const boxes = of('b:');
+  const onRow = pointerWithin({ ...args, droppableContainers: rows });
+  if (onRow.length) return onRow;
+  const inBox = pointerWithin({ ...args, droppableContainers: boxes });
+  if (inBox[0]) {
+    // Between lines (a day heading, a gap): the nearest line in that section.
+    const box = String(inBox[0].id).slice(2);
+    const near = rows.filter((r) => r.data.current?.box === box);
+    return near.length ? closestCenter({ ...args, droppableContainers: near }) : inBox;
+  }
+  return closestCenter({ ...args, droppableContainers: [...rows, ...boxes] });
+};
+
+const boxOf = (lists: Lists, id: string) =>
+  id.startsWith('b:')
+    ? id.slice(2)
+    : Object.keys(lists).find((k) => lists[k]!.includes(id.slice(2)));
 
 /** A trip's itinerary: sections in order, with transport, lodging, plans and notes. */
 export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: Stage }) {
@@ -162,9 +198,24 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
   } | null>(null);
   const [clock, setClockRaw] = useState<Clock>(() => load('itineraryClock', 'local'));
   const setClock = (c: Clock) => (setClockRaw(c), save('itineraryClock', c));
-  const [dragging, setDragging] = useState(false);
+  // While something is dragged: what, and (for an entry) each section's entries so far.
+  const [drag, setDrag] = useState<{ active: string; lists: Lists } | null>(null);
   // A drag ends with a click on whatever is under the pointer; swallow it.
   const quiet = useRef(false);
+  // When an entry jumps to another section the layout shifts under the pointer. Hold the
+  // drop target for a frame so that shift doesn't count as a new move.
+  const settling = useRef(false);
+  const lastOver = useRef<string | number | null>(null);
+  useEffect(() => {
+    const f = requestAnimationFrame(() => (settling.current = false));
+    return () => cancelAnimationFrame(f);
+  }, [drag]);
+  const collision = useCallback<CollisionDetection>((args) => {
+    if (settling.current && lastOver.current !== null) return [{ id: lastOver.current }];
+    const hits = baseCollision(args);
+    if (hits[0]) lastOver.current = hits[0].id;
+    return hits;
+  }, []);
   const tripId = detail.trip.id;
   const key = keys.trip(tripId);
   const sections = sortSections(detail.itinerary);
@@ -173,7 +224,18 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
     s.entries.some((e) => [e.start.tz, e.end.tz].some((z) => z && z !== here)),
   );
   const [now] = useState(() => Date.now());
-  const rowsBySection = new Map(sections.map((s) => [s.id, rowsOf(s.entries)]));
+  const byId = new Map(sections.flatMap((s) => s.entries.map((e) => [e.id, e] as const)));
+  const ordered = new Map(sections.map((s) => [s.id, orderEntries(s.entries)]));
+  const baseLists: Lists = Object.fromEntries(
+    [...ordered].map(([id, list]) => [id, list.map((e) => e.id)]),
+  );
+  // During a drag, entries show where they've been dragged to so far.
+  const entriesOf = (id: string): ItineraryEntry[] =>
+    drag?.active.startsWith('e:')
+      ? (drag.lists[id] ?? []).map((x) => byId.get(x)!).filter(Boolean)
+      : ordered.get(id)!;
+  const rowsBySection = new Map(sections.map((s) => [s.id, rowsOf(entriesOf(s.id))]));
+  const activeEntry = drag?.active.startsWith('e:') ? byId.get(drag.active.slice(2)) : undefined;
 
   // "Next": the first line not over yet, once it's close (during the trip, or within two days).
   let next: string | null = null;
@@ -206,22 +268,94 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
     }
   }
 
+  function onDragStart(e: DragStartEvent) {
+    setDrag({ active: String(e.active.id), lists: baseLists });
+    navigator.vibrate?.(10);
+  }
+
+  // An entry dragged over another section joins it straight away, so the gap shows where
+  // it will land.
+  function onDragOver(e: DragOverEvent) {
+    const active = String(e.active.id);
+    const overNode = e.over;
+    if (!active.startsWith('e:') || !overNode) return;
+    const over = String(overNode.id);
+    const translated = e.active.rect.current.translated;
+    setDrag((d) => {
+      if (!d) return d;
+      const from = boxOf(d.lists, active);
+      const to = boxOf(d.lists, over);
+      if (!from || !to || from === to) return d;
+      const id = active.slice(2);
+      const target = d.lists[to]!;
+      const overIndex = over.startsWith('e:') ? target.indexOf(over.slice(2)) : -1;
+      const below = !!translated && translated.top > overNode.rect.top + overNode.rect.height / 2;
+      const at = overIndex >= 0 ? overIndex + (below ? 1 : 0) : target.length;
+      settling.current = true;
+      return {
+        ...d,
+        lists: {
+          ...d.lists,
+          [from]: d.lists[from]!.filter((x) => x !== id),
+          [to]: [...target.slice(0, at), id, ...target.slice(at)],
+        },
+      };
+    });
+  }
+
   function onDragEnd(e: DragEndEvent) {
     quiet.current = true;
     setTimeout(() => (quiet.current = false), 300);
-    setDragging(false);
-    const ids = sections.map((s) => s.id);
-    const a = ids.indexOf(String(e.active.id));
-    const b = e.over ? ids.indexOf(String(e.over.id)) : -1;
-    if (a < 0 || b < 0 || a === b) return;
-    const order = arrayMove(ids, a, b);
+    const active = String(e.active.id);
+    const over = e.over ? String(e.over.id) : null;
+    const lists = drag?.lists ?? baseLists;
+    setDrag(null);
     const prev = qc.getQueryData<TripDetail>(key);
-    if (prev)
+
+    if (active.startsWith('s:')) {
+      const ids = sections.map((s) => s.id);
+      const a = ids.indexOf(active.slice(2));
+      const b = over?.startsWith('s:') ? ids.indexOf(over.slice(2)) : -1;
+      if (a < 0 || b < 0 || a === b) return;
+      const order = arrayMove(ids, a, b);
+      if (prev)
+        qc.setQueryData<TripDetail>(key, {
+          ...prev,
+          itinerary: prev.itinerary.map((s) => ({ ...s, sort_order: order.indexOf(s.id) })),
+        });
+      void send(() => api.post<TripDetail>(`/trips/${tripId}/itinerary/order`, { ids: order }));
+      return;
+    }
+
+    const id = active.slice(2);
+    const box = boxOf(lists, active);
+    if (!box) return;
+    let list = lists[box]!;
+    if (over?.startsWith('e:') && boxOf(lists, over) === box) {
+      const a = list.indexOf(id);
+      const b = list.indexOf(over.slice(2));
+      if (a !== b) list = arrayMove(list, a, b);
+    }
+    const before = baseLists[box]!;
+    if (list.length === before.length && list.every((x, i) => x === before[i])) return;
+    // Show the new order now; the server keeps connecting flights together.
+    if (prev) {
+      const moved = byId.get(id)!;
       qc.setQueryData<TripDetail>(key, {
         ...prev,
-        itinerary: prev.itinerary.map((s) => ({ ...s, sort_order: order.indexOf(s.id) })),
+        itinerary: prev.itinerary.map((s) => {
+          const entries = s.entries.filter((x) => x.id !== id);
+          if (s.id === box) entries.push({ ...moved, section_id: box });
+          return {
+            ...s,
+            entries: entries.map((x) =>
+              s.id === box ? { ...x, sort_order: list.indexOf(x.id) } : x,
+            ),
+          };
+        }),
       });
-    void send(() => api.post<TripDetail>(`/trips/${tripId}/itinerary/order`, { ids: order }));
+    }
+    void send(() => api.post<TripDetail>(`/itinerary-sections/${box}/order`, { ids: list }));
   }
 
   async function removeEntry(e: ItineraryEntry, section: ItinerarySection) {
@@ -304,12 +438,16 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
               <Icon name="printer" size={16} />
             </button>
           )}
-          <AddPill icon="plane" onClick={() => setSectionSheet({ kind: 'travel' })}>
-            Travel
-          </AddPill>
-          <AddPill icon="pin" onClick={() => setSectionSheet({ kind: 'stay' })}>
-            Stay
-          </AddPill>
+          <button
+            className="inline-flex h-8 items-center gap-1 rounded-full bg-chip pr-3 pl-2 text-[13px] font-medium text-ink"
+            onClick={() =>
+              // After travel comes a stay, and after a stay more travel.
+              setSectionSheet({ kind: sections.at(-1)?.kind === 'travel' ? 'stay' : 'travel' })
+            }
+          >
+            <Icon name="plus" size={14} className="text-soft" />
+            Section
+          </button>
         </div>
       </div>
 
@@ -320,7 +458,7 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
         </p>
       )}
 
-      <DragActive.Provider value={dragging}>
+      <DragActive.Provider value={!!drag}>
         <div
           onClickCapture={(e) => {
             if (quiet.current) {
@@ -331,21 +469,21 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
         >
           <DndContext
             sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragStart={() => {
-              setDragging(true);
-              navigator.vibrate?.(10);
-            }}
-            onDragCancel={() => setDragging(false)}
+            collisionDetection={collision}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDragCancel={() => setDrag(null)}
             onDragEnd={onDragEnd}
+            measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+            autoScroll={{ threshold: { x: 0, y: 0.12 }, acceleration: 5 }}
           >
             <SortableContext
-              items={sections.map((s) => s.id)}
+              items={sections.map((s) => sectionKey(s.id))}
               strategy={verticalListSortingStrategy}
             >
               {sections.map((s) => {
                 const rows = rowsBySection.get(s.id)!;
-                const conns = new Map(connections(sortEntries(s.entries)).map((c) => [c.after, c]));
+                const conns = new Map(connections(entriesOf(s.id)).map((c) => [c.after, c]));
                 const dates = sectionDates(s);
                 let lastDay: string | null = null;
                 return (
@@ -355,6 +493,8 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
                     dates={dates}
                     onEdit={() => setSectionSheet({ section: s, kind: s.kind })}
                     onAdd={() => setEntrySheet({ section: s })}
+                    entryIds={entriesOf(s.id).map((e) => entryKey(e.id))}
+                    draggingEntry={!!activeEntry}
                   >
                     {s.notes && <p className="px-3.5 pt-2 text-[13px] text-soft">{s.notes}</p>}
                     {!rows.length && (
@@ -372,51 +512,68 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
                       if (r.date) lastDay = r.date;
                       const c = r.part === 'all' ? conns.get(r.entry.id) : undefined;
                       return (
-                        <Fragment key={r.key}>
-                          {showDay && (
-                            <div className="px-3 pt-3 pb-1 text-xs font-medium text-faint break-after-avoid">
-                              {formatDay(r.date)}
-                            </div>
-                          )}
-                          <div
-                            ref={r.key === next ? nextRef : undefined}
-                            className="break-inside-avoid"
+                        <SortableEntry
+                          key={r.key}
+                          id={r.part === 'out' ? null : r.entry.id}
+                          section={s.id}
+                          nextRef={r.key === next ? nextRef : undefined}
+                          head={
+                            showDay && (
+                              <div className="px-3 pt-3 pb-1 text-xs font-medium text-faint break-after-avoid">
+                                {formatDay(r.date)}
+                              </div>
+                            )
+                          }
+                          after={
+                            c && (
+                              <div className="flex items-center gap-2 border-b border-line py-2 pr-3 pl-11 text-[13px] text-soft">
+                                <Icon name="clock" size={13} className="text-faint" />
+                                <span>
+                                  Layover{c.at ? ` in ${c.at}` : ''} · {formatMinutes(c.minutes)}
+                                  {c.change && (
+                                    <span className="text-danger">
+                                      {' '}
+                                      · change {c.change.from} → {c.change.to}
+                                    </span>
+                                  )}
+                                </span>
+                              </div>
+                            )
+                          }
+                        >
+                          <SwipeRow
+                            id={r.key}
+                            onDelete={() => removeEntry(r.entry, s)}
+                            className={cx('border-b border-line', c && 'border-b-0')}
                           >
-                            <SwipeRow
-                              id={r.key}
-                              onDelete={() => removeEntry(r.entry, s)}
-                              className={cx('border-b border-line', c && 'border-b-0')}
-                            >
-                              <EntryRow
-                                row={r}
-                                clock={clock}
-                                next={r.key === next}
-                                onOpen={() => setEntrySheet({ section: s, entry: r.entry })}
-                                onCopy={(text) => copy(text, toast)}
-                              />
-                            </SwipeRow>
-                          </div>
-                          {c && (
-                            <div className="flex items-center gap-2 border-b border-line py-2 pr-3 pl-11 text-[13px] text-soft break-inside-avoid">
-                              <Icon name="clock" size={13} className="text-faint" />
-                              <span>
-                                Layover{c.at ? ` in ${c.at}` : ''} · {formatMinutes(c.minutes)}
-                                {c.change && (
-                                  <span className="text-danger">
-                                    {' '}
-                                    · change {c.change.from} → {c.change.to}
-                                  </span>
-                                )}
-                              </span>
-                            </div>
-                          )}
-                        </Fragment>
+                            <EntryRow
+                              row={r}
+                              clock={clock}
+                              next={r.key === next}
+                              onOpen={() => setEntrySheet({ section: s, entry: r.entry })}
+                              onCopy={(text) => copy(text, toast)}
+                            />
+                          </SwipeRow>
+                        </SortableEntry>
                       );
                     })}
                   </SortableSection>
                 );
               })}
             </SortableContext>
+            <DragOverlay dropAnimation={{ duration: 180, easing: 'cubic-bezier(.2,.7,.3,1)' }}>
+              {activeEntry ? (
+                <div className="rounded-xl bg-surface shadow-xl ring-1 ring-line">
+                  <EntryRow
+                    row={rowsOf([activeEntry])[0]!}
+                    clock={clock}
+                    next={false}
+                    onOpen={() => undefined}
+                    onCopy={() => undefined}
+                  />
+                </div>
+              ) : null}
+            </DragOverlay>
           </DndContext>
         </div>
       </DragActive.Provider>
@@ -426,8 +583,8 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
         open={!!sectionSheet}
         section={sectionSheet?.section}
         kind={sectionSheet?.kind ?? 'stay'}
-        suggestion={
-          sectionSheet?.kind === 'travel'
+        suggest={(k) =>
+          k === 'travel'
             ? travelCount
               ? 'Heading home'
               : 'Getting there'
@@ -482,44 +639,28 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
   );
 }
 
-function AddPill({
-  icon,
-  onClick,
-  children,
-}: {
-  icon: IconName;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      className="inline-flex h-8 items-center gap-1 rounded-full bg-chip pr-3 pl-2 text-[13px] font-medium text-ink"
-      onClick={onClick}
-    >
-      <Icon name="plus" size={14} className="text-soft" />
-      <Icon name={icon} size={14} className="text-soft" />
-      {children}
-    </button>
-  );
-}
-
 /** A section: its bar (hold and drag it to move the section) and its lines. */
 function SortableSection({
   section: s,
   dates,
   onEdit,
   onAdd,
+  entryIds,
+  draggingEntry,
   children,
 }: {
   section: ItinerarySection;
   dates: string;
   onEdit: () => void;
   onAdd: () => void;
+  entryIds: string[];
+  draggingEntry: boolean;
   children: ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: s.id,
+    id: sectionKey(s.id),
   });
+  const { setNodeRef: setBoxRef } = useDroppable({ id: boxKey(s.id) });
   return (
     <section
       ref={setNodeRef}
@@ -552,8 +693,94 @@ function SortableSection({
           onClick={onAdd}
         />
       </div>
-      {children}
+      <SortableContext items={entryIds} strategy={verticalListSortingStrategy}>
+        {/* An emptied section keeps a little room so an entry can go back. */}
+        <div ref={setBoxRef} className={cx(draggingEntry && !entryIds.length && 'min-h-12')}>
+          {children}
+        </div>
+      </SortableContext>
     </section>
+  );
+}
+
+const SLOT =
+  "after:pointer-events-none after:absolute after:inset-0.5 after:rounded-xl after:border-2 after:border-dashed after:border-accent/70 after:bg-accent-tint/40 after:content-['']";
+
+interface EntryLineProps {
+  section: string;
+  nextRef?: RefObject<HTMLDivElement | null>;
+  /** The day heading above it, and a layover under it: they move with the line. */
+  head?: ReactNode;
+  after?: ReactNode;
+  children: ReactNode;
+}
+
+/** One line you can hold and drag (a check-out line stays put: it follows its check-in). */
+function SortableEntry({
+  id,
+  section,
+  nextRef,
+  head,
+  after,
+  children,
+}: EntryLineProps & { id: string | null }) {
+  if (!id)
+    return (
+      <div ref={nextRef} className="break-inside-avoid">
+        {head}
+        {children}
+        {after}
+      </div>
+    );
+  return (
+    <DraggableEntry id={id} section={section} nextRef={nextRef} head={head} after={after}>
+      {children}
+    </DraggableEntry>
+  );
+}
+
+function DraggableEntry({
+  id,
+  section,
+  nextRef,
+  head,
+  after,
+  children,
+}: EntryLineProps & { id: string }) {
+  const {
+    setNodeRef,
+    setActivatorNodeRef,
+    attributes,
+    listeners,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: entryKey(id), data: { box: section } });
+  return (
+    <div
+      ref={(n) => {
+        setNodeRef(n);
+        if (nextRef) nextRef.current = n;
+      }}
+      style={{ transform: CSS.Translate.toString(transform), transition }}
+      className={cx('relative break-inside-avoid', isDragging && SLOT)}
+    >
+      <div className={cx(isDragging && 'invisible')}>
+        {head}
+        <div
+          ref={setActivatorNodeRef}
+          {...attributes}
+          // The line holds its own buttons, so it's a group, not a button.
+          role="group"
+          aria-roledescription="Entry you can drag to reorder"
+          {...listeners}
+          className="touch-manipulation outline-none select-none [-webkit-touch-callout:none]"
+        >
+          {children}
+        </div>
+        {after}
+      </div>
+    </div>
   );
 }
 
@@ -684,7 +911,7 @@ function EntryRow({
             )}
             {statusQuery && (
               <a
-                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-accent print:hidden"
+                className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-accent first:-ml-1.5 print:hidden"
                 href={`https://www.google.com/search?q=${encodeURIComponent(statusQuery)}`}
                 target="_blank"
                 rel="noreferrer"
@@ -703,7 +930,8 @@ function SectionSheet(props: {
   open: boolean;
   section?: ItinerarySection;
   kind: SectionKind;
-  suggestion: string;
+  /** A name to start with for each kind. */
+  suggest: (kind: SectionKind) => string;
   count: number;
   onClose: () => void;
   onSave: (v: { kind: SectionKind; title: string; notes: string | null }) => Promise<void>;
@@ -716,14 +944,20 @@ function SectionSheet(props: {
 function SectionSheetBody({
   section,
   kind: initialKind,
-  suggestion,
+  suggest,
   count,
   onClose,
   onSave,
   onDelete,
 }: Parameters<typeof SectionSheet>[0]) {
   const [kind, setKind] = useState<SectionKind>(section?.kind ?? initialKind);
-  const [title, setTitle] = useState(section?.title ?? suggestion);
+  const [title, setTitle] = useState(section?.title ?? suggest(initialKind));
+  // Switching the type swaps in that type's suggested name, until you type your own.
+  const [typed, setTyped] = useState(!!section);
+  const pickKind = (k: SectionKind) => {
+    setKind(k);
+    if (!typed) setTitle(suggest(k));
+  };
   const [notes, setNotes] = useState(section?.notes ?? '');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -747,7 +981,7 @@ function SectionSheetBody({
     <Sheet
       open
       onClose={onClose}
-      title={section ? 'Edit section' : kind === 'travel' ? 'Add travel' : 'Add a stay'}
+      title={section ? 'Edit section' : 'Add a section'}
       footer={
         <>
           {section ? (
@@ -774,11 +1008,11 @@ function SectionSheetBody({
       >
         <FieldRow icon="layers" label="Type">
           <div className="flex flex-wrap gap-1.5">
-            <Pick on={kind === 'travel'} onClick={() => setKind('travel')}>
+            <Pick on={kind === 'travel'} onClick={() => pickKind('travel')}>
               <Icon name="plane" size={15} />
               Travel
             </Pick>
-            <Pick on={kind === 'stay'} onClick={() => setKind('stay')}>
+            <Pick on={kind === 'stay'} onClick={() => pickKind('stay')}>
               <Icon name="pin" size={15} />
               Stay
             </Pick>
@@ -796,7 +1030,10 @@ function SectionSheetBody({
             id="section-title"
             autoFocus={!section}
             value={title}
-            onChange={(e) => setTitle(e.target.value)}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              setTyped(true);
+            }}
           />
         </FieldRow>
         <FieldRow icon="note" label="Notes" htmlFor="section-notes">

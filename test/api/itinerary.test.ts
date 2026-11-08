@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { connections, entryMinutes, sortEntries } from '../../src/shared/logic';
+import { connections, entryMinutes } from '../../src/shared/logic';
 import type { TripDetail } from '../../src/shared/types';
 import { session } from './helpers';
 
@@ -46,7 +46,7 @@ describe('itinerary', () => {
         end: { code: 'OPO', date: '2027-06-03', time: '11:50' },
       })
     ).data;
-    const flights = sortEntries(d.itinerary[0]!.entries);
+    const flights = d.itinerary[0]!.entries;
     expect(flights[0]).toMatchObject({
       mode: 'plane',
       start: { code: 'BOS', place: 'Boston', tz: 'America/New_York' },
@@ -124,5 +124,100 @@ describe('itinerary', () => {
     await api.del(`/trips/${tripId}`);
     const after = (await api.get<{ tables: Record<string, unknown[]> }>('/export')).data;
     expect(after.tables.itinerary_sections).toHaveLength(0);
+  });
+
+  it('places entries by time, keeps connecting flights together, and can be dragged', async () => {
+    const api = await session();
+    const d0 = (
+      await api.post<TripDetail>('/trips', {
+        name: 'Order',
+        start_date: '2027-06-02',
+        end_date: '2027-06-10',
+        source: { kind: 'blank' },
+      })
+    ).data;
+    const tripId = d0.trip.id;
+    let d = (
+      await api.post<TripDetail>(`/trips/${tripId}/itinerary`, { kind: 'travel', title: 'There' })
+    ).data;
+    const sec = d.itinerary[0]!.id;
+    const add = async (body: object) =>
+      (await api.post<TripDetail>(`/itinerary-sections/${sec}/entries`, body)).data;
+    const names = (x: TripDetail, i = 0) =>
+      [...x.itinerary[i]!.entries]
+        .sort((a, b) => a.sort_order - b.sort_order)
+        .map((e) => e.title ?? e.number);
+
+    // Added out of order, they line up by time.
+    await add({
+      kind: 'transport',
+      number: '2',
+      start: { code: 'JFK', date: '2027-06-03', time: '13:00' },
+      end: { code: 'LIS', date: '2027-06-04', time: '01:00' },
+    });
+    await add({
+      kind: 'transport',
+      number: '1',
+      start: { code: 'GRR', date: '2027-06-03', time: '07:00' },
+      end: { code: 'JFK', date: '2027-06-03', time: '09:00' },
+    });
+    // A taxi with just a date (noon) would fall between the two flights by time, but
+    // connecting flights stay back to back.
+    d = await add({ kind: 'transport', mode: 'car', title: 'Taxi', start: { date: '2027-06-03' } });
+    expect(names(d)).toEqual(['1', '2', 'Taxi']);
+
+    // Dragging the taxi between the flights doesn't split the connection.
+    const ids = (x: TripDetail) => {
+      const by = new Map(x.itinerary[0]!.entries.map((e) => [e.title ?? e.number, e.id]));
+      return (n: string) => by.get(n)!;
+    };
+    let id = ids(d);
+    d = (
+      await api.post<TripDetail>(`/itinerary-sections/${sec}/order`, {
+        ids: [id('1'), id('Taxi'), id('2')],
+      })
+    ).data;
+    expect(names(d)).toEqual(['1', '2', 'Taxi']);
+
+    // But anything else can go anywhere: the taxi first.
+    d = (
+      await api.post<TripDetail>(`/itinerary-sections/${sec}/order`, {
+        ids: [id('Taxi'), id('1'), id('2')],
+      })
+    ).data;
+    expect(names(d)).toEqual(['Taxi', '1', '2']);
+
+    // Into another section.
+    d = (
+      await api.post<TripDetail>(`/trips/${tripId}/itinerary`, { kind: 'stay', title: 'Lisbon' })
+    ).data;
+    const lisbon = d.itinerary[1]!.id;
+    d = (await api.post<TripDetail>(`/itinerary-sections/${lisbon}/order`, { ids: [id('Taxi')] }))
+      .data;
+    expect(names(d, 0)).toEqual(['1', '2']);
+    expect(names(d, 1)).toEqual(['Taxi']);
+
+    // A new time moves an entry to where it now falls.
+    id = ids(d);
+    d = (
+      await api.patch<TripDetail>(`/itinerary-entries/${id('1')}`, {
+        start: { code: 'GRR', date: '2027-06-03', time: '07:00' },
+        title: 'Early',
+      })
+    ).data;
+    expect(names(d)).toEqual(['Early', '2']);
+
+    // Entries from another trip can't be moved in.
+    const other = (
+      await api.post<TripDetail>('/trips', { name: 'Other', source: { kind: 'blank' } })
+    ).data;
+    const os = (
+      await api.post<TripDetail>(`/trips/${other.trip.id}/itinerary`, {
+        kind: 'stay',
+        title: 'X',
+      })
+    ).data.itinerary[0]!.id;
+    const res = await api.post(`/itinerary-sections/${os}/order`, { ids: [id('2')] });
+    expect(res.status).toBe(400);
   });
 });

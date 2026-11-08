@@ -286,6 +286,7 @@ export const entryInput = z.object({
 });
 export const entryPatch = patchOf(entryInput).extend({ section_id: id.optional() });
 export const reorderSections = z.object({ ids: z.array(id).min(1).max(200) });
+export const reorderEntries = z.object({ ids: z.array(id).min(1).max(500) });
 
 export const saveAsTemplate = z.object({ name: name() });
 

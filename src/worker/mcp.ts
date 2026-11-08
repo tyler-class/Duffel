@@ -9,7 +9,7 @@ import {
   entryMinutes,
   entryName,
   formatMinutes,
-  sortEntries,
+  orderEntries,
   sortSections,
   describeRelative,
   displayQty,
@@ -214,10 +214,10 @@ const endView = (e: EntryEnd) =>
     }).filter(([, v]) => v !== null),
   );
 
-/** How an assistant sees the itinerary: sections in order, entries by time, with layovers. */
+/** How an assistant sees the itinerary: sections and entries in order, with layovers. */
 function itineraryView(sections: ItinerarySection[]) {
   return sortSections(sections).map((s) => {
-    const entries = sortEntries(s.entries);
+    const entries = orderEntries(s.entries);
     const layovers = new Map(connections(entries).map((c) => [c.after, c]));
     return {
       section_id: s.id,
@@ -1099,7 +1099,7 @@ function buildServer(call: Call) {
     'get_itinerary',
     {
       description:
-        'A trip’s itinerary: sections in order, each with its entries by time (flights and other transport with durations and layovers, lodging, plans, notes), plus ids for editing.',
+        'A trip’s itinerary: sections in order, each with its entries in order (new ones go where their time falls; connecting flights stay back to back) (flights and other transport with durations and layovers, lodging, plans, notes), plus ids for editing.',
       inputSchema: z.object({
         trip: z.string().optional().describe('Trip name or id; defaults to the next trip'),
       }),

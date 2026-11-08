@@ -1,16 +1,23 @@
 // A trip's itinerary: sections in order, each with transport, lodging, plans and notes.
 import { Hono } from 'hono';
 import airportData from '@shared/airports.json';
-import { endInstant, findAirport, type AirportData } from '@shared/logic';
+import {
+  endInstant,
+  findAirport,
+  keepConnections,
+  placeByTime,
+  type AirportData,
+} from '@shared/logic';
 import {
   entryInput,
   entryPatch,
+  reorderEntries,
   reorderSections,
   sectionInput,
   sectionPatch,
 } from '@shared/schemas';
 import type { EntryEnd } from '@shared/types';
-import { endCols, first, insertStmt, newId, nowIso, toEntry, updateStmt } from '../db';
+import { all, endCols, first, insertStmt, newId, nowIso, toEntry, updateStmt } from '../db';
 import { tripDetail } from './trips';
 import { ApiError, body, defined, notFound, type AppEnv } from './util';
 
@@ -56,6 +63,33 @@ async function sectionTrip(db: D1Database, id: string): Promise<string> {
 async function nextOrder(db: D1Database, sql: string, id: string) {
   const r = await first<{ m: number | null }>(db, sql, id);
   return (r?.m ?? -1) + 1;
+}
+
+/**
+ * Saves a section's entry order: as it stands, or with one entry moved to where its time
+ * falls. Connecting flights always end up back to back.
+ */
+async function arrange(db: D1Database, sectionId: string, placeId?: string) {
+  const rows = await all(
+    db,
+    'SELECT * FROM itinerary_entries WHERE section_id = ? ORDER BY sort_order, created_at',
+    sectionId,
+  );
+  let list = rows.map(toEntry);
+  const moved = placeId ? list.find((e) => e.id === placeId) : undefined;
+  if (moved) list = placeByTime(list, moved);
+  list = keepConnections(list);
+  const now = nowIso();
+  const stmts = list.flatMap((e, i) =>
+    e.sort_order === i
+      ? []
+      : [
+          db
+            .prepare('UPDATE itinerary_entries SET sort_order = ?, updated_at = ? WHERE id = ?')
+            .bind(i, now, e.id),
+        ],
+  );
+  if (stmts.length) await db.batch(stmts);
 }
 
 // ---------- sections ----------
@@ -136,8 +170,9 @@ itinerary.post('/itinerary-sections/:id/entries', async (c) => {
   const end = withAirport(input.end);
   checkOrder(start, end);
   const now = nowIso();
+  const entryId = newId();
   await insertStmt(db, 'itinerary_entries', {
-    id: newId(),
+    id: entryId,
     section_id: sectionId,
     kind: input.kind,
     mode: input.kind === 'transport' ? (input.mode ?? 'plane') : null,
@@ -160,7 +195,38 @@ itinerary.post('/itinerary-sections/:id/entries', async (c) => {
     created_at: now,
     updated_at: now,
   }).run();
+  // A new entry goes where its time falls, unless it asked for a spot (an undo).
+  await arrange(db, sectionId, input.sort_order === undefined ? entryId : undefined);
   return c.json(await tripDetail(db, tripId), 201);
+});
+
+// Entries in a section, in a new order. Entries from the trip's other sections move here.
+itinerary.post('/itinerary-sections/:id/order', async (c) => {
+  const sectionId = c.req.param('id');
+  const db = c.env.DB;
+  const tripId = await sectionTrip(db, sectionId);
+  const { ids } = await body(c, reorderEntries);
+  const owned = await all<{ id: string }>(
+    db,
+    `SELECT e.id FROM itinerary_entries e JOIN itinerary_sections s ON s.id = e.section_id
+     WHERE s.trip_id = ?`,
+    tripId,
+  );
+  const ok = new Set(owned.map((r) => r.id));
+  if (ids.some((id) => !ok.has(id)))
+    throw new ApiError(400, 'invalid', 'Some of those entries aren’t on this trip.');
+  const now = nowIso();
+  await db.batch(
+    ids.map((id, i) =>
+      db
+        .prepare(
+          'UPDATE itinerary_entries SET section_id = ?, sort_order = ?, updated_at = ? WHERE id = ?',
+        )
+        .bind(sectionId, i, now, id),
+    ),
+  );
+  await arrange(db, sectionId);
+  return c.json(await tripDetail(db, tripId));
 });
 
 itinerary.patch('/itinerary-entries/:id', async (c) => {
@@ -195,6 +261,14 @@ itinerary.patch('/itinerary-entries/:id', async (c) => {
   if (input.kind && input.kind !== 'transport') f.mode = null;
   if (input.kind === 'transport' && !old.mode && !input.mode) f.mode = 'plane';
   if (Object.keys(f).length) await updateStmt(db, 'itinerary_entries', id, f).run();
+  // A new time or section puts the entry where its time falls.
+  const section = input.section_id ?? old.section_id;
+  const retimed =
+    section !== old.section_id ||
+    (['date', 'time', 'tz'] as const).some(
+      (k) => start?.[k] !== undefined && start[k] !== old.start[k],
+    );
+  await arrange(db, section, retimed && input.sort_order === undefined ? id : undefined);
   return c.json(await tripDetail(db, tripId));
 });
 

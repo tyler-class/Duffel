@@ -5,6 +5,8 @@ import {
   findAirport,
   formatMinutes,
   nextEntry,
+  orderEntries,
+  placeByTime,
   searchAirports,
   zonedInstant,
   type AirportData,
@@ -103,5 +105,44 @@ describe('airports', () => {
     expect(gr.every((c, i) => i === 0 || !c.startsWith('GR') || gr[i - 1]!.startsWith('GR'))).toBe(
       true,
     );
+  });
+});
+
+describe('entry order', () => {
+  const flight = (id: string, from: string, dep: string, to: string, arr: string, n: number) =>
+    entry({
+      id,
+      kind: 'transport',
+      mode: 'plane',
+      start: { ...end('2027-06-03', dep, 'UTC'), code: from },
+      end: { ...end('2027-06-03', arr, 'UTC'), code: to },
+      sort_order: n,
+    });
+
+  it('keeps the arranged order but pulls connecting flights together', () => {
+    const a = flight('a', 'GRR', '07:00', 'JFK', '09:00', 0);
+    const car = entry({ id: 'car', kind: 'transport', mode: 'car', sort_order: 1 });
+    const b = flight('b', 'JFK', '11:00', 'LIS', '20:00', 2);
+    const note = entry({ id: 'n', kind: 'note', sort_order: 3 });
+    expect(orderEntries([note, b, car, a]).map((e) => e.id)).toEqual(['a', 'b', 'car', 'n']);
+    // Chains of three follow the first flight, wherever the others were.
+    const c = flight('c', 'LIS', '22:00', 'OPO', '23:00', -1);
+    expect(orderEntries([a, car, b, c]).map((e) => e.id)).toEqual(['a', 'b', 'c', 'car']);
+  });
+
+  it('does not chain a flight back home', () => {
+    const out = flight('out', 'GRR', '07:00', 'ORD', '08:00', 0);
+    const dinner = entry({ id: 'd', sort_order: 1 });
+    const back = flight('back', 'ORD', '18:00', 'GRR', '19:00', 2);
+    expect(orderEntries([out, dinner, back]).map((e) => e.id)).toEqual(['out', 'd', 'back']);
+  });
+
+  it('places a new entry where its time falls', () => {
+    const at = (id: string, time: string | null, date: string | null = '2027-06-03') =>
+      entry({ id, start: end(date, time, 'UTC') });
+    const list = [at('9', '09:00'), at('x', null, null), at('12', '12:00')];
+    expect(placeByTime(list, at('10', '10:00')).map((e) => e.id)).toEqual(['9', 'x', '10', '12']);
+    expect(placeByTime(list, at('13', '13:00')).map((e) => e.id)).toEqual(['9', 'x', '12', '13']);
+    expect(placeByTime(list, at('u', null, null)).map((e) => e.id)).toEqual(['9', 'x', '12', 'u']);
   });
 });
