@@ -9,6 +9,7 @@ import { Icon } from '../components/Icon';
 import {
   ErrorText,
   GhostButton,
+  InfoTip,
   PageHeader,
   PrimaryButton,
   SectionLabel,
@@ -64,37 +65,49 @@ export function Settings() {
         />
       </div>
 
-      <SectionLabel icon="bag">Auto pack</SectionLabel>
+      <SectionLabel
+        icon="bag"
+        trailing={
+          <InfoTip label="How auto pack works">
+            <div className="flex flex-col gap-3">
+              <p>
+                Each catalog item says where it packs: their luggage, their carry-on, a type of bag
+                (like diapers into a diaper bag), or no bag (a stroller, a car seat). Set it on the
+                item in the Catalog; a template can change it for its trips. Bag types are set under
+                Catalog → Bags.
+              </p>
+              <AutoPackList title="When it happens">
+                <li>Making a trip from a template, or copying a trip.</li>
+                <li>Adding catalog items to a trip, one or several.</li>
+                <li>
+                  Selecting items and assigning them to someone: anything not in a bag they share
+                  moves to theirs.
+                </li>
+                <li>Adding a bag to a trip: Duffel offers to move the items waiting for it.</li>
+              </AutoPackList>
+              <AutoPackList title="Where things go">
+                <li>A bag type: that person’s bag of that type, else the trip’s shared one.</li>
+                <li>Carry-on: that person’s carry-on bag, else a shared carry-on.</li>
+                <li>
+                  Luggage: that person’s suitcase, else their duffel, backpack or tote, else a
+                  shared bag if one clearly fits best. A diaper bag or cooler is used last, only
+                  when it’s their only bag.
+                </li>
+                <li>No bag: the No bag group.</li>
+                <li>Nowhere that fits: No bag yet, to sort out by hand.</li>
+              </AutoPackList>
+              <AutoPackList title="It never">
+                <li>Moves something you put in a bag yourself.</li>
+                <li>Places items typed in by name that aren’t in the catalog.</li>
+              </AutoPackList>
+            </div>
+          </InfoTip>
+        }
+      >
+        Auto pack
+      </SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 pb-2 text-sm text-soft">
-        <p>
-          Each catalog item says where it packs: their luggage, their carry-on, a type of bag (like
-          diapers into a diaper bag), or no bag (a stroller, a car seat). Set it on the item in the
-          Catalog; a template can change it for its trips. Bag types are set under Catalog → Bags.
-        </p>
-        <AutoPackList title="When it happens">
-          <li>Making a trip from a template, or copying a trip.</li>
-          <li>Adding catalog items to a trip, one or several.</li>
-          <li>
-            Selecting items and assigning them to someone: anything not in a bag they share moves to
-            theirs.
-          </li>
-          <li>Adding a bag to a trip: Duffel offers to move the items waiting for it.</li>
-        </AutoPackList>
-        <AutoPackList title="Where things go">
-          <li>A bag type: that person’s bag of that type, else the trip’s shared one.</li>
-          <li>Carry-on: that person’s carry-on bag, else a shared carry-on.</li>
-          <li>
-            Luggage: that person’s suitcase, else their duffel, backpack or tote, else a shared bag
-            if one clearly fits best. A diaper bag or cooler is used last, only when it’s their only
-            bag.
-          </li>
-          <li>No bag: the No bag group.</li>
-          <li>Nowhere that fits: No bag yet, to sort out by hand.</li>
-        </AutoPackList>
-        <AutoPackList title="It never">
-          <li>Moves something you put in a bag yourself.</li>
-          <li>Places items typed in by name that aren’t in the catalog.</li>
-        </AutoPackList>
+        <p>Catalog items go into the right bag when they’re added to a trip.</p>
         <span className="pt-1 text-ink">When someone has no bag of an item’s type</span>
         <Segmented<AutoPackFallback>
           label="When someone has no bag of an item’s type"
