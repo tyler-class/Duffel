@@ -756,8 +756,7 @@ function PackTrip(props: {
                       renderRow={(r) => (
                         <Row
                           row={r}
-                          sub={rowSub(r, groupBy, bagMap, personMap, bagName)}
-                          carry={groupBy === 'person' && isCarryOn(r, bagMap)}
+                          tag={rowTag(r, groupBy, bagMap, personMap, bagName)}
                           onToggle={() => toggle(r)}
                           onEdit={() => setEditing(r)}
                           onDelete={() => remove(r)}
@@ -943,46 +942,41 @@ function PackTrip(props: {
   );
 }
 
-function rowSub(
+/** What a row shows beside its name: its bag (orange when it's a carry-on), or whose it is. */
+function rowTag(
   r: TripItem,
   groupBy: GroupBy,
   bags: Map<string, TripBag>,
   people: Map<string, Person>,
   bagName: (b: TripBag) => string,
-) {
-  const parts: React.ReactNode[] = [];
+): React.ReactNode {
   if (groupBy === 'person') {
     const b = r.trip_bag_id ? bags.get(r.trip_bag_id) : undefined;
-    if (b)
-      parts.push(
-        <span key="b" className="inline-flex min-w-0 items-center gap-1">
-          <Icon name={b.carry_on ? 'backpack' : 'bag'} size={13} />
-          <span className="truncate">{bagName(b)}</span>
-        </span>,
+    if (!b)
+      return (
+        <>
+          <Icon name="nobag" size={13} className="flex-none" />
+          <span className="truncate">No bag</span>
+        </>
       );
-    else
-      parts.push(
-        <span key="b" className="inline-flex items-center gap-1">
-          <Icon name="nobag" size={13} />
-          No bag
-        </span>,
-      );
-  } else {
-    const p = r.person_id ? people.get(r.person_id) : undefined;
-    parts.push(
-      <span key="p" className="inline-flex items-center gap-1.5">
-        {p ? <PersonDot person={p} /> : <Icon name="users" size={13} />}
-        {p ? p.name : 'Shared'}
-      </span>,
+    return (
+      <>
+        <Icon
+          name={b.carry_on ? 'backpack' : 'bag'}
+          size={13}
+          className={cx('flex-none', b.carry_on && 'text-accent')}
+        />
+        <span className="truncate">{bagName(b)}</span>
+      </>
     );
   }
-  if (r.notes)
-    parts.push(
-      <span key="n" className="truncate">
-        {r.notes}
-      </span>,
-    );
-  return parts;
+  const p = r.person_id ? people.get(r.person_id) : undefined;
+  return (
+    <>
+      {p ? <PersonDot person={p} /> : <Icon name="users" size={13} className="flex-none" />}
+      <span className="truncate">{p ? p.name : 'Shared'}</span>
+    </>
+  );
 }
 
 function GroupMark({ g }: { g: Group }) {
@@ -1014,8 +1008,7 @@ function FilterChip({ children, onClear }: { children: React.ReactNode; onClear:
 /** One row: check to pack, tap to edit, swipe left to reveal Delete. */
 function Row({
   row,
-  sub,
-  carry,
+  tag,
   onToggle,
   onEdit,
   onDelete,
@@ -1024,8 +1017,8 @@ function Row({
   onSelect,
 }: {
   row: TripItem;
-  sub: React.ReactNode[];
-  carry: boolean;
+  /** Its bag or person, on the right of the name. */
+  tag: React.ReactNode;
   onToggle: () => void;
   onEdit: () => void;
   onDelete: () => void;
@@ -1069,31 +1062,27 @@ function Row({
         </button>
         <button className="flex min-w-0 flex-1 items-center gap-3 py-3 text-left" onClick={onEdit}>
           <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span
-              className={cx(
-                'text-base leading-tight',
-                row.packed && 'text-faint line-through decoration-1',
-              )}
-            >
-              {row.name}
-            </span>
-            {sub.length > 0 && (
-              <span className="flex min-w-0 items-center gap-2.5 overflow-hidden text-[13px] whitespace-nowrap text-soft">
-                {sub}
+            <span className="flex min-w-0 items-baseline gap-2">
+              <span
+                className={cx(
+                  // The name keeps at least about half the row; the bag shortens first.
+                  'min-w-[55%] flex-1 text-base leading-tight',
+                  row.packed && 'text-faint line-through decoration-1',
+                )}
+              >
+                {row.name}
               </span>
-            )}
-          </span>
-          {carry && (
-            <span
-              className={cx(
-                'grid h-6 w-6 flex-none place-items-center rounded-md bg-accent-tint text-accent',
-                row.packed && 'opacity-50',
-              )}
-              title="Carry-on"
-            >
-              <Icon name="backpack" size={14} />
+              <span
+                className={cx(
+                  'ml-auto inline-flex min-w-0 shrink items-center gap-1 self-center text-[13px] whitespace-nowrap text-soft',
+                  row.packed && 'opacity-60',
+                )}
+              >
+                {tag}
+              </span>
             </span>
-          )}
+            {row.notes && <span className="truncate text-[13px] text-soft">{row.notes}</span>}
+          </span>
           <span
             className={cx(
               'min-w-7 flex-none text-right font-mono text-[13px] tnum',
