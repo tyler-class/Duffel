@@ -4,7 +4,8 @@ import { api, errorMessage } from '../lib/api';
 import { EXAMPLE_PROMPTS } from '@shared/examples';
 import { Icon } from '../components/Icon';
 import { useToast } from '../components/Toast';
-import { ErrorText, GhostButton, SectionLabel, SubHeading } from '../components/ui';
+import { cx, ErrorText, GhostButton, Pick, SectionLabel, SubHeading } from '../components/ui';
+import { assistants, ASSISTANT_INTRO, CONNECTED_TEXT, signInNote } from '../kit/assistants';
 
 function Copy({ text, label = 'Copy' }: { text: string; label?: string }) {
   const [done, setDone] = useState(false);
@@ -35,71 +36,82 @@ function Code({ children }: { children: string }) {
   );
 }
 
-/** The “Connect an AI assistant” part of Settings. */
+/** The “Connect an AI assistant” part of Settings (Selfhost Kit layout: src/client/kit/assistants.ts). */
 export function ConnectAISection() {
   const url = `${window.location.origin}/mcp`;
-  const cli = `claude mcp add --transport http duffel ${url}`;
+  const list = assistants('Duffel', 'duffel', url);
+  const [open, setOpen] = useState<string | null>(null);
+  const [examples, setExamples] = useState(false);
+  const shown = list.find((a) => a.id === open);
   return (
     <div>
       <SectionLabel icon="sparkle">Connect an AI assistant</SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 text-sm text-soft">
-        <p>
-          Let Claude, ChatGPT or any assistant that supports MCP read and update your packing lists.
-        </p>
+        <p>{ASSISTANT_INTRO('packing lists')}</p>
         <div className="flex flex-col gap-1.5">
-          <span className="text-xs text-soft">Your Duffel’s connector URL</span>
+          <span className="text-xs text-soft">{CONNECTED_TEXT.urlLabel('Duffel')}</span>
           <div className="flex items-center gap-1">
             <div className="min-w-0 flex-1">
               <Code>{url}</Code>
             </div>
             <Copy text={url} />
           </div>
+          <span className="text-xs text-faint">{signInNote('Duffel')}</span>
         </div>
-        <p className="flex items-start gap-2 rounded-lg bg-accent-tint px-3 py-2.5 text-accent">
-          <Icon name="user" size={16} className="mt-0.5" />
-          When you connect, a Duffel sign-in page opens. Enter your household password there to
-          approve the assistant.
-        </p>
       </div>
 
-      <SubHeading>Claude (web, desktop, mobile)</SubHeading>
-      <ol className="flex list-decimal flex-col gap-1.5 pr-6 pl-11 text-sm text-ink">
-        <li>Open Settings → Connectors and choose “Add custom connector”.</li>
-        <li>Name it Duffel and paste the URL above.</li>
-        <li>Choose Connect, then enter your household password on the Duffel page.</li>
-      </ol>
-
-      <SubHeading>ChatGPT</SubHeading>
-      <ol className="flex list-decimal flex-col gap-1.5 pr-6 pl-11 text-sm text-ink">
-        <li>
-          In Settings, add a custom connector (MCP server). Your plan may need developer mode turned
-          on.
-        </li>
-        <li>Paste the URL above and choose OAuth sign-in.</li>
-        <li>Enter your household password on the Duffel page.</li>
-      </ol>
-
-      <SubHeading>Claude Code</SubHeading>
-      <div className="flex flex-col gap-2 px-6 text-sm text-ink">
-        <div className="flex items-center gap-1">
-          <div className="min-w-0 flex-1">
-            <Code>{cli}</Code>
-          </div>
-          <Copy text={cli} />
-        </div>
-        <p className="text-soft">Then run /mcp in Claude Code and choose Authenticate.</p>
-      </div>
-
-      <SubHeading>Other apps</SubHeading>
-      <p className="px-6 text-sm text-ink">
-        Cursor, VS Code and other MCP apps: add a remote (HTTP) MCP server with the URL above. They
-        open the Duffel sign-in page the first time.
-      </p>
-
-      <TryAsking />
-
-      <SubHeading>Connected</SubHeading>
+      <SubHeading>{CONNECTED_TEXT.heading}</SubHeading>
       <Connections />
+
+      <SubHeading>{CONNECTED_TEXT.setUp}</SubHeading>
+      <div className="flex flex-col gap-3 px-6 text-sm">
+        <div className="flex flex-wrap gap-1.5">
+          {list.map((a) => (
+            <Pick
+              key={a.id}
+              on={open === a.id}
+              onClick={() => setOpen(open === a.id ? null : a.id)}
+            >
+              {a.name}
+            </Pick>
+          ))}
+        </div>
+        {shown && (
+          <div className="flex flex-col gap-2 text-ink">
+            {shown.steps.length > 0 && (
+              <ol className="flex list-decimal flex-col gap-1.5 pl-5">
+                {shown.steps.map((t) => (
+                  <li key={t}>{t}</li>
+                ))}
+              </ol>
+            )}
+            {shown.command && (
+              <div className="flex items-center gap-1">
+                <div className="min-w-0 flex-1">
+                  <Code>{shown.command}</Code>
+                </div>
+                <Copy text={shown.command} />
+              </div>
+            )}
+            {shown.after && <p className="text-soft">{shown.after}</p>}
+          </div>
+        )}
+      </div>
+
+      <button
+        type="button"
+        aria-expanded={examples}
+        onClick={() => setExamples((v) => !v)}
+        className="flex w-full items-center gap-1.5 px-6 pt-5 pb-2 text-left text-sm font-semibold text-ink"
+      >
+        {CONNECTED_TEXT.examples}
+        <Icon
+          name="chevDown"
+          size={14}
+          className={cx('text-faint transition-transform', !examples && '-rotate-90')}
+        />
+      </button>
+      {examples && <TryAsking />}
     </div>
   );
 }
@@ -107,6 +119,7 @@ export function ConnectAISection() {
 function Connections() {
   const qc = useQueryClient();
   const [error, setError] = useState('');
+  const [confirm, setConfirm] = useState(false);
   const q = useQuery({
     queryKey: ['connections'],
     queryFn: () =>
@@ -118,7 +131,7 @@ function Connections() {
   return (
     <div className="flex flex-col gap-1 px-6 text-sm">
       {q.isPending && <p className="text-soft">Loading…</p>}
-      {!q.isPending && !list.length && <p className="text-soft">No assistants are connected.</p>}
+      {!q.isPending && !list.length && <p className="text-soft">{CONNECTED_TEXT.none}</p>}
       {list.map((c) => (
         <div key={c.id} className="flex items-center gap-2 border-b border-line py-2.5 text-ink">
           <Icon name="ai" size={16} className="text-soft" />
@@ -135,6 +148,12 @@ function Connections() {
           icon="x"
           className="-ml-3 self-start text-danger"
           onClick={async () => {
+            if (!confirm) {
+              setConfirm(true);
+              setTimeout(() => setConfirm(false), 3000);
+              return;
+            }
+            setConfirm(false);
             setError('');
             try {
               await api.post('/connections/revoke-all');
@@ -144,7 +163,7 @@ function Connections() {
             }
           }}
         >
-          Disconnect all
+          {confirm ? CONNECTED_TEXT.confirm : CONNECTED_TEXT.disconnectAll}
         </GhostButton>
       )}
       <ErrorText>{error || (q.error ? errorMessage(q.error) : '')}</ErrorText>
@@ -157,8 +176,8 @@ function TryAsking() {
   const toast = useToast();
   return (
     <>
-      <SubHeading>Try asking</SubHeading>
       <div className="px-6">
+        <p className="pb-1 text-xs text-faint">{CONNECTED_TEXT.examplesHint}</p>
         {EXAMPLE_PROMPTS.slice(0, 6).map((e) => (
           <button
             key={e.prompt}
