@@ -7,7 +7,7 @@ import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
 import { app } from './app';
 import { handleAuthorize } from './consent';
 import { mcpApiHandler } from './mcp';
-import { checkIn } from './kit/telemetry';
+import { checkIn, checkInOnRequest, type CheckInOptions } from './kit/telemetry';
 import { buildFlags } from '../shared/kit/build';
 import { version } from '../../package.json';
 
@@ -65,8 +65,18 @@ function oauthCapable(url: URL): boolean {
   return url.protocol === 'https:' || ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname);
 }
 
+/** The anonymous daily check-in's settings (counts only; see src/worker/kit/telemetry.ts). */
+const usage = (_env: Cloudflare.Env): CheckInOptions => ({
+  app: 'duffel',
+  version,
+  tables: USAGE_TABLES,
+  build: buildFlags(),
+});
+
 export default {
   fetch(request: Request, env: Cloudflare.Env, ctx: ExecutionContext) {
+    // Check in the first time the app is opened each day (no cost after that).
+    checkInOnRequest(ctx, request, env.DB, usage(env));
     const url = new URL(request.url);
     if (!oauthCapable(url)) {
       // e.g. testing from a phone at http://192.168.x.x:5199: the app works, assistant connections don't.
@@ -86,8 +96,6 @@ export default {
   },
   // Hourly; the check-in itself goes out at most once a day, and not at all if it's turned off.
   scheduled(_controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
-    ctx.waitUntil(
-      checkIn(env.DB, { app: 'duffel', version, tables: USAGE_TABLES, build: buildFlags() }),
-    );
+    ctx.waitUntil(checkIn(env.DB, usage(env)));
   },
 } satisfies ExportedHandler<Cloudflare.Env>;
