@@ -613,13 +613,7 @@ export function SectionLabel({
   sticky?: boolean;
 }) {
   return (
-    <div
-      className={cx(
-        'px-4 pt-6 pb-1',
-        sticky &&
-          'sticky top-[calc(env(safe-area-inset-top,0px)+8px)] z-10 bg-bg md:top-[env(safe-area-inset-top,0px)]',
-      )}
-    >
+    <div className={cx('px-4 pt-6 pb-1', sticky && 'sticky top-0 z-10 bg-bg')}>
       <div className="flex items-center gap-2 rounded-full bg-accent-tint px-4 py-2">
         {icon && <Icon name={icon} size={15} className="text-accent" />}
         <span className="flex-1 text-[13px] font-semibold text-ink">{children}</span>

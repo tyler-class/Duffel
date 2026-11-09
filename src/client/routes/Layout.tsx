@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
@@ -29,16 +30,21 @@ export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
   useTabSwipe(TAB_PATHS, tabRoot(pathname));
+  // A new page starts at the top (the browser did this when the whole document scrolled).
+  const scroller = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    scroller.current?.scrollTo(0, 0);
+  }, [pathname]);
   return (
-    // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
-    // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
-    <div className="min-h-full min-h-lvh pt-[calc(env(safe-area-inset-top,0px)+8px)] md:pl-60 md:pt-safe">
-      {/* A solid strip under the status bar: iOS blurs whatever scrolls beneath it in installed
-          apps, so the page scrolls under a plain bar instead (0 tall in a browser tab). */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top,0px)] bg-bg"
-      />
+    // Like Nitrogen: the page is the size of the screen and only the content area below the app
+    // bar scrolls. The document itself never scrolls, so iOS never blurs content under the
+    // status bar in the installed app.
+    <div className="flex h-full flex-col md:pl-60">
+      {/* Phones: a solid app bar at the top. */}
+      <header className="z-20 flex h-[calc(env(safe-area-inset-top,0px)+48px)] flex-none items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
+        <img src="/favicon.svg" alt="" className="h-7 w-7 rounded-lg" />
+        <span className="text-[17px] font-semibold">Duffel</span>
+      </header>
       {/* Tablet and desktop: a sidebar on the left. */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-chip px-3 pt-[calc(20px+env(safe-area-inset-top,0px))] pb-5 md:flex">
         <div className="flex items-center gap-2.5 px-3 pb-6">
@@ -66,9 +72,14 @@ export function Layout() {
         <AboutButton variant="nav" className="mt-auto" />
       </aside>
 
-      <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-3xl md:px-6 md:pt-4 md:pb-10">
-        <Outlet />
-      </main>
+      <div
+        ref={scroller}
+        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 md:pt-safe"
+      >
+        <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-3xl md:px-6 md:pt-4 md:pb-10">
+          <Outlet />
+        </main>
+      </div>
 
       {/* Phones: tabs along the bottom. */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-safe backdrop-blur md:hidden">
