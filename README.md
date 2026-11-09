@@ -21,6 +21,32 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 
 One deployment is one household.
 
+## A look around
+
+**Packing.** Edit an item, select several at once, or filter to what’s left.
+
+![Three phone screens: the Edit item sheet with a per-day quantity, three items selected with Move to bag, and the Filter sheet set to To pack](docs/screenshots/packing.png)
+
+**Bags.** See how full each bag is, set a bag’s owner, type and capacity, and choose how Auto pack works.
+
+![Three phone screens: a trip's bags with how full each one is, the Edit bag sheet, and Settings with Appearance, Auto pack and Notifications](docs/screenshots/bags.png)
+
+**To-dos and itinerary.** A to-do dated relative to the trip, a flight across time zones, and a stay.
+
+![Three phone screens: a to-do set to 10 days before the trip starts, a flight from Boston to Lisbon with each airport's time zone, and a lodging booking](docs/screenshots/plan.png)
+
+![A trip's itinerary on a computer in dark mode: the flight, the stay and the day's plans](docs/screenshots/itinerary-desktop-dark.png)
+
+**New trips and templates.** Copy a past trip or start from a template, with its bags, items and to-dos.
+
+![Two phone screens: New trip copying a past trip, and a template's pre-trip, during and after to-dos](docs/screenshots/new-trip.png)
+
+![A template's bags and items on a computer, with a note on items that won't have a bag](docs/screenshots/template-desktop.png)
+
+**Catalog and people.** Everything you own, how many to bring, and who’s in the family.
+
+![Three phone screens: the catalog grouped by category, a T-shirt set to 1 per day at most 7, and the Edit person sheet](docs/screenshots/catalog.png)
+
 <!-- kit:readme:start -->
 <!-- Written by the Selfhost Kit (kit/docs/readme-install.md): edit it there. -->
 
@@ -156,6 +182,10 @@ Open your Duffel link on the phone, then:
 It opens full screen like a regular app, and follows your phone's light or dark setting.
 
 ![Duffel on a phone in dark mode: a trip's packing list](docs/screenshots/phone-dark.png)
+
+Each phone picks its own notifications in **Settings → Notifications**. Press and drag along the tab bar to switch tabs.
+
+![Two phone screens: Settings → Notifications switched on for this device, and the glass tab bar mid-drag](docs/screenshots/phone-notifications.png)
 
 ## Connect an AI assistant
 
