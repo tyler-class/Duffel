@@ -1,9 +1,13 @@
 import { env } from 'cloudflare:workers';
-import { describe, expect, it } from 'vitest';
-import { checkIn, kitState } from '../../src/worker/kit/telemetry';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { checkIn, kitState, noteSite } from '../../src/worker/kit/telemetry';
 import { USAGE_TABLES } from '../../src/worker/index';
 import type { AppState } from '../../src/shared/types';
 import { session } from './helpers';
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
 
 describe('anonymous check-in', () => {
   it('sends counts once a day, never contents, and stops when switched off', async () => {
@@ -14,7 +18,23 @@ describe('anonymous check-in', () => {
       sent.push(JSON.parse(String(init.body)));
       return new Response('{"ok":true}');
     }) as unknown as typeof fetch;
-    const opts = { app: 'duffel', version: '1.2.3', tables: USAGE_TABLES, fetcher };
+    const opts = {
+      build: { updatesOn: false, source: false, real: true },
+      app: 'duffel',
+      version: '1.2.3',
+      tables: USAGE_TABLES,
+      fetcher,
+    };
+
+    // A live copy (a real build that has served a request at a real address).
+    await noteSite(env.DB, { origin: 'https://copy.example.com', app: 'duffel', version: '1.2.3' });
+    // The Settings switch sends its on/off message with the global fetch: catch it here.
+    const events: unknown[] = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      expect(String(input)).toBe('https://stats.tylerclass.net/v1/event');
+      events.push((JSON.parse(String(init?.body)) as { event: string }).event);
+      return new Response('{"ok":true}');
+    });
 
     const day1 = new Date('2027-01-01T05:00:00Z');
     expect(await checkIn(env.DB, { ...opts, now: day1 })).toBe('sent');
@@ -34,6 +54,7 @@ describe('anonymous check-in', () => {
     const s = (await api.get<AppState>('/state')).data.settings;
     expect([s.telemetry, s.updates_set_up]).toEqual([false, true]);
     expect(await checkIn(env.DB, { ...opts, now: new Date('2027-01-02T05:00:00Z') })).toBe('off');
+    expect(events).toEqual(['telemetry_off']);
     expect(sent).toHaveLength(1);
 
     // A failed send is tried again on the next run.
@@ -42,6 +63,8 @@ describe('anonymous check-in', () => {
     const day3 = new Date('2027-01-03T05:00:00Z');
     expect(await checkIn(env.DB, { ...opts, fetcher: failing, now: day3 })).toBe('failed');
     expect(await checkIn(env.DB, { ...opts, now: day3 })).toBe('sent');
-    expect(sent[1]).toMatchObject({ flags: { updates_set_up: true } });
+    expect(events).toEqual(['telemetry_off', 'telemetry_on']);
+    // A live copy reports what its build saw, not the Settings click.
+    expect(sent[1]).toMatchObject({ flags: { updates_set_up: false, source: false } });
   });
 });
