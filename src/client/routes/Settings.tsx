@@ -24,6 +24,7 @@ import { InstallHint } from '../components/InstallHint';
 import { isStandalone } from '../lib/pwa';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
 import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
+import { buildFlags } from '@shared/kit/build';
 
 /** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
 const USAGE_COUNTED = 'trips, items, bags and to-dos';
@@ -135,7 +136,7 @@ export function Settings() {
       </div>
 
       <UpdatesSection
-        setUp={data.settings.updates_set_up}
+        setUp={buildFlags().updatesOn || data.settings.updates_set_up}
         onSetUp={() => run(() => api.patch('/settings', { updates_set_up: true }))}
         telemetry={data.settings.telemetry}
         onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
