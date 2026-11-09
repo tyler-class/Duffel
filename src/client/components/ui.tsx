@@ -530,7 +530,16 @@ export function PageHeader({
 export function InfoTip({ label, children }: { label: string; children: ReactNode }) {
   const [pinned, setPinned] = useState(false);
   const [hover, setHover] = useState(false);
+  // Where the popover starts, relative to the icon, so it stays on screen wherever the icon is.
+  const [offset, setOffset] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const place = () => {
+    const r = ref.current?.getBoundingClientRect();
+    if (!r) return;
+    const w = Math.min(352, window.innerWidth - 40);
+    const left = Math.max(16, Math.min(r.right - w, window.innerWidth - 16 - w));
+    setOffset(left - r.left);
+  };
   const id = useId();
   const open = pinned || hover;
   useEffect(() => {
@@ -556,7 +565,11 @@ export function InfoTip({ label, children }: { label: string; children: ReactNod
     <div
       ref={ref}
       className="relative flex"
-      onPointerEnter={(e) => e.pointerType === 'mouse' && setHover(true)}
+      onPointerEnter={(e) => {
+        if (e.pointerType !== 'mouse') return;
+        place();
+        setHover(true);
+      }}
       onPointerLeave={(e) => e.pointerType === 'mouse' && setHover(false)}
     >
       <button
@@ -564,7 +577,10 @@ export function InfoTip({ label, children }: { label: string; children: ReactNod
         aria-label={label}
         aria-expanded={open}
         aria-controls={id}
-        onClick={() => setPinned((p) => !p)}
+        onClick={() => {
+          place();
+          setPinned((p) => !p);
+        }}
         className={cx(
           'grid h-6 w-6 place-items-center rounded-full transition-colors',
           open ? 'text-accent' : 'text-soft hover:text-ink',
@@ -574,7 +590,7 @@ export function InfoTip({ label, children }: { label: string; children: ReactNod
       </button>
       {open && (
         // The top padding bridges the gap, so a mouse can move from the icon into it.
-        <div id={id} role="note" className="absolute top-full right-0 z-40 pt-2">
+        <div id={id} role="note" className="absolute top-full z-40 pt-2" style={{ left: offset }}>
           <div className="max-h-[55vh] w-[min(22rem,calc(100vw-2.5rem))] overflow-y-auto rounded-2xl border border-line bg-surface p-4 text-left text-sm font-normal text-soft shadow-xl">
             {children}
           </div>
