@@ -21,14 +21,11 @@ import {
 import { useToast } from '../components/Toast';
 import { ConnectAISection } from './ConnectAI';
 import { InstallHint } from '../components/InstallHint';
-import {
-  isNewer,
-  isSourceRepo,
-  runUrl,
-  setupUrl,
-  UPSTREAM,
-  useLatestVersion,
-} from '../lib/updates';
+import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
+import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
+
+/** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
+const USAGE_COUNTED = 'trips, items, bags and to-dos';
 import { AboutButton } from '../components/AboutSheet';
 
 export function Settings() {
@@ -265,17 +262,11 @@ function UpdatesSection({
   onTelemetry: (on: boolean) => void;
 }) {
   const latest = useLatestVersion();
-  const current = __APP_VERSION__;
   const repo = __SOURCE_REPO__;
   const isSource = isSourceRepo(repo, UPSTREAM);
-  const newer = latest.data && isNewer(latest.data, current) ? latest.data : null;
-  const status = newer
-    ? `Duffel ${newer} is available. You have ${current}.`
-    : latest.isError
-      ? `Duffel ${current}. Couldn’t check for a newer version.`
-      : latest.data
-        ? `Duffel ${current}, up to date.`
-        : `Duffel ${current}.`;
+  const status = updateStatus('Duffel', __APP_VERSION__, latest.data, latest.isError);
+  const how = howUpdatesWork('Duffel');
+  const shared = whatsShared('Duffel', USAGE_COUNTED, false);
 
   return (
     <>
@@ -283,33 +274,26 @@ function UpdatesSection({
         icon="download"
         trailing={
           !isSource && (
-            <InfoTip label="How updates work">
+            <InfoTip label={UPDATE_TEXT.howUpdatesWork}>
               <div className="flex flex-col gap-2">
-                <p>Updates take two steps, both in your own accounts:</p>
+                <p>{how.intro}</p>
                 <ol className="flex list-decimal flex-col gap-1 pl-5 marker:text-faint">
-                  <li>
-                    An update workflow in your GitHub copy brings in the latest Duffel every Monday.
-                    GitHub needs you to add it once: Set up opens it ready to commit.
-                  </li>
-                  <li>
-                    Cloudflare deploys your copy every time it changes. That part is already on.
-                  </li>
+                  {how.steps.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
                 </ol>
-                <p>
-                  Your data lives in your database, so updates don’t touch it. Changes you made to
-                  the code in your copy are replaced.
-                </p>
+                <p>{how.outro}</p>
               </div>
             </InfoTip>
           )
         }
       >
-        Updates
+        {UPDATE_TEXT.heading}
       </SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 pb-2 text-sm text-soft">
-        <p className={cx(newer && 'text-ink')}>{status}</p>
+        <p className={cx(status.newer && 'text-ink')}>{status.text}</p>
         {isSource ? null : !repo ? (
-          <p className="text-xs text-faint">Deployed by hand: git pull, then npm run deploy.</p>
+          <p className="text-xs text-faint">{UPDATE_TEXT.byHand}</p>
         ) : (
           <>
             <div className="flex flex-wrap items-center gap-2">
@@ -320,11 +304,11 @@ function UpdatesSection({
                   rel="noreferrer"
                   className={cx(
                     LINK_BUTTON,
-                    newer ? 'bg-accent text-accent-ink' : 'bg-chip text-ink',
+                    status.newer ? 'bg-accent text-accent-ink' : 'bg-chip text-ink',
                   )}
                 >
                   <Icon name="reset" size={16} />
-                  Update now
+                  {UPDATE_TEXT.updateNow}
                 </a>
               ) : (
                 <a
@@ -335,7 +319,7 @@ function UpdatesSection({
                   className={cx(LINK_BUTTON, 'bg-accent text-accent-ink')}
                 >
                   <Icon name="github" size={16} />
-                  Set up automatic updates
+                  {UPDATE_TEXT.setUp}
                 </a>
               )}
               <a
@@ -350,42 +334,38 @@ function UpdatesSection({
             <p className="text-xs text-faint">
               {setUp ? (
                 <>
-                  Opens GitHub: click Run workflow.{' '}
+                  {UPDATE_TEXT.updateNowHint}{' '}
                   <a
                     href={setupUrl(repo, __SOURCE_BRANCH__)}
                     target="_blank"
                     rel="noreferrer"
                     className="underline underline-offset-2"
                   >
-                    Set up again
+                    {UPDATE_TEXT.setUpAgain}
                   </a>
                 </>
               ) : (
-                'Opens GitHub: click Commit changes. It updates now, then every Monday.'
+                UPDATE_TEXT.setUpHint
               )}
             </p>
           </>
         )}
         <div className="flex items-center gap-3 border-t border-line pt-3">
           <span className="flex flex-1 items-center gap-1.5 text-ink">
-            Share anonymous usage counts
-            <InfoTip label="What’s shared">
+            {UPDATE_TEXT.telemetry}
+            <InfoTip label={UPDATE_TEXT.whatsShared}>
               <div className="flex flex-col gap-2">
-                <p>Once a day this copy sends Duffel’s developer:</p>
+                <p>{shared.intro}</p>
                 <ul className="flex list-disc flex-col gap-0.5 pl-5 marker:text-faint">
-                  <li>a random id this copy made for itself</li>
-                  <li>its version</li>
-                  <li>how many trips, items, bags and so on it has (counts only)</li>
-                  <li>whether automatic updates are on</li>
+                  {shared.items.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
                 </ul>
-                <p>
-                  Never names, lists, notes or anything you type, and no IP address is kept. It
-                  shows how many copies are in use, to decide what to work on next.
-                </p>
+                <p>{shared.outro}</p>
               </div>
             </InfoTip>
           </span>
-          <Switch on={telemetry} onChange={onTelemetry} label="Share anonymous usage counts" />
+          <Switch on={telemetry} onChange={onTelemetry} label={UPDATE_TEXT.telemetry} />
         </div>
       </div>
     </>

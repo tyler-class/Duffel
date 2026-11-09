@@ -4,6 +4,8 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
+<!-- 📸 SCREENSHOT docs/screenshots/hero.png: Duffel on a phone: a trip's packing list grouped by person -->
+
 - **Per-person lists.** Every item belongs to someone (or is shared), with quantities that scale with trip length: “1 T-shirt per day, at most 7”. Set a custom number any time and it stays put.
 - **Bags.** Bags belong to people (or are shared), and items land in the right one automatically. Carry-on is a property of the bag, so the carry-on view is always right. **Auto pack** sends an item to a type of bag: diapers into its person’s diaper bag, snacks into the cooler. Car seats and strollers go under “No bag”.
 - **Groups.** Items sit under groups like Clothing, Documents or Food & drink, on every person and bag. Drag items and whole groups into the order you pack them (long-press on a phone).
@@ -17,27 +19,116 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 
 One deployment is one household.
 
-## Deploy
+<!-- kit:readme:start -->
+<!-- Written by the Selfhost Kit (kit/docs/readme-install.md): edit it there. -->
 
-### One click
+## Install
 
-1. Click **Deploy to Cloudflare** above and sign in to Cloudflare (a free account works).
-2. Cloudflare copies this repo to your GitHub or GitLab account, creates the database and storage, and asks for **APP_PASSWORD**. That’s the password everyone in your household will use. Pick something long.
-3. When the deploy finishes, open the `*.workers.dev` link. Sign in, add the people you pack for, or load the sample data to look around.
+You need two free accounts, and about five minutes.
 
-Cloudflare runs the database migrations on every deploy (`npm run deploy`), before the new version goes live.
+### 1. Have a Cloudflare account
 
-### By hand
+Duffel runs on your own Cloudflare account. The free plan is plenty. If you don't have one, [sign up](https://dash.cloudflare.com/sign-up) and confirm your email.
 
-```sh
-git clone https://github.com/tyler-class/Duffel.git && cd Duffel
-npm install
-npx wrangler login
-npx wrangler secret put APP_PASSWORD
-npm run deploy
-```
+<!-- 📸 SCREENSHOT docs/screenshots/install-1-cloudflare-signup.png: Cloudflare's sign-up page -->
 
-`npm run deploy` builds the app, applies migrations to the remote database and deploys the Worker. Wrangler creates the D1 database and KV namespace on the first deploy and writes their ids into `wrangler.jsonc`. If your Wrangler version asks you to create them yourself, run `npx wrangler d1 create duffel` and `npx wrangler kv namespace create OAUTH_KV`, then add the ids it prints.
+### 2. Have a GitHub account
+
+The Deploy button makes your own copy of Duffel's code in your GitHub account, so you can keep it updated. If you don't have one, [sign up](https://github.com/signup).
+
+### 3. Let Cloudflare use your GitHub
+
+Cloudflare needs its **Cloudflare Workers and Pages** app installed on your GitHub account to create your copy and deploy it.
+
+1. Open [github.com/apps/cloudflare-workers-and-pages](https://github.com/apps/cloudflare-workers-and-pages) and click **Install** (or **Configure** if it's already installed).
+2. Choose your account.
+3. Pick **All repositories**. That's simplest, because the Deploy button creates a new one. If you'd rather limit it, choose **Only select repositories** and come back to add your Duffel copy after step 4.
+4. Click **Install**.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-3-github-app.png: GitHub's install page for Cloudflare Workers and Pages, with All repositories selected -->
+
+You can also do this in the middle of the next step: Cloudflare asks you to connect GitHub if you haven't.
+
+### 4. Click Deploy
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
+
+Sign in to Cloudflare if it asks. You land on a setup page.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-4-deploy-page.png: Cloudflare's "Create an application" page for Duffel -->
+
+### 5. Check the names (most people keep the defaults)
+
+- **Git account**: your GitHub account.
+- **Repository name**: what your copy is called on GitHub. Leave **Create private Git repository** ticked to keep it private.
+- **Project name**: the Worker's name, which is also in your address: `https://duffel.<your-subdomain>.workers.dev`.
+- **Database and storage names**: what Cloudflare calls the storage it creates for you. Keep them.
+
+### 6. Set your password
+
+Under **Variables and secrets**, fill in **APP_PASSWORD**: the one password everyone in your household uses to sign in. Pick something long. You can change it later (see [Change your password](#change-your-password)), but set it now.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-6-password.png: The APP_PASSWORD field on the setup page -->
+
+### 7. Create and deploy
+
+Click **Create and deploy**. Cloudflare copies the code to your GitHub, creates the storage and builds Duffel. It takes a minute or two. When the build log finishes, your address is at the end of it, and on the Worker's page under **Domains**.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-7-build-done.png: A finished build log with the workers.dev address at the end -->
+
+Open it, sign in with your password, and you're done. Bookmark it, or add it to your phone's home screen.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-7-signed-in.png: Duffel right after signing in -->
+
+### 8. Set up automatic updates (recommended)
+
+Your copy updates itself every Monday once you allow it. That takes one click, once:
+
+1. In Duffel, open **Settings → Updates** and choose **Set up automatic updates**.
+2. GitHub opens with the update file filled in. Click **Commit changes**.
+
+That brings in the latest Duffel straight away, then every week. See [Updates](#updates) for how it works.
+
+<!-- 📸 SCREENSHOT docs/screenshots/install-8-updates.png: Settings → Updates with the Set up automatic updates button -->
+<!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
+
+## Updates
+
+Updates take two steps, both in your own accounts. Duffel never deploys to your Cloudflare directly.
+
+1. **Duffel → your GitHub copy.** The update workflow you added in step 8 brings in the latest code every Monday. To update now, open **Settings → Updates → Update now** and click **Run workflow** on GitHub. Settings also tells you when a newer version is out.
+2. **Your GitHub copy → your Cloudflare.** Cloudflare builds and deploys every change to your copy, migrating the database first. This was switched on in step 7.
+
+Your household's data lives in the database, not here, so it isn't touched. An update replaces the code in your copy, so changes you made to it are overwritten. Your copy's own name and storage settings are kept.
+
+Deployed by hand instead? `git pull`, then `npm run deploy`.
+
+## Change your password
+
+1. In Cloudflare, open **Compute → Workers & Pages** and choose **duffel**.
+2. Open the **Settings** tab. Under **Variables and Secrets**, find **APP_PASSWORD** (type **Secret**) and click its pencil icon.
+3. Type the new password and save. You can't see the current one, only set a new one.
+
+Everyone is signed out and signs in again with the new password.
+
+<!-- 📸 SCREENSHOT docs/screenshots/password-1-secrets.png: The Variables and Secrets list with APP_PASSWORD and its pencil icon -->
+
+## Use your own domain (advanced)
+
+Your address starts as `https://duffel.<your-subdomain>.workers.dev`. Two ways to change it:
+
+- **Rename your workers.dev subdomain.** In Cloudflare, open **Compute → Workers & Pages**. Your subdomain is shown on the right, with **Change**. It applies to every Worker in your account, so all your apps move together.
+- **Give Duffel its own address on a domain you own**, like `duffel.example.com`. The domain has to be on Cloudflare. Open the Worker, go to **Settings → Domains & Routes → Add → Custom domain**, and enter the address. Cloudflare sets up DNS and the certificate. Repeat for each app to give each one its own subdomain.
+
+<!-- 📸 SCREENSHOT docs/screenshots/domain-1-custom-domain.png: Settings → Domains & Routes → Add → Custom domain -->
+
+If you connected an AI assistant, connect it again with the new address.
+
+## Anonymous usage counts
+
+Once a day your copy tells Duffel's developer that it exists: a random id it made for itself, its version, how many trips, items, bags and to-dos it has (counts only), and whether automatic updates are on. Never names, contents or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
+
+<!-- kit:readme:end -->
 
 ## Use it on your phone
 
@@ -60,36 +151,23 @@ Assistants can read and change trips, packing lists, groups, templates, to-dos a
 
 Ready-made prompts for longer jobs appear in the assistant’s prompt menu (the + menu in Claude): **Plan a trip**, **What’s left to pack**, **Add the usual to-dos**, **Add bookings to the itinerary** and **Organize into groups**. Settings lists more examples under **Try asking**, tap one to copy it.
 
-## Change the password
-
-Set a new `APP_PASSWORD`, either in the Cloudflare dashboard under **Workers & Pages → duffel → Settings → Variables and Secrets**, or with:
-
-```sh
-npx wrangler secret put APP_PASSWORD
-```
-
-Everyone is signed out and signs in again with the new password. Connected AI assistants keep working until you disconnect them.
-
 ## Back up and restore
 
 **Settings → Backup → Download backup** saves everything as one JSON file. **Restore from backup** replaces everything with a backup’s contents. Use it to move to a new deployment, too.
 
-## Update your copy
+## Deploy by hand
 
-Updates come in two steps, both in your own accounts: Duffel's latest code goes into **your GitHub copy**, and Cloudflare deploys **your copy** whenever it changes. Duffel never deploys to your Cloudflare account directly.
+If you’d rather not use the button, or want to work on the code:
 
-- **Your copy → your Cloudflare** is already on. The Deploy button set Cloudflare to build and deploy every change to your copy's `main` branch (migrating the database first).
-- **Duffel → your copy** needs one click to turn on. The Deploy button doesn't copy GitHub workflow files, so open **Settings → Updates** and choose **Set up automatic updates**. GitHub opens with the update workflow filled in; click **Commit changes**. That brings in the latest Duffel straight away, then every Monday.
+```sh
+git clone https://github.com/tyler-class/Duffel.git && cd Duffel
+npm install
+npx wrangler login
+npx wrangler secret put APP_PASSWORD
+npm run deploy
+```
 
-To update before Monday, choose **Update now** in Settings and click **Run workflow** on GitHub. Settings also shows when a newer Duffel is out.
-
-Your household’s data is in the database, not the repo, so updates don’t touch it. An update replaces the app’s code with Duffel’s, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let a workflow change them, so if Duffel’s change, copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
-
-If you deployed by hand, `git pull` and `npm run deploy`.
-
-## Anonymous usage counts
-
-Once a day your copy tells Duffel’s developer that it exists: a random id it made for itself, its version, how many rows each table has (trips, items, bags, …) and whether automatic updates are on. Never names, lists, notes or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
+`npm run deploy` builds the app, applies migrations to the remote database and deploys the Worker. Wrangler creates the D1 database and KV namespace on the first deploy and writes their ids into `wrangler.jsonc`. If your Wrangler version asks you to create them yourself, run `npx wrangler d1 create duffel` and `npx wrangler kv namespace create OAUTH_KV`, then add the ids it prints.
 
 ## Local development
 

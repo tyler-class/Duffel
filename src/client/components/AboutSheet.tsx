@@ -1,24 +1,22 @@
 import { useState } from 'react';
-import { checkForUpdate } from '../lib/pwa';
-import { useToast } from './Toast';
+import { aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
 import { Icon, type IconName } from './Icon';
 import { cx, Sheet } from './ui';
 
-const LINKS: [string, string, IconName][] = [
-  ['https://github.com/tyler-class/Duffel', 'Duffel on GitHub', 'github'],
-  ['mailto:duffel@tylerclass.net', 'Questions or help? duffel@tylerclass.net', 'mail'],
-  [
-    'https://ko-fi.com/tylerclass',
-    'Duffel is free, no baggage fees. Buy me a coffee to keep it that way ☕',
-    'dollar',
-  ],
-  ['https://tylerclass.net', 'tylerclass.net', 'link'],
-];
+const LINKS = aboutLinks({
+  title: 'Duffel',
+  repo: 'tyler-class/Duffel',
+  email: 'duffel@tylerclass.net',
+});
+const ICONS: Record<AboutLinkKind, IconName> = {
+  github: 'github',
+  email: 'mail',
+  coffee: 'coffee',
+  site: 'link',
+};
 
-/** About Duffel: version, what it is, who built it, and links. */
+/** About Duffel: version, what it is, who built it, and links (Selfhost Kit layout). */
 export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const toast = useToast();
-  const [checking, setChecking] = useState(false);
   return (
     <Sheet
       open={open}
@@ -33,38 +31,18 @@ export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => vo
           in, and the to-dos around every trip. It runs on your own Cloudflare account, so your data
           stays yours.
         </p>
-        <p className="text-sm text-soft">Built by Tyler Class.</p>
-        <button
-          type="button"
-          disabled={checking}
-          className="inline-flex items-center gap-1.5 self-start rounded-full bg-chip px-3.5 py-2 text-sm text-ink disabled:opacity-60"
-          onClick={async () => {
-            setChecking(true);
-            try {
-              if ((await checkForUpdate()) === 'latest')
-                toast({ text: 'You’re on the latest version.' });
-            } catch {
-              toast({ text: 'Couldn’t check. Are you online?' });
-            } finally {
-              setChecking(false);
-            }
-          }}
-        >
-          <Icon name="reset" size={15} />
-          {checking ? 'Checking…' : 'Check for updates'}
-        </button>
+        <p className="text-sm text-soft">{BUILT_BY}</p>
       </div>
       <div className="pt-3 pb-2">
-        {LINKS.map(([href, label, icon]) => (
+        {LINKS.map((l) => (
           <a
-            key={href}
-            href={href}
-            // Email opens the mail app; the rest open in a new tab.
-            {...(href.startsWith('mailto:') ? {} : { target: '_blank', rel: 'noreferrer' })}
-            className="flex w-full items-center gap-3 border-t border-line py-3.5 text-base text-ink"
+            key={l.href}
+            href={l.href}
+            {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+            className="group flex w-full items-center gap-3 border-t border-line py-3.5 text-base text-ink"
           >
-            <Icon name={icon} size={18} className="flex-none text-accent" />
-            <span className="flex-1">{label}</span>
+            <Icon name={ICONS[l.kind]} size={18} className="flex-none text-accent" />
+            <span className="flex-1 underline-offset-4 group-hover:underline">{l.label}</span>
             <Icon name="chevRight" size={16} className="flex-none text-faint" />
           </a>
         ))}
