@@ -7,6 +7,7 @@ const LINKS = aboutLinks({
   title: 'Duffel',
   repo: 'tyler-class/Duffel',
   email: 'duffel@tylerclass.net',
+  coffee: 'Duffel has no baggage fees. Buy me a coffee ☕',
 });
 const ICONS: Record<AboutLinkKind, IconName> = {
   github: 'github',
