@@ -8,6 +8,7 @@ import { ToastProvider } from './components/Toast';
 import { Login, SetupNeeded } from './routes/Login';
 import { Layout } from './routes/Layout';
 import { Pack } from './routes/Pack';
+import { PrintFromLink, PrintTrip } from './routes/PrintItinerary';
 import { Trips } from './routes/Trips';
 import { NewTrip } from './routes/NewTrip';
 import { TripSettings } from './routes/TripSettings';
@@ -30,6 +31,8 @@ startPwa();
 startOfflineSync(queryClient);
 
 const router = createBrowserRouter([
+  // The itinerary alone, for printing: no tab bar or sidebar.
+  { path: '/trips/:id/print', element: <PrintTrip /> },
   {
     element: <Layout />,
     children: [
@@ -78,11 +81,14 @@ function Gate() {
   return <RouterProvider router={router} />;
 }
 
+const printToken = /^\/print\/([^/]+)$/.exec(location.pathname)?.[1] ?? null;
+
 export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <ToastProvider>
-        <Gate />
+        {/* A print link (opened from the installed iPhone app) works without signing in. */}
+        {printToken ? <PrintFromLink token={printToken} /> : <Gate />}
       </ToastProvider>
     </QueryClientProvider>
   );

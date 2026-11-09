@@ -4,6 +4,7 @@ import type { EntryEnd, ItineraryEntry, ItinerarySection } from '../types';
 import { dayNumber } from './dates';
 
 const MIN_MS = 60_000;
+const DAY_MS = 24 * 60 * MIN_MS;
 
 const offsetCache = new Map<string, Intl.DateTimeFormat>();
 function fmt(tz: string): Intl.DateTimeFormat {
@@ -51,10 +52,27 @@ export function zonedInstant(date: string, time: string, tz: string | null): num
   if (day === null || !m) return null;
   const local = day * 86_400_000 + (+m[1]! * 60 + +m[2]!) * MIN_MS;
   if (!isTimeZone(tz)) return local;
-  // Guess with the offset at the local time, then correct once for a DST change in between.
-  let t = local - zoneOffset(local, tz) * MIN_MS;
-  t = local - zoneOffset(t, tz) * MIN_MS;
-  return t;
+  // The zone's offset a day either side covers any DST change near this time. A candidate is
+  // right when it reads back as the same local time. Two right answers (the repeated hour when
+  // clocks go back): the first. None (the hour skipped when clocks go forward): read the time
+  // with the offset from before the change, which moves it forward, as clocks do.
+  const before = zoneOffset(local - DAY_MS, tz);
+  const after = zoneOffset(local + DAY_MS, tz);
+  const fits = [...new Set([before, after])]
+    .map((o) => local - o * MIN_MS)
+    .filter((t) => t + zoneOffset(t, tz) * MIN_MS === local)
+    .sort((x, y) => x - y);
+  return fits[0] ?? local - before * MIN_MS;
+}
+
+/** An instant's local date ("2027-06-03") and time ("21:40") in a time zone. */
+export function localIn(at: number, tz: string): { date: string; time: string } {
+  const p = Object.fromEntries(
+    fmt(tz)
+      .formatToParts(new Date(at))
+      .map((x) => [x.type, x.value]),
+  );
+  return { date: `${p.year}-${p.month}-${p.day}`, time: `${p.hour}:${p.minute}` };
 }
 
 /** When an end happens, if it has a date and a time. */
@@ -68,8 +86,6 @@ export function sortKey(e: ItineraryEntry): number {
   const day = dayNumber(e.start.date);
   return day === null ? Infinity : day * 86_400_000 + 12 * 3_600_000;
 }
-
-const DAY_MS = 24 * 60 * MIN_MS;
 
 /**
  * Flight B continues flight A: B leaves within a day of A landing, and isn't a flight back

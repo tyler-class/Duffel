@@ -39,6 +39,7 @@ import {
   type tripStage,
 } from '@shared/logic';
 import type { EntryEnd, ItineraryEntry, ItinerarySection, TripDetail } from '@shared/types';
+import { useNavigate } from 'react-router';
 import { api, errorMessage } from '../lib/api';
 import { DragActive } from '../lib/dragActive';
 import { formatDay, formatRange } from '../lib/format';
@@ -67,14 +68,39 @@ type Stage = ReturnType<typeof tripStage>;
 type Clock = 'local' | 'home';
 const DAY = 86_400_000;
 
+/** Running as the app installed from an iPhone or iPad home screen (which can't print). */
+function isIosApp(): boolean {
+  const nav = navigator as Navigator & { standalone?: boolean };
+  const ios =
+    /iP(hone|ad|od)/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
+  return (
+    ios && (nav.standalone === true || window.matchMedia('(display-mode: standalone)').matches)
+  );
+}
+
 /** "9:40 PM", or in home time "6:40 PM" with the day when it moves. */
-function timeText(e: EntryEnd, clock: Clock): string {
+/**
+ * "9:40 PM", or in home time "6:40 PM" with the day when it moves. `bare`: no day in home
+ * time (a transport's arrival shows "+1" instead).
+ */
+function timeText(e: EntryEnd, clock: Clock, bare = false): string {
   if (!e.time) return '';
   if (clock === 'home') {
     const h = homeTime(e);
-    if (h) return `${formatClock(h.time)}${h.date !== e.date ? ` (${formatDay(h.date)})` : ''}`;
+    if (h)
+      return `${formatClock(h.time)}${!bare && h.date !== e.date ? ` (${formatDay(h.date)})` : ''}`;
   }
   return formatClock(e.time);
+}
+
+/** Days from departure to arrival, by the clock being shown: the "+1" on an overnight trip. */
+function shownShift(e: ItineraryEntry, clock: Clock): number {
+  if (clock === 'home') {
+    const a = homeTime(e.start);
+    const b = homeTime(e.end);
+    if (a && b) return (dayNumber(b.date) ?? 0) - (dayNumber(a.date) ?? 0);
+  }
+  return dayShift(e);
 }
 
 function sectionDates(s: ItinerarySection): string {
@@ -217,6 +243,22 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
     return hits;
   }, []);
   const tripId = detail.trip.id;
+  const navigate = useNavigate();
+  const [iosApp] = useState(isIosApp);
+  // Safari opens print links without signing in, so the iPhone app keeps a fresh one ready
+  // (they last 30 minutes; iOS only opens a new window straight from a tap).
+  const [printLink, setPrintLink] = useState<string | null>(null);
+  useEffect(() => {
+    if (!iosApp) return;
+    const get = () =>
+      api
+        .post<{ url: string }>(`/trips/${tripId}/print-link`, {})
+        .then((r) => setPrintLink(r.url))
+        .catch(() => undefined);
+    void get();
+    const t = setInterval(get, 20 * 60_000);
+    return () => clearInterval(t);
+  }, [iosApp, tripId]);
   const key = keys.trip(tripId);
   const sections = sortSections(detail.itinerary);
   const here = deviceZone();
@@ -377,6 +419,11 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
   }
 
   function print() {
+    // Phones print from the itinerary's own page (opens the print dialog there).
+    if (window.matchMedia('(pointer: coarse)').matches) {
+      navigate(`/trips/${tripId}/print`);
+      return;
+    }
     const root = document.documentElement;
     const theme = root.dataset.theme;
     // Print in light colors, whatever the screen uses.
@@ -428,16 +475,29 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
           />
         )}
         <div className="ml-auto flex items-center gap-1.5">
-          {sections.length > 0 && (
-            <button
-              className="grid h-8 w-8 place-items-center rounded-full bg-chip text-soft"
-              onClick={print}
-              aria-label="Print itinerary"
-              title="Print itinerary"
-            >
-              <Icon name="printer" size={16} />
-            </button>
-          )}
+          {sections.length > 0 &&
+            (iosApp ? (
+              // The installed iPhone app can't print: open the itinerary in Safari, which can.
+              <a
+                href={printLink ?? `/trips/${tripId}/print`}
+                target="_blank"
+                rel="noreferrer"
+                className="grid h-8 w-8 place-items-center rounded-full bg-chip text-soft"
+                aria-label="Print itinerary (opens in Safari)"
+                title="Print itinerary"
+              >
+                <Icon name="printer" size={16} />
+              </a>
+            ) : (
+              <button
+                className="grid h-8 w-8 place-items-center rounded-full bg-chip text-soft"
+                onClick={print}
+                aria-label="Print itinerary"
+                title="Print itinerary"
+              >
+                <Icon name="printer" size={16} />
+              </button>
+            ))}
           <button
             className="inline-flex h-8 items-center gap-1 rounded-full bg-chip pr-3 pl-2 text-[13px] font-medium text-ink"
             onClick={() =>
@@ -809,24 +869,24 @@ function EntryRow({
   if (e.kind === 'transport') {
     const from = e.start.code ?? e.start.place;
     const to = e.end.code ?? e.end.place;
-    const shift = dayShift(e);
+    const shift = shownShift(e, clock);
     const route = [
       [from, timeText(e.start, clock)].filter(Boolean).join(' '),
-      [to, timeText(e.end, clock)].filter(Boolean).join(' '),
+      [to, timeText(e.end, clock, true)].filter(Boolean).join(' '),
     ];
     if (route.some(Boolean))
       lines.push(
         <span key="route" className="tnum">
           {route[0] || '?'} → {route[1] || '?'}
-          {shift > 0 && clock === 'local' && (
-            <sup className="ml-0.5 text-[10px] text-faint">+{shift}</sup>
-          )}
+          {shift > 0 && <sup className="ml-0.5 text-[10px] text-faint">+{shift}</sup>}
         </span>,
       );
     const label = entryName(e);
     const sub = [e.carrier, e.number].filter(Boolean).join(' ');
     if (e.title && sub && sub !== label) lines.push(<span key="num">{sub}</span>);
-    if (e.end.date && e.start.date && e.end.date !== e.start.date && shift > 1)
+    // The arrival's own date, when it's two or more days on (local times only: home times
+    // carry their day already).
+    if (clock === 'local' && e.end.date && e.start.date && e.end.date !== e.start.date && shift > 1)
       lines.push(<span key="arr">Arrives {formatDay(e.end.date)}</span>);
   } else if (e.kind === 'lodging') {
     if (row.part === 'out') {
@@ -1055,5 +1115,79 @@ function SectionSheetBody({
         </div>
       </form>
     </Sheet>
+  );
+}
+
+/**
+ * The itinerary on its own, read-only, for printing (the print page, and links opened from the
+ * installed iPhone app, which can't print itself). Times as on the bookings.
+ */
+export function ItineraryPrint({ detail }: { detail: Pick<TripDetail, 'trip' | 'itinerary'> }) {
+  const t = detail.trip;
+  const sections = sortSections(detail.itinerary);
+  return (
+    <div className="px-1">
+      <header className="px-4 pt-2 pb-1">
+        <h1 className="text-2xl font-semibold">{t.name}</h1>
+        <p className="text-sm text-soft">
+          {[formatRange(t.start_date, t.end_date), t.destination].filter(Boolean).join(' · ')}
+        </p>
+      </header>
+      {!sections.length && <p className="px-4 pt-4 text-sm text-soft">No itinerary yet.</p>}
+      {sections.map((s) => {
+        const entries = orderEntries(s.entries);
+        const rows = rowsOf(entries);
+        const conns = new Map(connections(entries).map((c) => [c.after, c]));
+        const dates = sectionDates(s);
+        let lastDay: string | null = null;
+        return (
+          <section key={s.id} className="mt-5 px-4 break-inside-avoid-page">
+            <div className="flex items-center gap-2 rounded-2xl bg-chip py-2 pr-3 pl-3.5 break-after-avoid">
+              <Icon name={s.kind === 'travel' ? 'plane' : 'pin'} size={16} className="text-soft" />
+              <span className="flex-1 truncate text-base font-semibold">{s.title}</span>
+              {dates && <span className="flex-none text-xs text-faint tnum">{dates}</span>}
+            </div>
+            {s.notes && <p className="px-3.5 pt-2 text-[13px] text-soft">{s.notes}</p>}
+            {rows.map((r) => {
+              const showDay = r.date && r.date !== lastDay;
+              if (r.date) lastDay = r.date;
+              const c = r.part === 'all' ? conns.get(r.entry.id) : undefined;
+              return (
+                <div key={r.key} className="break-inside-avoid">
+                  {showDay && (
+                    <div className="px-3 pt-3 pb-1 text-xs font-medium text-faint break-after-avoid">
+                      {formatDay(r.date)}
+                    </div>
+                  )}
+                  <div className={cx('border-b border-line', c && 'border-b-0')}>
+                    <EntryRow
+                      row={r}
+                      clock="local"
+                      next={false}
+                      onOpen={() => undefined}
+                      onCopy={() => undefined}
+                    />
+                  </div>
+                  {c && (
+                    <div className="flex items-center gap-2 border-b border-line py-2 pr-3 pl-11 text-[13px] text-soft">
+                      <Icon name="clock" size={13} className="text-faint" />
+                      <span>
+                        Layover{c.at ? ` in ${c.at}` : ''} · {formatMinutes(c.minutes)}
+                        {c.change && (
+                          <span className="text-danger">
+                            {' '}
+                            · change {c.change.from} → {c.change.to}
+                          </span>
+                        )}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </section>
+        );
+      })}
+    </div>
   );
 }

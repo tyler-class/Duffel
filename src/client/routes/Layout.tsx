@@ -33,11 +33,6 @@ export function Layout() {
     // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
     // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
     <div className="min-h-full min-h-lvh pt-[calc(env(safe-area-inset-top,0px)+8px)] md:pl-60 md:pt-safe">
-      {/* Phones: a solid band under the status bar, so content scrolls out cleanly below iOS's blur. */}
-      <div
-        aria-hidden
-        className="pointer-events-none fixed inset-x-0 top-0 z-20 h-[calc(env(safe-area-inset-top,0px)+8px)] bg-gradient-to-b from-bg from-60% to-bg/0 md:hidden"
-      />
       {/* Tablet and desktop: a sidebar on the left. */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-chip px-3 pt-[calc(20px+env(safe-area-inset-top,0px))] pb-5 md:flex">
         <div className="flex items-center gap-2.5 px-3 pb-6">

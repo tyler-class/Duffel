@@ -1,6 +1,11 @@
 // Showing itinerary times: local "9:40 PM" as on the booking, or converted to this device's zone.
 import { useEffect, useState } from 'react';
-import { endInstant, likelyZone as sharedLikelyZone, type AirportData } from '@shared/logic';
+import {
+  endInstant,
+  likelyZone as sharedLikelyZone,
+  localIn,
+  type AirportData,
+} from '@shared/logic';
 import type { EntryEnd, ItinerarySection } from '@shared/types';
 
 export const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -32,23 +37,11 @@ export function zoneName(tz: string, at: number): string {
 }
 
 /** An end's time in this device's zone: "6:40 PM" plus the date when it differs. */
-export function homeTime(e: EntryEnd): { time: string; date: string } | null {
+export function homeTime(e: EntryEnd, tz = deviceZone()): { time: string; date: string } | null {
   // Without a zone the time can't be converted: show it as written.
   if (!e.tz) return null;
   const at = endInstant(e);
-  if (at === null) return null;
-  const tz = deviceZone();
-  const f = new Intl.DateTimeFormat('en-CA', {
-    timeZone: tz,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  });
-  const p = Object.fromEntries(f.formatToParts(at).map((x) => [x.type, x.value]));
-  return { time: `${p.hour}:${p.minute}`, date: `${p.year}-${p.month}-${p.day}` };
+  return at === null ? null : localIn(at, tz);
 }
 
 /** Every IANA zone this browser knows, for the time zone picker. */

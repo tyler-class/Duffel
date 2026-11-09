@@ -24,6 +24,7 @@ const P = {
   grid: '<rect x="4" y="4" width="7" height="7" rx="1.5"/><rect x="13" y="4" width="7" height="7" rx="1.5"/><rect x="4" y="13" width="7" height="7" rx="1.5"/><rect x="13" y="13" width="7" height="7" rx="1.5"/>',
   chev: '<path d="M6 9l6 6 6-6"/>',
   chevRight: '<path d="M9 6l6 6-6 6"/>',
+  chevLeft: '<path d="M15 6l-6 6 6 6"/>',
   back: '<path d="M15 6l-6 6 6 6"/>',
   tag: '<path d="M3 12V4a1 1 0 0 1 1-1h8l9 9-9 9-9-9z"/><circle cx="8" cy="8" r="1.5"/>',
   hash: '<path d="M5 9h14M5 15h14M10 4L8 20M16 4l-2 16"/>',

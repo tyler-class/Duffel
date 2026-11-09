@@ -255,7 +255,7 @@ export function Segmented<T extends string>({
     <div
       role="group"
       aria-label={label}
-      className="flex min-w-0 gap-0.5 rounded-full bg-chip p-[3px]"
+      className="flex min-w-0 gap-0.5 rounded-full bg-seg-track p-[3px] ring-1 ring-seg-edge ring-inset"
     >
       {options.map(([v, text]) => (
         <button
@@ -266,8 +266,8 @@ export function Segmented<T extends string>({
           className={cx(
             'flex-1 rounded-full px-0.5 py-1.5 text-[13px] whitespace-nowrap',
             value === v
-              ? 'bg-seg font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.08)]'
-              : 'text-soft',
+              ? 'bg-seg font-medium text-ink shadow-[0_1px_2px_rgba(0,0,0,.08)] ring-1 ring-seg-ring'
+              : 'text-seg-off',
           )}
         >
           {text}
@@ -778,12 +778,15 @@ export function SlideToggle<T extends string>({
     <div
       role="tablist"
       aria-label={label}
-      className={cx('relative grid rounded-full bg-chip p-1', className)}
+      className={cx(
+        'relative grid rounded-full bg-seg-track p-1 ring-1 ring-seg-edge ring-inset',
+        className,
+      )}
       style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}
     >
       <span
         aria-hidden="true"
-        className="absolute inset-y-1 left-1 rounded-full bg-seg shadow-[0_1px_3px_rgba(0,0,0,.12)] transition-transform duration-200 ease-out"
+        className="absolute inset-y-1 left-1 rounded-full bg-seg shadow-[0_1px_3px_rgba(0,0,0,.12)] ring-1 ring-seg-ring transition-transform duration-200 ease-out"
         style={{ width: `calc((100% - 0.5rem) / ${n})`, transform: `translateX(${index * 100}%)` }}
       />
       {options.map(([v, text], i) => (
@@ -795,7 +798,7 @@ export function SlideToggle<T extends string>({
           className={cx(
             'relative z-10 inline-flex items-center justify-center gap-1.5 rounded-full whitespace-nowrap transition-colors',
             size === 'sm' ? 'px-2.5 py-1 text-[13px]' : 'px-3 py-1.5 text-sm',
-            i === index ? 'font-semibold text-accent' : 'text-soft',
+            i === index ? 'font-semibold text-accent' : 'text-seg-off',
           )}
         >
           {text}

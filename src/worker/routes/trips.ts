@@ -69,7 +69,7 @@ import { ApiError, body, defined, notFound, type AppEnv } from './util';
 
 export const trips = new Hono<AppEnv>();
 
-async function getTrip(db: D1Database, id: string): Promise<Trip> {
+export async function getTrip(db: D1Database, id: string): Promise<Trip> {
   const t = await loadTrip(db, id);
   if (!t) throw notFound('Trip');
   return t;
