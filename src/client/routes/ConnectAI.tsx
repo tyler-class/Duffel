@@ -88,6 +88,7 @@ export function ConnectAISection() {
                 ))}
               </ol>
             )}
+            {shown.commandIntro && <p className="text-soft">{shown.commandIntro}</p>}
             {shown.command && (
               <div className="flex items-center gap-1">
                 <div className="min-w-0 flex-1">
