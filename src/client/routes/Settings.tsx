@@ -21,6 +21,7 @@ import {
 import { useToast } from '../components/Toast';
 import { ConnectAISection } from './ConnectAI';
 import { InstallHint } from '../components/InstallHint';
+import { isStandalone } from '../lib/pwa';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
 import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
 
@@ -140,10 +141,15 @@ export function Settings() {
         onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
       />
 
-      <SectionLabel icon="phone">Install on your phone</SectionLabel>
-      <div className="px-6 py-4">
-        <InstallHint />
-      </div>
+      {/* Already installed: nothing to do here, so no section. */}
+      {!isStandalone() && (
+        <>
+          <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          <div className="px-6 py-4">
+            <InstallHint />
+          </div>
+        </>
+      )}
 
       <SectionLabel icon="archive">Backup</SectionLabel>
       <p className="px-6 pt-4 text-sm text-soft">

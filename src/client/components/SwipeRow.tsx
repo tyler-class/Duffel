@@ -50,7 +50,8 @@ export function SwipeRow({
   const offset = dragging ? Math.min(0, Math.max(-REVEAL - 32, base + dx)) : base;
 
   return (
-    <div className={cx('relative overflow-hidden', className)}>
+    // data-swipe-row: its own sideways swipe, so swiping between tabs leaves it alone.
+    <div data-swipe-row className={cx('relative overflow-hidden', className)}>
       {!off && (
         <button
           type="button"

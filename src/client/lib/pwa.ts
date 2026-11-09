@@ -78,3 +78,8 @@ export async function checkForUpdate(): Promise<'updating' | 'latest'> {
   applyIfIdle(true);
   return 'updating';
 }
+
+/** Running as the installed app (home screen), not in a browser tab. */
+export const isStandalone = () =>
+  window.matchMedia?.('(display-mode: standalone)').matches ||
+  (navigator as { standalone?: boolean }).standalone === true;

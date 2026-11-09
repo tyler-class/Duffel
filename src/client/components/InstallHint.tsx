@@ -5,9 +5,6 @@ interface InstallPrompt extends Event {
   prompt: () => Promise<void>;
 }
 
-const isStandalone = () =>
-  window.matchMedia?.('(display-mode: standalone)').matches ||
-  (navigator as { standalone?: boolean }).standalone === true;
 const isIOS = () =>
   /iphone|ipad|ipod/i.test(navigator.userAgent) ||
   (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -22,8 +19,6 @@ export function InstallHint() {
     window.addEventListener('beforeinstallprompt', on);
     return () => window.removeEventListener('beforeinstallprompt', on);
   }, []);
-  if (isStandalone())
-    return <p className="text-sm text-soft">Duffel is installed on this device.</p>;
   return (
     <div className="flex flex-col gap-2 text-sm text-soft">
       {prompt && (

@@ -2,6 +2,7 @@ import { NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
+import { useTabSwipe } from '../lib/tabSwipe';
 
 const TABS: [string, string, IconName][] = [
   ['/', 'Trips', 'map'],
@@ -9,6 +10,15 @@ const TABS: [string, string, IconName][] = [
   ['/templates', 'Templates', 'tmpl'],
   ['/settings', 'Settings', 'settings'],
 ];
+
+const TAB_PATHS = TABS.map(([to]) => to);
+
+/** The tab whose main page this is (swiping between tabs works there), or null deeper in. */
+function tabRoot(path: string): string | null {
+  const p = path.replace(/\/+$/, '') || '/';
+  if (p === '/trips') return '/';
+  return TAB_PATHS.includes(p) ? p : null;
+}
 
 function activeTab(path: string): string {
   for (const p of ['/catalog', '/templates', '/settings']) if (path.startsWith(p)) return p;
@@ -18,6 +28,7 @@ function activeTab(path: string): string {
 export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
+  useTabSwipe(TAB_PATHS, tabRoot(pathname));
   return (
     // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
     // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
@@ -71,7 +82,7 @@ export function Layout() {
               )}
               aria-current={active === to ? 'page' : undefined}
             >
-              <Icon name={icon} />
+              <Icon name={icon} size={23} />
               {label}
             </NavLink>
           ))}
