@@ -3,6 +3,7 @@ import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
 import { useTabSwipe } from '../lib/tabSwipe';
+import { useNotifications } from '../lib/notifications';
 
 const TABS: [string, string, IconName][] = [
   ['/', 'Trips', 'map'],
@@ -29,6 +30,7 @@ export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
   useTabSwipe(TAB_PATHS, tabRoot(pathname));
+  useNotifications();
   return (
     // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
     // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.

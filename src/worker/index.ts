@@ -8,6 +8,7 @@ import { app } from './app';
 import { handleAuthorize } from './consent';
 import { mcpApiHandler } from './mcp';
 import { checkIn, checkInOnRequest, type CheckInOptions } from './kit/telemetry';
+import { runNotifications } from './notifications';
 import { buildFlags } from '../shared/kit/build';
 import { version } from '../../package.json';
 
@@ -94,8 +95,10 @@ export default {
     }
     return providerFor(url.origin).fetch(request, env, ctx);
   },
-  // Hourly; the check-in itself goes out at most once a day, and not at all if it's turned off.
+  // Hourly: the check-in (at most once a day, and not at all if it's turned off), and
+  // notifications (each device's 8 a.m., by its own time zone; each sent once).
   scheduled(_controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
     ctx.waitUntil(checkIn(env.DB, usage(env)));
+    ctx.waitUntil(runNotifications(env.DB));
   },
 } satisfies ExportedHandler<Cloudflare.Env>;

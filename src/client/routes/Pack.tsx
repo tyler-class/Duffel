@@ -123,6 +123,16 @@ function PackTrip(props: {
     /* eslint-enable react-hooks/set-state-in-effect */
     setParams({}, { replace: true });
   }, [params, detail, setParams]);
+  // A notification's link: ?view=packing|todos|itinerary opens that tab (once).
+  useEffect(() => {
+    const v = params.get('view');
+    if (v !== 'packing' && v !== 'todos' && v !== 'itinerary') return;
+    /* eslint-disable-next-line react-hooks/set-state-in-effect */
+    setView(v);
+    const next = new URLSearchParams(params);
+    next.delete('view');
+    setParams(next, { replace: true });
+  }, [params, setParams]);
   const stopSelecting = () => {
     setSelecting(false);
     setSelected(new Set());

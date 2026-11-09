@@ -6,7 +6,8 @@
   // Needed for OAuth clients that identify themselves with a metadata URL.
   "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
-  // Hourly: sends the anonymous daily check-in (at most once a day; off switch in Settings).
+  // Hourly: the anonymous daily check-in (at most once a day; off switch in Settings), and
+  // notifications at 8 a.m. in each device's own time zone.
   "triggers": { "crons": ["41 * * * *"] },
   "upload_source_maps": true,
   "assets": {

@@ -22,7 +22,8 @@ import {
   useSortable,
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { CSS as DndCSS } from '@dnd-kit/utilities';
+import { useSearchParams } from 'react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import type { SectionKind } from '@shared/lookups';
@@ -213,9 +214,20 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
       }
     }
   const nextRef = useRef<HTMLDivElement>(null);
+  const [params, setParams] = useSearchParams();
+  const day = params.get('day');
   useEffect(() => {
+    if (day) return; // a notification's day wins (below)
     if (stage === 'during') nextRef.current?.scrollIntoView({ block: 'center' });
-  }, [stage]);
+  }, [stage, day]);
+  // A notification's link: ?day=YYYY-MM-DD scrolls to that day (once).
+  useEffect(() => {
+    if (!day) return;
+    document.querySelector(`[data-day="${CSS.escape(day)}"]`)?.scrollIntoView({ block: 'start' });
+    const next = new URLSearchParams(params);
+    next.delete('day');
+    setParams(next, { replace: true });
+  }, [day, params, setParams]);
 
   const sensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 6 } }),
@@ -494,7 +506,10 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
                           nextRef={r.key === next ? nextRef : undefined}
                           head={
                             showDay && (
-                              <div className="px-3 pt-3 pb-1 text-xs font-medium text-faint break-after-avoid">
+                              <div
+                                data-day={r.date}
+                                className="scroll-mt-24 px-3 pt-3 pb-1 text-xs font-medium text-faint break-after-avoid"
+                              >
                                 {formatDay(r.date)}
                               </div>
                             )
@@ -639,7 +654,7 @@ function SortableSection({
   return (
     <section
       ref={setNodeRef}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
+      style={{ transform: DndCSS.Translate.toString(transform), transition }}
       className={cx(
         'relative mt-5 px-5 print:mt-4',
         isDragging && 'z-20 opacity-90 [&>div:first-child]:shadow-lg',
@@ -737,7 +752,7 @@ function DraggableEntry({
         setNodeRef(n);
         if (nextRef) nextRef.current = n;
       }}
-      style={{ transform: CSS.Translate.toString(transform), transition }}
+      style={{ transform: DndCSS.Translate.toString(transform), transition }}
       className={cx('relative break-inside-avoid', isDragging && SLOT)}
     >
       <div className={cx(isDragging && 'invisible')}>

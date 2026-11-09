@@ -138,7 +138,7 @@ function Connections() {
       {!q.isPending && !list.length && <p className="text-soft">{CONNECTED_TEXT.none}</p>}
       {list.map((c) => (
         <div key={c.id} className="flex items-center gap-2 border-b border-line py-2.5 text-ink">
-          <Icon name="ai" size={16} className="text-soft" />
+          <Icon name="sparkle" size={16} className="text-soft" />
           <span className="flex-1">{c.name}</span>
           {c.created_at && (
             <span className="text-xs text-faint">

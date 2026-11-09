@@ -20,6 +20,7 @@ import {
 } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ConnectAISection } from './ConnectAI';
+import { NotificationsSection } from './NotificationsSection';
 import { InstallHint } from '../components/InstallHint';
 import { isStandalone } from '../lib/pwa';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
@@ -142,12 +143,16 @@ export function Settings() {
         <ErrorText>{error}</ErrorText>
       </div>
 
+      <NotificationsSection />
+
       <ConnectAISection />
 
       {/* Already installed: nothing to do here, so no section. */}
       {!isStandalone() && (
         <>
-          <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          <div id="install" className="scroll-mt-14 md:scroll-mt-0">
+            <SectionLabel icon="phone">Install on your phone</SectionLabel>
+          </div>
           <div className="px-6 py-4">
             <InstallHint />
           </div>

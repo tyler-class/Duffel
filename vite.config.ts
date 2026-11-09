@@ -42,6 +42,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Push notifications and the app-icon badge (Selfhost Kit: public/kit-push-sw.js).
+        importScripts: ['kit-push-sw.js'],
         // ttf: the PDF's fonts, so Print works offline and fast enough to open the iPhone share
         // sheet from the tap (the PDF code is a js chunk, cached with the rest).
         globPatterns: ['**/*.{js,css,html,svg,png,woff2,ttf}'],

@@ -9,3 +9,4 @@ export * from './todos';
 export * from './itinerary';
 export * from './airports';
 export * from './itineraryRows';
+export * from './notify';
