@@ -1,4 +1,3 @@
-import { useEffect, useRef } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
@@ -30,18 +29,13 @@ export function Layout() {
   const { pathname } = useLocation();
   const active = activeTab(pathname);
   useTabSwipe(TAB_PATHS, tabRoot(pathname));
-  // A new page starts at the top (the browser did this when the whole document scrolled).
-  const scroller = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    scroller.current?.scrollTo(0, 0);
-  }, [pathname]);
   return (
-    // Like Nitrogen: the page is the size of the screen and only the content area below the app
-    // bar scrolls. The document itself never scrolls, so iOS never blurs content under the
-    // status bar in the installed app.
-    <div className="flex h-full flex-col md:pl-60">
-      {/* Phones: a solid app bar at the top. */}
-      <header className="z-20 flex h-[calc(env(safe-area-inset-top,0px)+48px)] flex-none items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
+    // min-h-lvh: on a page too short to scroll, iOS home-screen apps size the viewport without the
+    // safe areas and the fixed tab bar floats above the bottom. Filling the large viewport avoids it.
+    // (The same setup as HSA Locker and Ratio.)
+    <div className="min-h-full min-h-lvh md:pl-60 md:pt-safe">
+      {/* Phones: a solid app bar pinned at the top, so nothing blurs under the iPhone status bar. */}
+      <header className="sticky top-0 z-20 mb-2 flex h-[calc(env(safe-area-inset-top,0px)+48px)] items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
         <img src="/favicon.svg" alt="" className="h-7 w-7 rounded-lg" />
         <span className="text-[17px] font-semibold">Duffel</span>
       </header>
@@ -72,14 +66,9 @@ export function Layout() {
         <AboutButton variant="nav" className="mt-auto" />
       </aside>
 
-      <div
-        ref={scroller}
-        className="min-h-0 flex-1 overflow-y-auto overscroll-contain pt-2 md:pt-safe"
-      >
-        <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-3xl md:px-6 md:pt-4 md:pb-10">
-          <Outlet />
-        </main>
-      </div>
+      <main className="mx-auto w-full max-w-2xl pb-[calc(72px+env(safe-area-inset-bottom,0px))] md:max-w-3xl md:px-6 md:pt-4 md:pb-10">
+        <Outlet />
+      </main>
 
       {/* Phones: tabs along the bottom. */}
       <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line bg-bg/95 pb-safe backdrop-blur md:hidden">
