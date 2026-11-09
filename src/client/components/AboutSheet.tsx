@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
-import { Icon, type IconName } from './Icon';
+import { ABOUT_ICONS, aboutLinks, BUILT_BY, type AboutLinkKind } from '../kit/about';
+import { Icon } from './Icon';
 import { cx, Sheet } from './ui';
 
 const LINKS = aboutLinks({
@@ -9,12 +9,24 @@ const LINKS = aboutLinks({
   email: 'duffel@tylerclass.net',
   coffee: '$0 baggage fees. Buy me a coffee ☕',
 });
-const ICONS: Record<AboutLinkKind, IconName> = {
-  github: 'github',
-  email: 'mail',
-  coffee: 'coffee',
-  site: 'link',
-};
+/** An About link's icon: the kit's shared set, identical in every app. */
+function LinkIcon({ kind, className }: { kind: AboutLinkKind; className?: string }) {
+  return (
+    <svg
+      width={18}
+      height={18}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+      aria-hidden="true"
+      dangerouslySetInnerHTML={{ __html: ABOUT_ICONS[kind] }}
+    />
+  );
+}
 
 /** About Duffel: version, what it is, who built it, and links (Selfhost Kit layout). */
 export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -42,7 +54,7 @@ export function AboutSheet({ open, onClose }: { open: boolean; onClose: () => vo
             {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
             className="group flex w-full items-center gap-3 border-t border-line py-3.5 text-base text-ink"
           >
-            <Icon name={ICONS[l.kind]} size={18} className="flex-none text-accent" />
+            <LinkIcon kind={l.kind} className="flex-none text-accent" />
             <span className="flex-1 underline-offset-4 group-hover:underline">{l.label}</span>
             <Icon name="chevRight" size={16} className="flex-none text-faint" />
           </a>

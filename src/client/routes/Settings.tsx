@@ -377,12 +377,12 @@ function UpdatesSection({
                 <>
                   {UPDATE_TEXT.updateNowHint}{' '}
                   <a
-                    href={setupUrl(repo, __SOURCE_BRANCH__)}
+                    href={workflowFileUrl(repo, __SOURCE_BRANCH__)}
                     target="_blank"
                     rel="noreferrer"
                     className="underline underline-offset-2"
                   >
-                    {UPDATE_TEXT.setUpAgain}
+                    {UPDATE_TEXT.updateFile}
                   </a>
                 </>
               ) : (
