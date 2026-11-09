@@ -143,12 +143,7 @@ export function Settings() {
         <ErrorText>{error}</ErrorText>
       </div>
 
-      <UpdatesSection
-        setUp={buildFlags().updatesOn || data.settings.updates_set_up}
-        onSetUp={() => run(() => api.patch('/settings', { updates_set_up: true }))}
-        telemetry={data.settings.telemetry}
-        onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
-      />
+      <ConnectAISection />
 
       {/* Already installed: nothing to do here, so no section. */}
       {!isStandalone() && (
@@ -192,7 +187,12 @@ export function Settings() {
         <ErrorText>{restoreError}</ErrorText>
       </div>
 
-      <ConnectAISection />
+      <UpdatesSection
+        setUp={buildFlags().updatesOn || data.settings.updates_set_up}
+        onSetUp={() => run(() => api.patch('/settings', { updates_set_up: true }))}
+        telemetry={data.settings.telemetry}
+        onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
+      />
 
       <SectionLabel icon="user">Account</SectionLabel>
       <div className="px-6 pt-2">
