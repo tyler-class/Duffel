@@ -15,6 +15,7 @@ import {
   PrimaryButton,
   SectionLabel,
   Segmented,
+  SlideToggle,
   Sheet,
   Switch,
 } from '../components/ui';
@@ -69,7 +70,7 @@ export function Settings() {
 
       <SectionLabel icon="palette">Appearance</SectionLabel>
       <div className="px-6 pt-4 pb-2">
-        <Segmented<Theme>
+        <SlideToggle<Theme>
           label="Appearance"
           value={theme}
           onChange={setTheme}
