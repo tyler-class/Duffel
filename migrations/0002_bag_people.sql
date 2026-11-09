@@ -1,4 +1,4 @@
--- Bags belong to people. A bag can be for one person ("Olivia carry-on"), several
+-- Bags belong to people. A bag can be for one person ("Mia carry-on"), several
 -- ("Kids' suitcase" for two children), or nobody (shared). Templates carry their own
 -- bag setup, which is copied onto trips built from them.
 

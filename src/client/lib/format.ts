@@ -43,7 +43,7 @@ export function packHint(c: PackChoice, fallback: AutoPackFallback): string {
   } (see Settings).`;
 }
 
-/** "Olivia: 3 items with no diaper bag". */
+/** "Mia: 3 items with no diaper bag". */
 export function gapText(g: { carry: boolean; pack_type: string | null; count: number }): string {
   if (g.pack_type) return `${plural(g.count, 'item')} with no ${g.pack_type.toLowerCase()}`;
   return `${plural(g.count, g.carry ? 'carry-on item' : 'item')} with no ${g.carry ? 'carry-on' : 'checked'} bag`;
