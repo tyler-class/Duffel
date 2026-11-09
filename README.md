@@ -4,7 +4,7 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
-<!-- 📸 SCREENSHOT docs/screenshots/hero.png: Duffel on a phone: a trip's packing list grouped by person -->
+![Duffel on a laptop and a phone: a trip's packing list grouped by person, and its itinerary](docs/screenshots/hero.png)
 
 - **Per-person lists.** Every item belongs to someone (or is shared), with quantities that scale with trip length: “1 T-shirt per day, at most 7”. Set a custom number any time and it stays put.
 - **Bags.** Bags belong to people (or are shared), and items land in the right one automatically. Carry-on is a property of the bag, so the carry-on view is always right. **Auto pack** sends an item to a type of bag: diapers into its person’s diaper bag, snacks into the cooler. Car seats and strollers go under “No bag”.
@@ -16,6 +16,8 @@ A calm, simple packing list for families. Plan what everyone needs, pack it into
 - **Pack together.** Everyone in the household signs in with one shared password and sees changes within seconds.
 - **AI assistants.** Connect Claude, ChatGPT or any MCP-capable assistant and ask it to build or update your lists, groups, to-dos and itineraries. Connect your email to the same assistant and it can add bookings from confirmation emails.
 - **Yours.** It runs on your own Cloudflare account. The free plan is plenty. Your data stays in your database.
+
+![Three phone screens from one trip: the packing list by bag, the to-dos, and the itinerary](docs/screenshots/features.png)
 
 One deployment is one household.
 
@@ -78,7 +80,7 @@ Click **Create and deploy**. Cloudflare copies the code to your GitHub, creates 
 
 Open it, sign in with your password, and you're done. Bookmark it, or add it to your phone's home screen.
 
-<!-- 📸 SCREENSHOT docs/screenshots/install-7-signed-in.png: Duffel right after signing in -->
+![Duffel right after signing in](docs/screenshots/install-7-signed-in.png)
 
 ### 8. Set up automatic updates (recommended)
 
@@ -89,7 +91,7 @@ Your copy updates itself every Monday once you allow it. That takes one click, o
 
 That brings in the latest Duffel straight away, then every week. See [Updates](#updates) for how it works.
 
-<!-- 📸 SCREENSHOT docs/screenshots/install-8-updates.png: Settings → Updates with the Set up automatic updates button -->
+![Settings → Updates with the Set up automatic updates button](docs/screenshots/install-8-updates.png)
 <!-- 📸 SCREENSHOT docs/screenshots/install-8-commit.png: GitHub's new-file page with the update file filled in, and the Commit changes button -->
 
 ## Notifications
@@ -151,11 +153,15 @@ Open your Duffel link on the phone, then:
 - **iPhone:** in Safari, tap Share, then **Add to Home Screen**.
 - **Android:** in Chrome, open the menu and tap **Install app**.
 
-It opens full screen like a regular app.
+It opens full screen like a regular app, and follows your phone's light or dark setting.
+
+![Duffel on a phone in dark mode: a trip's packing list](docs/screenshots/phone-dark.png)
 
 ## Connect an AI assistant
 
 Duffel includes an [MCP](https://modelcontextprotocol.io) server at `https://<your-duffel>/mcp`. In Duffel, open **Settings → Connect an AI assistant** to copy your URL and see steps for Claude, ChatGPT, Claude Code and others. When an assistant connects, Duffel shows a sign-in page; enter your household password to approve it. **Settings → Connect an AI assistant → Disconnect all** revokes every connected assistant.
+
+![Settings → Connect an AI assistant, with the connector URL and set-up steps for Claude, ChatGPT and other apps](docs/screenshots/ai-assistant.png)
 
 Assistants can read and change trips, packing lists, groups, templates, to-dos and itineraries. Ask one “what can you do with Duffel?” and it calls `get_started`, which looks at your trips and suggests things to ask, such as:
 
@@ -168,6 +174,8 @@ Ready-made prompts for longer jobs appear in the assistant’s prompt menu (the 
 ## Back up and restore
 
 **Settings → Backup → Download backup** saves everything as one JSON file. **Restore from backup** replaces everything with a backup’s contents. Use it to move to a new deployment, too.
+
+![Settings → Backup, with Download backup and Restore from backup](docs/screenshots/backup.png)
 
 ## Deploy by hand
 
