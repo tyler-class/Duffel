@@ -14,7 +14,6 @@ import {
   PageHeader,
   PrimaryButton,
   SectionLabel,
-  Segmented,
   SlideToggle,
   Sheet,
   Switch,
@@ -126,7 +125,7 @@ export function Settings() {
       <div className="flex flex-col gap-3 px-6 pt-4 pb-2 text-sm text-soft">
         <p>Catalog items go into the right bag when they’re added to a trip.</p>
         <span className="pt-1 text-ink">When someone has no bag of an item’s type</span>
-        <Segmented<AutoPackFallback>
+        <SlideToggle<AutoPackFallback>
           label="When someone has no bag of an item’s type"
           value={data.settings.autopack_fallback}
           onChange={(autopack_fallback) => run(() => api.patch('/settings', { autopack_fallback }))}

@@ -29,7 +29,7 @@ import {
   PageHeader,
   PersonDot,
   PrimaryButton,
-  Segmented,
+  SlideToggle,
   Sheet,
   Switch,
   TextInput,
@@ -278,7 +278,7 @@ function ItemForm({
               : `Scales with trip length: ${f.qty} ${QTY_MODE_LABELS[f.qty_mode].toLowerCase()}${f.qty_offset ? `, ${f.qty_offset > 0 ? 'plus' : 'minus'} ${Math.abs(f.qty_offset)}` : ''}.`
           }
         >
-          <Segmented<QtyMode>
+          <SlideToggle<QtyMode>
             label="Quantity mode"
             value={f.qty_mode}
             onChange={(qty_mode) => set({ qty_mode })}

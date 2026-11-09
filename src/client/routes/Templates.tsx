@@ -50,7 +50,6 @@ import {
   PersonDot,
   SectionLabel,
   PrimaryButton,
-  Segmented,
   Sheet,
   SlideToggle,
   TextInput,
@@ -683,7 +682,7 @@ function TemplateItemSheet({
             : undefined
         }
       >
-        <Segmented<ModeChoice>
+        <SlideToggle<ModeChoice>
           label="Quantity mode"
           value={mode}
           onChange={setMode}

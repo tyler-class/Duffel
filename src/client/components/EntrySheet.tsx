@@ -27,6 +27,7 @@ import {
   Pick,
   PrimaryButton,
   Sheet,
+  SlideToggle,
   TextInput,
 } from './ui';
 
@@ -222,13 +223,20 @@ function EntrySheetBody({ initial, editing, zone, onClose, onSave, onDelete }: P
       >
         {!editing && (
           <FieldRow icon="layers" label="Type">
-            <div className="flex flex-wrap gap-1.5">
-              {ENTRY_KINDS.map((k) => (
-                <Pick key={k} on={d.kind === k} onClick={() => set({ kind: k })}>
-                  <Icon name={KIND_ICONS[k]} size={15} />
-                  {ENTRY_KIND_LABELS[k]}
-                </Pick>
-              ))}
+            {/* Icons show only when there is room for all four with them. */}
+            <div className="@container">
+              <SlideToggle<EntryKind>
+                label="Type"
+                value={d.kind}
+                onChange={(kind) => set({ kind })}
+                options={ENTRY_KINDS.map((k) => [
+                  k,
+                  <>
+                    <Icon name={KIND_ICONS[k]} size={15} className="hidden @min-[372px]:block" />
+                    {ENTRY_KIND_LABELS[k]}
+                  </>,
+                ])}
+              />
             </div>
           </FieldRow>
         )}

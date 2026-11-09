@@ -13,6 +13,7 @@ import {
   PersonDot,
   PrimaryButton,
   Sheet,
+  SlideToggle,
   Stepper,
   TextInput,
 } from './ui';
@@ -261,17 +262,21 @@ function ItemSheetBody(props: ItemSheetProps) {
               />
             </div>
             {calc && (
-              <div className="flex flex-wrap gap-1.5">
-                <Pick on={!draft.custom} onClick={() => set({ custom: false, qty: calculated })}>
-                  Catalog · {ruleText}
-                </Pick>
-                <Pick
-                  on={draft.custom}
-                  onClick={() => set({ custom: true, qty: shownQty ?? 1, qtyTouched: true })}
-                >
-                  Custom
-                </Pick>
-              </div>
+              <SlideToggle<'catalog' | 'custom'>
+                label="Quantity source"
+                value={draft.custom ? 'custom' : 'catalog'}
+                onChange={(v) =>
+                  set(
+                    v === 'custom'
+                      ? { custom: true, qty: shownQty ?? 1, qtyTouched: true }
+                      : { custom: false, qty: calculated },
+                  )
+                }
+                options={[
+                  ['catalog', `Catalog · ${ruleText}`],
+                  ['custom', 'Custom'],
+                ]}
+              />
             )}
           </div>
         </FieldRow>

@@ -59,7 +59,6 @@ import {
   FieldRow,
   GhostButton,
   IconButton,
-  Pick,
   PrimaryButton,
   Sheet,
   SlideToggle,
@@ -983,16 +982,27 @@ function SectionSheetBody({
         }}
       >
         <FieldRow icon="layers" label="Type">
-          <div className="flex flex-wrap gap-1.5">
-            <Pick on={kind === 'travel'} onClick={() => pickKind('travel')}>
-              <Icon name="plane" size={15} />
-              Travel
-            </Pick>
-            <Pick on={kind === 'stay'} onClick={() => pickKind('stay')}>
-              <Icon name="pin" size={15} />
-              Stay
-            </Pick>
-          </div>
+          <SlideToggle<SectionKind>
+            label="Type"
+            value={kind}
+            onChange={pickKind}
+            options={[
+              [
+                'travel',
+                <>
+                  <Icon name="plane" size={15} />
+                  Travel
+                </>,
+              ],
+              [
+                'stay',
+                <>
+                  <Icon name="pin" size={15} />
+                  Stay
+                </>,
+              ],
+            ]}
+          />
         </FieldRow>
         <FieldRow
           icon="tag"

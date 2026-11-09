@@ -42,7 +42,6 @@ import {
   SlideToggle,
   PersonDot,
   PrimaryButton,
-  Segmented,
   Sheet,
   TextInput,
 } from '../components/ui';
@@ -586,7 +585,7 @@ function PackTrip(props: {
             <div className="flex flex-col gap-4 py-3">
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs text-soft">Show</span>
-                <Segmented<Status>
+                <SlideToggle<Status>
                   label="Packed status"
                   value={status}
                   onChange={setStatus}
@@ -599,7 +598,7 @@ function PackTrip(props: {
               </div>
               <div className="flex flex-col gap-1.5">
                 <span className="text-xs text-soft">Where</span>
-                <Segmented<Where>
+                <SlideToggle<Where>
                   label="Where"
                   value={where}
                   onChange={setWhere}

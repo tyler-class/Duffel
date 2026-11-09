@@ -18,9 +18,9 @@ import {
   ErrorText,
   FieldRow,
   GhostButton,
-  Pick,
   PrimaryButton,
   Sheet,
+  SlideToggle,
   TextInput,
 } from './ui';
 
@@ -121,13 +121,12 @@ function TodoSheetBody({ initial, editing, trip, onClose, onSave, onDelete }: Pr
           />
         </FieldRow>
         <FieldRow icon="clock" label="When">
-          <div className="flex flex-wrap gap-1.5">
-            {TODO_PHASES.map((p) => (
-              <Pick key={p} on={d.phase === p} onClick={() => set({ phase: p })}>
-                {TODO_PHASE_LABELS[p]}
-              </Pick>
-            ))}
-          </div>
+          <SlideToggle<TodoPhase>
+            label="When"
+            value={d.phase}
+            onChange={(phase) => set({ phase })}
+            options={TODO_PHASES.map((p) => [p, TODO_PHASE_LABELS[p]])}
+          />
         </FieldRow>
         <FieldRow
           icon="cal"
@@ -139,23 +138,18 @@ function TodoSheetBody({ initial, editing, trip, onClose, onSave, onDelete }: Pr
           }
         >
           <div className="flex flex-col gap-2.5">
-            <div className="flex flex-wrap gap-1.5">
-              {MODES.map(([m, label]) => (
-                <Pick
-                  key={m}
-                  on={d.date_mode === m}
-                  onClick={() =>
-                    set(
-                      m === 'relative' && d.date_mode !== 'relative'
-                        ? { date_mode: m, rel_days: 3, rel_dir: 'before', rel_anchor: 'start' }
-                        : { date_mode: m },
-                    )
-                  }
-                >
-                  {label}
-                </Pick>
-              ))}
-            </div>
+            <SlideToggle<TodoDateMode>
+              label="Date"
+              value={d.date_mode}
+              onChange={(m) =>
+                set(
+                  m === 'relative' && d.date_mode !== 'relative'
+                    ? { date_mode: m, rel_days: 3, rel_dir: 'before', rel_anchor: 'start' }
+                    : { date_mode: m },
+                )
+              }
+              options={MODES}
+            />
             {d.date_mode === 'fixed' && (
               <TextInput
                 id="todo-date"
@@ -182,19 +176,19 @@ function TodoSheetBody({ initial, editing, trip, onClose, onSave, onDelete }: Pr
                     </div>
                   )}
                   {d.rel_dir !== 'on' && <span className="pr-1 text-sm text-soft">days</span>}
-                  {REL_DIRS.map((x) => (
-                    <Pick key={x} on={d.rel_dir === x} onClick={() => set({ rel_dir: x })}>
-                      {DIRS[x]}
-                    </Pick>
-                  ))}
+                  <SlideToggle<RelDir>
+                    label="Before or after"
+                    value={d.rel_dir}
+                    onChange={(rel_dir) => set({ rel_dir })}
+                    options={REL_DIRS.map((x) => [x, DIRS[x]])}
+                  />
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {REL_ANCHORS.map((a) => (
-                    <Pick key={a} on={d.rel_anchor === a} onClick={() => set({ rel_anchor: a })}>
-                      {ANCHORS[a]}
-                    </Pick>
-                  ))}
-                </div>
+                <SlideToggle<RelAnchor>
+                  label="Relative to"
+                  value={d.rel_anchor}
+                  onChange={(rel_anchor) => set({ rel_anchor })}
+                  options={REL_ANCHORS.map((a) => [a, ANCHORS[a]])}
+                />
               </>
             )}
           </div>
