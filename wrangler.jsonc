@@ -6,6 +6,8 @@
   // Needed for OAuth clients that identify themselves with a metadata URL.
   "compatibility_flags": ["global_fetch_strictly_public"],
   "observability": { "enabled": true },
+  // Hourly: sends the anonymous daily check-in (at most once a day; off switch in Settings).
+  "triggers": { "crons": ["41 * * * *"] },
   "upload_source_maps": true,
   "assets": {
     // Static SPA. Unknown paths fall back to index.html; /api/* always reaches the Worker.

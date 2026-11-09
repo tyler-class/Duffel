@@ -7,6 +7,24 @@ import { OAuthProvider } from '@cloudflare/workers-oauth-provider';
 import { app } from './app';
 import { handleAuthorize } from './consent';
 import { mcpApiHandler } from './mcp';
+import { checkIn } from './kit/telemetry';
+import { version } from '../../package.json';
+
+/** Tables whose row counts are sent in the anonymous daily check-in (counts only). */
+export const USAGE_TABLES = [
+  'people',
+  'items',
+  'suitcases',
+  'templates',
+  'template_items',
+  'template_todos',
+  'trips',
+  'trip_items',
+  'trip_bags',
+  'trip_todos',
+  'itinerary_sections',
+  'itinerary_entries',
+];
 
 const defaultHandler = {
   fetch(
@@ -64,5 +82,9 @@ export default {
       return defaultHandler.fetch(request, env, ctx);
     }
     return providerFor(url.origin).fetch(request, env, ctx);
+  },
+  // Hourly; the check-in itself goes out at most once a day, and not at all if it's turned off.
+  scheduled(_controller: ScheduledController, env: Cloudflare.Env, ctx: ExecutionContext) {
+    ctx.waitUntil(checkIn(env.DB, { app: 'duffel', version, tables: USAGE_TABLES }));
   },
 } satisfies ExportedHandler<Cloudflare.Env>;

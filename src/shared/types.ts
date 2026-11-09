@@ -203,6 +203,10 @@ export interface Settings {
   instance_name: string;
   /** Where an item with a bag type goes when its person has no bag of that type. */
   autopack_fallback: AutoPackFallback;
+  /** Someone added the update workflow to this copy's GitHub repo (from Settings → Updates). */
+  updates_set_up: boolean;
+  /** Send the anonymous daily check-in (row counts only). */
+  telemetry: boolean;
 }
 
 /** Everything except trip items: small enough to load in one request. */

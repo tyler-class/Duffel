@@ -293,6 +293,8 @@ export const saveAsTemplate = z.object({ name: name() });
 export const settingsPatch = z.object({
   instance_name: name(60).optional(),
   autopack_fallback: z.enum(AUTOPACK_FALLBACKS).optional(),
+  updates_set_up: z.boolean().optional(),
+  telemetry: z.boolean().optional(),
 });
 export const loginInput = z.object({ password: z.string().min(1).max(500) });
 

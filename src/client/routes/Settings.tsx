@@ -7,6 +7,7 @@ import { useSave } from '../lib/useSave';
 import { useTheme, type Theme } from '../lib/theme';
 import { Icon } from '../components/Icon';
 import {
+  cx,
   ErrorText,
   GhostButton,
   InfoTip,
@@ -15,10 +16,19 @@ import {
   SectionLabel,
   Segmented,
   Sheet,
+  Switch,
 } from '../components/ui';
 import { useToast } from '../components/Toast';
 import { ConnectAISection } from './ConnectAI';
 import { InstallHint } from '../components/InstallHint';
+import {
+  isNewer,
+  isSourceRepo,
+  runUrl,
+  setupUrl,
+  UPSTREAM,
+  useLatestVersion,
+} from '../lib/updates';
 import { AboutButton } from '../components/AboutSheet';
 
 export function Settings() {
@@ -126,6 +136,13 @@ export function Settings() {
         <ErrorText>{error}</ErrorText>
       </div>
 
+      <UpdatesSection
+        setUp={data.settings.updates_set_up}
+        onSetUp={() => run(() => api.patch('/settings', { updates_set_up: true }))}
+        telemetry={data.settings.telemetry}
+        onTelemetry={(telemetry) => run(() => api.patch('/settings', { telemetry }))}
+      />
+
       <SectionLabel icon="phone">Install on your phone</SectionLabel>
       <div className="px-6 py-4">
         <InstallHint />
@@ -226,5 +243,151 @@ function AutoPackList({ title, children }: { title: string; children: ReactNode 
       <p className="font-medium text-ink">{title}</p>
       <ul className="mt-1 flex list-disc flex-col gap-0.5 pl-5 marker:text-faint">{children}</ul>
     </div>
+  );
+}
+
+const LINK_BUTTON =
+  'inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2.5 text-[15px] font-medium';
+
+/**
+ * Updates: is a newer Duffel out, and links into this copy's own GitHub repo to add the
+ * update workflow (once) or run it. Updates go Duffel → their repo → their Cloudflare.
+ */
+function UpdatesSection({
+  setUp,
+  onSetUp,
+  telemetry,
+  onTelemetry,
+}: {
+  setUp: boolean;
+  onSetUp: () => void;
+  telemetry: boolean;
+  onTelemetry: (on: boolean) => void;
+}) {
+  const latest = useLatestVersion();
+  const current = __APP_VERSION__;
+  const repo = __SOURCE_REPO__;
+  const isSource = isSourceRepo(repo, UPSTREAM);
+  const newer = latest.data && isNewer(latest.data, current) ? latest.data : null;
+  const status = newer
+    ? `Duffel ${newer} is available. You have ${current}.`
+    : latest.isError
+      ? `Duffel ${current}. Couldn’t check for a newer version.`
+      : latest.data
+        ? `Duffel ${current}, up to date.`
+        : `Duffel ${current}.`;
+
+  return (
+    <>
+      <SectionLabel
+        icon="download"
+        trailing={
+          !isSource && (
+            <InfoTip label="How updates work">
+              <div className="flex flex-col gap-2">
+                <p>Updates take two steps, both in your own accounts:</p>
+                <ol className="flex list-decimal flex-col gap-1 pl-5 marker:text-faint">
+                  <li>
+                    An update workflow in your GitHub copy brings in the latest Duffel every Monday.
+                    GitHub needs you to add it once: Set up opens it ready to commit.
+                  </li>
+                  <li>
+                    Cloudflare deploys your copy every time it changes. That part is already on.
+                  </li>
+                </ol>
+                <p>
+                  Your data lives in your database, so updates don’t touch it. Changes you made to
+                  the code in your copy are replaced.
+                </p>
+              </div>
+            </InfoTip>
+          )
+        }
+      >
+        Updates
+      </SectionLabel>
+      <div className="flex flex-col gap-3 px-6 pt-4 pb-2 text-sm text-soft">
+        <p className={cx(newer && 'text-ink')}>{status}</p>
+        {isSource ? null : !repo ? (
+          <p className="text-xs text-faint">Deployed by hand: git pull, then npm run deploy.</p>
+        ) : (
+          <>
+            <div className="flex flex-wrap items-center gap-2">
+              {setUp ? (
+                <a
+                  href={runUrl(repo)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className={cx(
+                    LINK_BUTTON,
+                    newer ? 'bg-accent text-accent-ink' : 'bg-chip text-ink',
+                  )}
+                >
+                  <Icon name="reset" size={16} />
+                  Update now
+                </a>
+              ) : (
+                <a
+                  href={setupUrl(repo, __SOURCE_BRANCH__)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={onSetUp}
+                  className={cx(LINK_BUTTON, 'bg-accent text-accent-ink')}
+                >
+                  <Icon name="github" size={16} />
+                  Set up automatic updates
+                </a>
+              )}
+              <a
+                href={`https://github.com/${repo}`}
+                target="_blank"
+                rel="noreferrer"
+                className="px-1 text-[13px] text-soft underline-offset-2 hover:underline"
+              >
+                {repo}
+              </a>
+            </div>
+            <p className="text-xs text-faint">
+              {setUp ? (
+                <>
+                  Opens GitHub: click Run workflow.{' '}
+                  <a
+                    href={setupUrl(repo, __SOURCE_BRANCH__)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline underline-offset-2"
+                  >
+                    Set up again
+                  </a>
+                </>
+              ) : (
+                'Opens GitHub: click Commit changes. It updates now, then every Monday.'
+              )}
+            </p>
+          </>
+        )}
+        <div className="flex items-center gap-3 border-t border-line pt-3">
+          <span className="flex flex-1 items-center gap-1.5 text-ink">
+            Share anonymous usage counts
+            <InfoTip label="What’s shared">
+              <div className="flex flex-col gap-2">
+                <p>Once a day this copy sends Duffel’s developer:</p>
+                <ul className="flex list-disc flex-col gap-0.5 pl-5 marker:text-faint">
+                  <li>a random id this copy made for itself</li>
+                  <li>its version</li>
+                  <li>how many trips, items, bags and so on it has (counts only)</li>
+                  <li>whether automatic updates are on</li>
+                </ul>
+                <p>
+                  Never names, lists, notes or anything you type, and no IP address is kept. It
+                  shows how many copies are in use, to decide what to work on next.
+                </p>
+              </div>
+            </InfoTip>
+          </span>
+          <Switch on={telemetry} onChange={onTelemetry} label="Share anonymous usage counts" />
+        </div>
+      </div>
+    </>
   );
 }

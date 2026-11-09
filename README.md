@@ -76,15 +76,20 @@ Everyone is signed out and signs in again with the new password. Connected AI as
 
 ## Update your copy
 
-If you deployed with the button, your copy lives in your own GitHub account and updates itself: every Monday a GitHub Action takes the latest Duffel and pushes it to your copy, and Cloudflare migrates the database and redeploys. To update right away, open your copy on GitHub, go to **Actions → Update Duffel** and click **Run workflow**. Your household’s data is in the database, not the repo, so updates don’t touch it.
+Updates come in two steps, both in your own accounts: Duffel's latest code goes into **your GitHub copy**, and Cloudflare deploys **your copy** whenever it changes. Duffel never deploys to your Cloudflare account directly.
 
-The update replaces the app’s code with Duffel’s, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let an Action change them, so if Duffel’s workflows change you copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
+- **Your copy → your Cloudflare** is already on. The Deploy button set Cloudflare to build and deploy every change to your copy's `main` branch (migrating the database first).
+- **Duffel → your copy** needs one click to turn on. The Deploy button doesn't copy GitHub workflow files, so open **Settings → Updates** and choose **Set up automatic updates**. GitHub opens with the update workflow filled in; click **Commit changes**. That brings in the latest Duffel straight away, then every Monday.
 
-Copies made before Duffel 0.8.1 have an older `update.yml` that GitHub switches off after 60 days without a commit. Replace your copy’s `.github/workflows/update.yml` with [Duffel’s](.github/workflows/update.yml) once to keep it running.
+To update before Monday, choose **Update now** in Settings and click **Run workflow** on GitHub. Settings also shows when a newer Duffel is out.
+
+Your household’s data is in the database, not the repo, so updates don’t touch it. An update replaces the app’s code with Duffel’s, so changes you made to your copy’s code are overwritten. Two things are kept: your `.github/workflows` (GitHub doesn’t let a workflow change them, so if Duffel’s change, copy them over by hand) and a `wrangler.jsonc` that has your database id in it.
 
 If you deployed by hand, `git pull` and `npm run deploy`.
 
-If your copy was made before this update existed, copy [`.github/workflows/update.yml`](.github/workflows/update.yml) into it once.
+## Anonymous usage counts
+
+Once a day your copy tells Duffel’s developer that it exists: a random id it made for itself, its version, how many rows each table has (trips, items, bags, …) and whether automatic updates are on. Never names, lists, notes or anything you type, and no IP address is kept. It shows how many copies are in use. Turn it off in **Settings → Updates → Share anonymous usage counts**.
 
 ## Local development
 

@@ -5,6 +5,7 @@ import { cloudflare } from '@cloudflare/vite-plugin';
 import { VitePWA } from 'vite-plugin-pwa';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
+import { sourceDefines } from './scripts/kit/source';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8')) as {
   version: string;
@@ -81,7 +82,10 @@ export default defineConfig({
       },
     }),
   ],
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+    ...sourceDefines(),
+  },
   resolve: {
     alias: { '@shared': fileURLToPath(new URL('./src/shared', import.meta.url)) },
   },

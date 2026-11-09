@@ -27,6 +27,7 @@ import {
 } from '../db';
 import sample from '../../../seed/sample.json';
 import { ApiError, body, type AppEnv } from './util';
+import { kitState, setKitState } from '../kit/telemetry';
 
 export const admin = new Hono<AppEnv>();
 
@@ -86,10 +87,11 @@ async function lookupsInUse(db: D1Database): Promise<Partial<Record<LookupKind, 
 
 admin.get('/state', async (c) => {
   const db = c.env.DB;
-  const [instanceName, fallback, people, items, suitcases, templates, trips, inUse] =
+  const [instanceName, fallback, kit, people, items, suitcases, templates, trips, inUse] =
     await Promise.all([
       getSetting(db, 'instance_name'),
       getAutoPackFallback(db),
+      kitState(db),
       loadPeople(db),
       loadItems(db),
       loadSuitcases(db),
@@ -101,6 +103,8 @@ admin.get('/state', async (c) => {
     settings: {
       instance_name: instanceName ?? DEFAULT_INSTANCE_NAME,
       autopack_fallback: fallback,
+      updates_set_up: kit.updates_set_up,
+      telemetry: kit.telemetry,
     },
     people,
     items,
@@ -126,6 +130,8 @@ admin.patch('/settings', async (c) => {
   if (input.autopack_fallback !== undefined)
     stmts.push(set('autopack_fallback', input.autopack_fallback));
   if (stmts.length) await db.batch(stmts);
+  if (input.updates_set_up !== undefined || input.telemetry !== undefined)
+    await setKitState(db, { updates_set_up: input.updates_set_up, telemetry: input.telemetry });
   return c.json(input);
 });
 
