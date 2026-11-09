@@ -42,7 +42,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // ttf: the PDF's fonts, so Print works offline and fast enough to open the iPhone share
+        // sheet from the tap (the PDF code is a js chunk, cached with the rest).
+        globPatterns: ['**/*.{js,css,html,svg,png,woff2,ttf}'],
         // Pages are network-first (below), so a deploy shows up on the next load instead of
         // waiting for the service worker. index.html stays precached only as the offline copy.
         navigateFallback: null,

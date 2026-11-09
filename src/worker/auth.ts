@@ -174,8 +174,6 @@ export const guard: MiddlewareHandler<Env> = async (c, next) => {
   }
 
   if (PUBLIC.has(path)) return next();
-  // A print link carries its own signature (routes/print.ts): reading it needs no session.
-  if (c.req.method === 'GET' && path.startsWith('/api/print/')) return next();
   if (!(await isSignedIn(c)))
     return c.json({ error: 'unauthorized', message: 'Sign in first.' }, 401);
   return next();

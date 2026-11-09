@@ -30,17 +30,19 @@ import {
   connections,
   dayNumber,
   dayShift,
-  endInstant,
   entryMinutes,
   entryName,
   formatMinutes,
   orderEntries,
   sortSections,
   type tripStage,
+  itineraryRows,
+  sectionDays,
+  type ItineraryRow,
 } from '@shared/logic';
 import type { EntryEnd, ItineraryEntry, ItinerarySection, TripDetail } from '@shared/types';
-import { useNavigate } from 'react-router';
 import { api, errorMessage } from '../lib/api';
+import { deliverPdf, itineraryPdf, openPdfTab, preparePdf, sharesPdf } from '../lib/printItinerary';
 import { DragActive } from '../lib/dragActive';
 import { formatDay, formatRange } from '../lib/format';
 import { deviceZone, formatClock, homeTime, likelyZone, zoneName } from '../lib/itinerary';
@@ -68,16 +70,6 @@ type Stage = ReturnType<typeof tripStage>;
 type Clock = 'local' | 'home';
 const DAY = 86_400_000;
 
-/** Running as the app installed from an iPhone or iPad home screen (which can't print). */
-function isIosApp(): boolean {
-  const nav = navigator as Navigator & { standalone?: boolean };
-  const ios =
-    /iP(hone|ad|od)/.test(nav.userAgent) || (nav.platform === 'MacIntel' && nav.maxTouchPoints > 1);
-  return (
-    ios && (nav.standalone === true || window.matchMedia('(display-mode: standalone)').matches)
-  );
-}
-
 /** "9:40 PM", or in home time "6:40 PM" with the day when it moves. */
 /**
  * "9:40 PM", or in home time "6:40 PM" with the day when it moves. `bare`: no day in home
@@ -104,11 +96,8 @@ function shownShift(e: ItineraryEntry, clock: Clock): number {
 }
 
 function sectionDates(s: ItinerarySection): string {
-  const days = s.entries
-    .flatMap((e) => [e.start.date, e.end.date])
-    .filter((d): d is string => !!d)
-    .sort();
-  return days.length ? formatRange(days[0]!, days[days.length - 1]!) : '';
+  const d = sectionDays(s);
+  return d ? formatRange(d[0], d[1]) : '';
 }
 
 function copy(text: string, toast: ReturnType<typeof useToast>) {
@@ -118,66 +107,8 @@ function copy(text: string, toast: ReturnType<typeof useToast>) {
     .catch(() => undefined);
 }
 
-/**
- * One line on the itinerary. A stay with a check-out shows twice, at check-in and at
- * check-out, so the days read in order; both open the same booking.
- */
-interface Row {
-  key: string;
-  entry: ItineraryEntry;
-  part: 'all' | 'in' | 'out';
-  /** The day it's shown under. */
-  date: string | null;
-  /** When it starts and ends, for sorting and "Next". */
-  from: number;
-  until: number;
-}
-
-/** When an end happens: its instant, or its day (start or end of it) when there's no time. */
-function when(e: EntryEnd, endOfDay: boolean): number {
-  const at = endInstant(e);
-  if (at !== null) return at;
-  const d = dayNumber(e.date);
-  return d === null ? Infinity : d * DAY + (endOfDay ? DAY - 1 : DAY / 2);
-}
-
-/**
- * The lines of a section, in the entries' order. A check-out goes where its time falls:
- * after the last line that starts before it.
- */
-function rowsOf(entries: readonly ItineraryEntry[]): Row[] {
-  const rows: Row[] = [];
-  const outs: Row[] = [];
-  for (const e of entries) {
-    const split = e.kind === 'lodging' && !!e.end.date;
-    rows.push({
-      key: e.id,
-      entry: e,
-      part: split ? 'in' : 'all',
-      date: e.start.date,
-      from: when(e.start, false),
-      until: split || !e.end.date ? when(e.start, true) : when(e.end, true),
-    });
-    if (split)
-      outs.push({
-        key: `${e.id}:out`,
-        entry: e,
-        part: 'out',
-        date: e.end.date,
-        from: when(e.end, false),
-        until: when(e.end, true),
-      });
-  }
-  for (const out of outs) {
-    const own = rows.findIndex((r) => r.entry.id === out.entry.id);
-    let at = own + 1;
-    rows.forEach((r, i) => {
-      if (i > own && r.from !== Infinity && r.from <= out.from) at = i + 1;
-    });
-    rows.splice(at, 0, out);
-  }
-  return rows;
-}
+type Row = ItineraryRow;
+const rowsOf = itineraryRows;
 
 const sectionKey = (id: string) => `s:${id}`;
 const entryKey = (id: string) => `e:${id}`;
@@ -243,22 +174,15 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
     return hits;
   }, []);
   const tripId = detail.trip.id;
-  const navigate = useNavigate();
-  const [iosApp] = useState(isIosApp);
-  // Safari opens print links without signing in, so the iPhone app keeps a fresh one ready
-  // (they last 30 minutes; iOS only opens a new window straight from a tap).
-  const [printLink, setPrintLink] = useState<string | null>(null);
+  const [making, setMaking] = useState(false);
+  const hasSections = detail.itinerary.length > 0;
+  // Phones share the PDF, which needs the tap that started it: load the PDF maker ahead of
+  // time (once there's something to print) so building it is quick.
   useEffect(() => {
-    if (!iosApp) return;
-    const get = () =>
-      api
-        .post<{ url: string }>(`/trips/${tripId}/print-link`, {})
-        .then((r) => setPrintLink(r.url))
-        .catch(() => undefined);
-    void get();
-    const t = setInterval(get, 20 * 60_000);
-    return () => clearInterval(t);
-  }, [iosApp, tripId]);
+    if (!hasSections || !sharesPdf()) return;
+    const t = setTimeout(() => void preparePdf().catch(() => undefined), 1500);
+    return () => clearTimeout(t);
+  }, [hasSections]);
   const key = keys.trip(tripId);
   const sections = sortSections(detail.itinerary);
   const here = deviceZone();
@@ -418,25 +342,25 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
     });
   }
 
-  function print() {
-    // Phones print from the itinerary's own page (opens the print dialog there).
-    if (window.matchMedia('(pointer: coarse)').matches) {
-      navigate(`/trips/${tripId}/print`);
-      return;
+  /** Print: a PDF of the itinerary, shared (phones) or opened in a new tab (computers). */
+  async function print() {
+    if (making) return;
+    const tab = openPdfTab();
+    setMaking(true);
+    try {
+      const file = await itineraryPdf({ trip: detail.trip, itinerary: detail.itinerary });
+      const r = await deliverPdf(file, tab);
+      if (r === 'needs-tap')
+        toast({
+          text: 'Your PDF is ready.',
+          action: { label: 'Share', run: () => void deliverPdf(file).catch(() => undefined) },
+        });
+    } catch (e) {
+      tab?.close();
+      toast({ text: `Couldn’t make the PDF. ${errorMessage(e)}` });
+    } finally {
+      setMaking(false);
     }
-    const root = document.documentElement;
-    const theme = root.dataset.theme;
-    // Print in light colors, whatever the screen uses.
-    root.dataset.theme = 'light';
-    root.dataset.print = 'itinerary';
-    const restore = () => {
-      if (theme) root.dataset.theme = theme;
-      else delete root.dataset.theme;
-      delete root.dataset.print;
-      window.removeEventListener('afterprint', restore);
-    };
-    window.addEventListener('afterprint', restore);
-    window.print();
   }
 
   const travelCount = sections.filter((s) => s.kind === 'travel').length;
@@ -475,29 +399,21 @@ export function TripItinerary({ detail, stage }: { detail: TripDetail; stage: St
           />
         )}
         <div className="ml-auto flex items-center gap-1.5">
-          {sections.length > 0 &&
-            (iosApp ? (
-              // The installed iPhone app can't print: open the itinerary in Safari, which can.
-              <a
-                href={printLink ?? `/trips/${tripId}/print`}
-                target="_blank"
-                rel="noreferrer"
-                className="grid h-8 w-8 place-items-center rounded-full bg-chip text-soft"
-                aria-label="Print itinerary (opens in Safari)"
-                title="Print itinerary"
-              >
-                <Icon name="printer" size={16} />
-              </a>
-            ) : (
-              <button
-                className="grid h-8 w-8 place-items-center rounded-full bg-chip text-soft"
-                onClick={print}
-                aria-label="Print itinerary"
-                title="Print itinerary"
-              >
-                <Icon name="printer" size={16} />
-              </button>
-            ))}
+          {sections.length > 0 && (
+            <button
+              className={cx(
+                'inline-flex h-8 items-center justify-center gap-1.5 rounded-full bg-chip text-soft',
+                making ? 'px-3 text-[13px]' : 'w-8',
+              )}
+              onClick={() => void print()}
+              disabled={making}
+              aria-label={making ? 'Making PDF…' : 'Print itinerary (PDF)'}
+              title="Print itinerary"
+            >
+              <Icon name="printer" size={16} />
+              {making && <span>Making PDF…</span>}
+            </button>
+          )}
           <button
             className="inline-flex h-8 items-center gap-1 rounded-full bg-chip pr-3 pl-2 text-[13px] font-medium text-ink"
             onClick={() =>
@@ -1115,79 +1031,5 @@ function SectionSheetBody({
         </div>
       </form>
     </Sheet>
-  );
-}
-
-/**
- * The itinerary on its own, read-only, for printing (the print page, and links opened from the
- * installed iPhone app, which can't print itself). Times as on the bookings.
- */
-export function ItineraryPrint({ detail }: { detail: Pick<TripDetail, 'trip' | 'itinerary'> }) {
-  const t = detail.trip;
-  const sections = sortSections(detail.itinerary);
-  return (
-    <div className="px-1">
-      <header className="px-4 pt-2 pb-1">
-        <h1 className="text-2xl font-semibold">{t.name}</h1>
-        <p className="text-sm text-soft">
-          {[formatRange(t.start_date, t.end_date), t.destination].filter(Boolean).join(' · ')}
-        </p>
-      </header>
-      {!sections.length && <p className="px-4 pt-4 text-sm text-soft">No itinerary yet.</p>}
-      {sections.map((s) => {
-        const entries = orderEntries(s.entries);
-        const rows = rowsOf(entries);
-        const conns = new Map(connections(entries).map((c) => [c.after, c]));
-        const dates = sectionDates(s);
-        let lastDay: string | null = null;
-        return (
-          <section key={s.id} className="mt-5 px-4 break-inside-avoid-page">
-            <div className="flex items-center gap-2 rounded-2xl bg-chip py-2 pr-3 pl-3.5 break-after-avoid">
-              <Icon name={s.kind === 'travel' ? 'plane' : 'pin'} size={16} className="text-soft" />
-              <span className="flex-1 truncate text-base font-semibold">{s.title}</span>
-              {dates && <span className="flex-none text-xs text-faint tnum">{dates}</span>}
-            </div>
-            {s.notes && <p className="px-3.5 pt-2 text-[13px] text-soft">{s.notes}</p>}
-            {rows.map((r) => {
-              const showDay = r.date && r.date !== lastDay;
-              if (r.date) lastDay = r.date;
-              const c = r.part === 'all' ? conns.get(r.entry.id) : undefined;
-              return (
-                <div key={r.key} className="break-inside-avoid">
-                  {showDay && (
-                    <div className="px-3 pt-3 pb-1 text-xs font-medium text-faint break-after-avoid">
-                      {formatDay(r.date)}
-                    </div>
-                  )}
-                  <div className={cx('border-b border-line', c && 'border-b-0')}>
-                    <EntryRow
-                      row={r}
-                      clock="local"
-                      next={false}
-                      onOpen={() => undefined}
-                      onCopy={() => undefined}
-                    />
-                  </div>
-                  {c && (
-                    <div className="flex items-center gap-2 border-b border-line py-2 pr-3 pl-11 text-[13px] text-soft">
-                      <Icon name="clock" size={13} className="text-faint" />
-                      <span>
-                        Layover{c.at ? ` in ${c.at}` : ''} · {formatMinutes(c.minutes)}
-                        {c.change && (
-                          <span className="text-danger">
-                            {' '}
-                            · change {c.change.from} → {c.change.to}
-                          </span>
-                        )}
-                      </span>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </section>
-        );
-      })}
-    </div>
   );
 }

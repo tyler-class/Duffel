@@ -222,33 +222,3 @@
     animation: sheet-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
 }
-
-/* Printing the itinerary: only it, from the top of the page. */
-@media print {
-  :root[data-print='itinerary'] body * {
-    visibility: hidden;
-  }
-  :root[data-print='itinerary'] #itinerary-print,
-  :root[data-print='itinerary'] #itinerary-print * {
-    visibility: visible;
-  }
-  :root[data-print='itinerary'] #itinerary-print {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-  }
-  :root[data-print='itinerary'] {
-    --bg: #fff;
-    --surface: #fff;
-  }
-  :root[data-print='itinerary'] body {
-    background: #fff;
-  }
-  /* Keep the section bars and booking-number chips grey on paper. */
-  #itinerary-print section > div:first-child,
-  #itinerary-print .bg-chip {
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
-  }
-}

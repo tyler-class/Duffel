@@ -22,7 +22,6 @@ import { catalog } from './routes/catalog';
 import { templates } from './routes/templates';
 import { itinerary } from './routes/itinerary';
 import { trips } from './routes/trips';
-import { print } from './routes/print';
 import { ApiError, body, type AppEnv } from './routes/util';
 
 export const app = new Hono<AppEnv>().basePath('/api');
@@ -70,7 +69,6 @@ app.route('/', templates);
 app.route('/', trips);
 app.route('/', itinerary);
 app.route('/', connections);
-app.route('/', print);
 
 app.notFound((c) => c.json({ error: 'not_found', message: 'No such endpoint.' }, 404));
 
