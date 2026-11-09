@@ -265,7 +265,9 @@ const endInput = z
     time_zone: z
       .string()
       .optional()
-      .describe('IANA zone of that place, e.g. "Europe/Lisbon". Not needed with an airport code.'),
+      .describe(
+        'IANA zone of that place, e.g. "America/Cancun" for a Cancún hotel. Give it for hotels, plans and anything without an airport code; if left out, the trip\'s nearest zone is used.',
+      ),
   })
   .optional();
 type EndArg = z.infer<typeof endInput>;

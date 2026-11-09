@@ -238,3 +238,53 @@ export function entryName(e: ItineraryEntry): string {
   }
   return e.title ?? (e.kind === 'lodging' ? 'Lodging' : e.kind === 'note' ? 'Note' : 'Plan');
 }
+
+/**
+ * The zone a new or zoneless entry in a section most likely uses: the last one before it on
+ * the trip (in order), else the first one after it. Null when the trip has no zones at all.
+ */
+export function likelyZone(
+  sections: readonly ItinerarySection[],
+  sectionId: string,
+  before?: string,
+): string | null {
+  let last: string | null = null;
+  let after: string | null = null;
+  let passed = false;
+  for (const s of sortSections(sections)) {
+    for (const e of orderEntries(s.entries)) {
+      if (s.id === sectionId && e.id === before) passed = true;
+      const z = e.end.tz ?? e.start.tz;
+      if (!z) continue;
+      if (!passed) last = z;
+      else after ??= z;
+    }
+    if (s.id === sectionId && !before) passed = true;
+  }
+  return last ?? after;
+}
+
+/**
+ * Entries with a time but no zone (an assistant left it out, say): the zone they most likely
+ * use, so their times aren't read as UTC. Each end takes the entry's other end's zone first,
+ * then the trip's neighbouring entries.
+ */
+export function missingZones(
+  sections: readonly ItinerarySection[],
+): { id: string; start_tz?: string; end_tz?: string }[] {
+  const out: { id: string; start_tz?: string; end_tz?: string }[] = [];
+  for (const s of sections)
+    for (const e of s.entries) {
+      const needStart = !e.start.tz && !!(e.start.time || e.start.date);
+      const needEnd = !e.end.tz && !!(e.end.time || e.end.date);
+      if (!needStart && !needEnd) continue;
+      const near = e.start.tz ?? e.end.tz ?? likelyZone(sections, s.id, e.id);
+      if (!near) continue;
+      out.push({
+        id: e.id,
+        ...(needStart ? { start_tz: e.end.tz ?? near } : {}),
+        ...(needEnd ? { end_tz: e.start.tz ?? near } : {}),
+      });
+    }
+  return out;
+}

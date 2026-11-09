@@ -1,6 +1,6 @@
 // Showing itinerary times: local "9:40 PM" as on the booking, or converted to this device's zone.
 import { useEffect, useState } from 'react';
-import { endInstant, type AirportData } from '@shared/logic';
+import { endInstant, likelyZone as sharedLikelyZone, type AirportData } from '@shared/logic';
 import type { EntryEnd, ItinerarySection } from '@shared/types';
 
 export const deviceZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
@@ -33,6 +33,8 @@ export function zoneName(tz: string, at: number): string {
 
 /** An end's time in this device's zone: "6:40 PM" plus the date when it differs. */
 export function homeTime(e: EntryEnd): { time: string; date: string } | null {
+  // Without a zone the time can't be converted: show it as written.
+  if (!e.tz) return null;
   const at = endInstant(e);
   if (at === null) return null;
   const tz = deviceZone();
@@ -60,14 +62,9 @@ export function allZones(): string[] {
   }
 }
 
-/** The zone a new entry in a section most likely uses: the last one before it on the trip. */
+/** The zone a new entry in a section most likely uses: the trip's nearest, else this device's. */
 export function likelyZone(sections: ItinerarySection[], sectionId: string): string {
-  let last: string | null = null;
-  for (const s of sections) {
-    for (const e of s.entries) last = e.end.tz ?? e.start.tz ?? last;
-    if (s.id === sectionId) break;
-  }
-  return last ?? deviceZone();
+  return sharedLikelyZone(sections, sectionId) ?? deviceZone();
 }
 
 let loading: Promise<AirportData> | null = null;

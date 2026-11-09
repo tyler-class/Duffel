@@ -5,6 +5,7 @@ import {
   endInstant,
   findAirport,
   keepConnections,
+  likelyZone,
   placeByTime,
   type AirportData,
 } from '@shared/logic';
@@ -17,7 +18,17 @@ import {
   sectionPatch,
 } from '@shared/schemas';
 import type { EntryEnd } from '@shared/types';
-import { all, endCols, first, insertStmt, newId, nowIso, toEntry, updateStmt } from '../db';
+import {
+  all,
+  endCols,
+  first,
+  insertStmt,
+  loadItinerary,
+  newId,
+  nowIso,
+  toEntry,
+  updateStmt,
+} from '../db';
 import { tripDetail } from './trips';
 import { ApiError, body, defined, notFound, type AppEnv } from './util';
 
@@ -166,8 +177,19 @@ itinerary.post('/itinerary-sections/:id/entries', async (c) => {
   const db = c.env.DB;
   const tripId = await sectionTrip(db, sectionId);
   const input = await body(c, entryInput);
-  const start = withAirport(input.start);
-  const end = withAirport(input.end);
+  let start = withAirport(input.start);
+  let end = withAirport(input.end);
+  // A time with no zone (and no airport to take one from) gets the trip's nearest zone,
+  // instead of being read as UTC.
+  const timed = (e: EndIn) => !!(e?.time || e?.date);
+  if ((timed(start) && !start?.tz) || (timed(end) && !end?.tz)) {
+    const near =
+      start?.tz ?? end?.tz ?? likelyZone(await loadItinerary(db, tripId), sectionId) ?? null;
+    if (near) {
+      if (timed(start) && !start?.tz) start = { ...start, tz: end?.tz ?? near };
+      if (timed(end) && !end?.tz) end = { ...end, tz: start?.tz ?? near };
+    }
+  }
   checkOrder(start, end);
   const now = nowIso();
   const entryId = newId();

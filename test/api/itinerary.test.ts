@@ -1,3 +1,4 @@
+import { env } from 'cloudflare:workers';
 import { describe, expect, it } from 'vitest';
 import { connections, entryMinutes } from '../../src/shared/logic';
 import type { TripDetail } from '../../src/shared/types';
@@ -219,5 +220,49 @@ describe('itinerary', () => {
     ).data.itinerary[0]!.id;
     const res = await api.post(`/itinerary-sections/${os}/order`, { ids: [id('2')] });
     expect(res.status).toBe(400);
+  });
+
+  it('gives a booking with no zone its trip’s zone, so 3 PM never becomes 10 AM', async () => {
+    const api = await session();
+    const t = (await api.post<TripDetail>('/trips', { name: 'Zones', source: { kind: 'blank' } }))
+      .data;
+    let d = (
+      await api.post<TripDetail>(`/trips/${t.trip.id}/itinerary`, {
+        kind: 'travel',
+        title: 'There',
+      })
+    ).data;
+    const there = d.itinerary[0]!.id;
+    await api.post(`/itinerary-sections/${there}/entries`, {
+      kind: 'transport',
+      start: { code: 'CLT', date: '2026-12-17', time: '10:00' },
+      end: { code: 'CUN', date: '2026-12-17', time: '12:30' },
+    });
+    d = (
+      await api.post<TripDetail>(`/trips/${t.trip.id}/itinerary`, { kind: 'stay', title: 'Cancún' })
+    ).data;
+    const stay = d.itinerary[1]!.id;
+    // What an assistant sent: times, no zone.
+    d = (
+      await api.post<TripDetail>(`/itinerary-sections/${stay}/entries`, {
+        kind: 'lodging',
+        title: 'Resort',
+        start: { date: '2026-12-17', time: '15:00' },
+        end: { date: '2026-12-21', time: '11:00' },
+      })
+    ).data;
+    const resort = d.itinerary[1]!.entries[0]!;
+    expect([resort.start.tz, resort.end.tz]).toEqual(['America/Cancun', 'America/Cancun']);
+
+    // One saved before this fix, with no zone: repaired the next time the trip loads.
+    await env.DB.prepare('UPDATE itinerary_entries SET start_tz = NULL, end_tz = NULL WHERE id = ?')
+      .bind(resort.id)
+      .run();
+    d = (await api.get<TripDetail>(`/trips/${t.trip.id}`)).data;
+    expect(d.itinerary[1]!.entries[0]!.start.tz).toBe('America/Cancun');
+    const row = await env.DB.prepare('SELECT start_tz FROM itinerary_entries WHERE id = ?')
+      .bind(resort.id)
+      .first<{ start_tz: string }>();
+    expect(row?.start_tz).toBe('America/Cancun');
   });
 });

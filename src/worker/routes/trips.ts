@@ -41,6 +41,7 @@ import {
   typedBags,
   type LengthLike,
   type TripItemDraft,
+  missingZones,
 } from '@shared/logic';
 import type { Item, Template, TodoWhen, Trip, TripBag, TripDetail } from '@shared/types';
 import {
@@ -82,6 +83,26 @@ export async function tripDetail(db: D1Database, id: string): Promise<TripDetail
     loadTripTodos(db, id),
     loadItinerary(db, id),
   ]);
+  // Entries saved with a time but no zone get their trip's nearest zone, once, for good.
+  const fixes = missingZones(itinerary);
+  if (fixes.length) {
+    const now = nowIso();
+    await db.batch(
+      fixes.map((f) =>
+        db
+          .prepare(
+            'UPDATE itinerary_entries SET start_tz = COALESCE(?, start_tz), end_tz = COALESCE(?, end_tz), updated_at = ? WHERE id = ?',
+          )
+          .bind(f.start_tz ?? null, f.end_tz ?? null, now, f.id),
+      ),
+    );
+    for (const s of itinerary)
+      for (const e of s.entries) {
+        const f = fixes.find((x) => x.id === e.id);
+        if (f?.start_tz) e.start.tz = f.start_tz;
+        if (f?.end_tz) e.end.tz = f.end_tz;
+      }
+  }
   return { trip, bags, items, todos, itinerary };
 }
 
