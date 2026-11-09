@@ -23,7 +23,14 @@ import { ConnectAISection } from './ConnectAI';
 import { InstallHint } from '../components/InstallHint';
 import { isStandalone } from '../lib/pwa';
 import { isSourceRepo, runUrl, setupUrl, UPSTREAM, useLatestVersion } from '../lib/updates';
-import { howUpdatesWork, UPDATE_TEXT, updateStatus, whatsShared } from '../kit/updates';
+import {
+  autoUpdatesInfo,
+  howUpdatesWork,
+  UPDATE_TEXT,
+  updateStatus,
+  whatsShared,
+  workflowFileUrl,
+} from '../kit/updates';
 import { buildFlags } from '@shared/kit/build';
 
 /** What the usage counts count, in words (matches USAGE_TABLES in the worker). */
@@ -271,6 +278,7 @@ function UpdatesSection({
   const latest = useLatestVersion();
   const repo = __SOURCE_REPO__;
   const isSource = isSourceRepo(repo, UPSTREAM);
+  const auto = autoUpdatesInfo('Duffel');
   const status = updateStatus('Duffel', __APP_VERSION__, latest.data, latest.isError);
   const how = howUpdatesWork('Duffel');
   const shared = whatsShared('Duffel', USAGE_COUNTED, false);
@@ -299,6 +307,31 @@ function UpdatesSection({
       </SectionLabel>
       <div className="flex flex-col gap-3 px-6 pt-4 pb-2 text-sm text-soft">
         <p className={cx(status.newer && 'text-ink')}>{status.text}</p>
+        {setUp && repo && !isSource && (
+          <div className="flex items-center gap-1.5 text-ink">
+            <Icon name="check" size={16} className="text-accent" />
+            {UPDATE_TEXT.autoOn}
+            <InfoTip label={UPDATE_TEXT.aboutAutoOn}>
+              <div className="flex flex-col gap-2">
+                <p>{auto.what}</p>
+                <ul className="flex list-disc flex-col gap-1 pl-5 marker:text-faint">
+                  {auto.how.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+                <p>{auto.off}</p>
+                <a
+                  href={workflowFileUrl(repo, __SOURCE_BRANCH__)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-accent underline underline-offset-2"
+                >
+                  {auto.fileLink}
+                </a>
+              </div>
+            </InfoTip>
+          </div>
+        )}
         {isSource ? null : !repo ? (
           <p className="text-xs text-faint">{UPDATE_TEXT.byHand}</p>
         ) : (
