@@ -791,7 +791,7 @@ function PackTrip(props: {
       )}
 
       {selecting && (
-        <div className="fixed inset-x-0 bottom-[calc(64px+env(safe-area-inset-bottom,0px))] z-30 flex justify-center px-4 md:bottom-6 md:left-60">
+        <div className="fixed inset-x-0 bottom-[calc(var(--tabbar-clear)+12px)] z-30 flex justify-center px-4 md:bottom-6 md:left-60">
           <div className="flex w-full max-w-xl items-center gap-1 rounded-full bg-ink py-1.5 pr-1.5 pl-4 text-sm text-bg shadow-lg">
             <span className="flex-1 font-medium tnum">
               {selected.size ? `${selected.size} selected` : 'Tap items to select'}
