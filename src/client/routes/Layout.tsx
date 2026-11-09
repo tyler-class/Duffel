@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useLocation } from 'react-router';
+import { Link, NavLink, Outlet, useLocation } from 'react-router';
 import { AboutButton } from '../components/AboutSheet';
 import { Icon, type IconName } from '../components/Icon';
 import { cx } from '../components/ui';
@@ -36,8 +36,10 @@ export function Layout() {
     <div className="min-h-full min-h-lvh md:pl-60 md:pt-safe">
       {/* Phones: a solid app bar pinned at the top, so nothing blurs under the iPhone status bar. */}
       <header className="sticky top-0 z-20 mb-2 flex h-[calc(env(safe-area-inset-top,0px)+48px)] items-center justify-center gap-2 border-b border-line bg-bg pt-[env(safe-area-inset-top,0px)] md:hidden">
-        <img src="/favicon.svg" alt="" className="h-7 w-7 rounded-lg" />
-        <span className="text-[17px] font-semibold">Duffel</span>
+        <Link to="/" aria-label="Duffel home" className="flex h-full items-center gap-2 px-3">
+          <img src="/favicon.svg" alt="" className="h-7 w-7 rounded-lg" />
+          <span className="text-[17px] font-semibold">Duffel</span>
+        </Link>
       </header>
       {/* Tablet and desktop: a sidebar on the left. */}
       <aside className="fixed inset-y-0 left-0 z-30 hidden w-60 flex-col border-r border-line bg-chip px-3 pt-[calc(20px+env(safe-area-inset-top,0px))] pb-5 md:flex">
