@@ -12,6 +12,17 @@ import { useTrip } from '../lib/queries';
 
 type Printable = Pick<TripDetail, 'trip' | 'itinerary'>;
 
+/**
+ * Leaving the print page that the installed iPhone app opened in Safari: close the tab (back to
+ * the app), or, when the browser won't close it, go to the trip in Duffel.
+ */
+function done(tripId: string | undefined) {
+  window.close();
+  setTimeout(() => {
+    if (!window.closed) window.location.assign(tripId ? `/trips/${tripId}` : '/');
+  }, 250);
+}
+
 function PrintView({ data, back }: { data?: Printable; back?: string }) {
   const printed = useRef(false);
   // Paper is light, whatever the screen uses.
@@ -36,10 +47,18 @@ function PrintView({ data, back }: { data?: Printable; back?: string }) {
   return (
     <div className="min-h-full bg-white pb-10 text-ink">
       <div className="flex items-center gap-2 px-4 pt-[calc(env(safe-area-inset-top,0px)+12px)] pb-2 print:hidden">
-        {back && (
+        {back ? (
           <Link to={back} className="inline-flex items-center gap-1 text-[15px] text-accent">
             <Icon name="chevLeft" size={18} /> Back
           </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={() => done(data?.trip.id)}
+            className="inline-flex items-center gap-1 text-[15px] text-accent"
+          >
+            <Icon name="chevLeft" size={18} /> Done
+          </button>
         )}
         <button
           type="button"
@@ -70,9 +89,12 @@ export function PrintFromLink({ token }: { token: string }) {
   });
   if (q.isError)
     return (
-      <p className="px-5 pt-[calc(env(safe-area-inset-top,0px)+24px)] text-soft">
-        This print link has expired. Open Print again in Duffel.
-      </p>
+      <div className="flex flex-col items-start gap-3 px-5 pt-[calc(env(safe-area-inset-top,0px)+24px)]">
+        <p className="text-soft">This print link has expired. Open Print again in Duffel.</p>
+        <button type="button" onClick={() => done(undefined)} className="text-[15px] text-accent">
+          Done
+        </button>
+      </div>
     );
   return <PrintView data={q.data} />;
 }
