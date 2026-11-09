@@ -79,9 +79,13 @@ const shift = (d: string, n: number) =>
 const nextDay = (d: string) => shift(d, 1);
 const prevDay = (d: string) => shift(d, -1);
 
-/** The hourly cron's notification run. */
+/**
+ * The hourly cron's notification run. Anything due that hasn't gone out yet is sent at any hour
+ * from 8:00 local to midnight (no 21:00 cutoff): one turned on late in the evening still gets
+ * today's.
+ */
 export function runNotifications(db: D1Database, o: Partial<PushJobOptions> = {}) {
-  return runPushJob(db, { ...duffelPush(db), icon: ICON, ...o });
+  return runPushJob(db, { ...duffelPush(db), icon: ICON, until: 24, ...o });
 }
 
 /** /api/push/*: behind Duffel's sign-in (mounted after the guard in app.ts). */

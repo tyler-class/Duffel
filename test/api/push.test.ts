@@ -334,6 +334,39 @@ describe('the notification run', () => {
     expect(svc.got).toHaveLength(2);
     await api.del(`/trips/${trip.id}`);
   });
+
+  it('sends today’s to-dos to a device turned on at 22:00, but nothing before 8', async () => {
+    await clearDevices();
+    const api = await session();
+    const trip = (
+      await api.post<TripDetail>('/trips', {
+        name: 'Late push trip',
+        start_date: '2031-08-20',
+        end_date: '2031-08-22',
+        source: { kind: 'blank' },
+      })
+    ).data.trip;
+    await api.post(`/trips/${trip.id}/todos`, {
+      title: 'Order the adapter',
+      due_date: '2031-08-04',
+    });
+    const svc = pushService();
+    const early = await device('UTC');
+    // 7:41 local: too early.
+    await runNotifications(env.DB, { now: new Date('2031-08-04T07:41Z'), fetcher: svc.fetcher });
+    expect(svc.got).toHaveLength(0);
+    // That device goes; another turns notifications on at 22:00 and the 22:41 run sends today's.
+    await env.DB.prepare('DELETE FROM selfhost_push_devices WHERE id = ?').bind(early.d.id).run();
+    const late = await device('UTC');
+    await runNotifications(env.DB, { now: new Date('2031-08-04T22:41Z'), fetcher: svc.fetcher });
+    expect(svc.got.map((r) => r.url)).toEqual([late.d.endpoint]);
+    expect(await decrypt(late.b, svc.got[0]!.body)).toMatchObject({
+      title: 'Late push trip',
+      body: '1 to-do today: Order the adapter',
+      tag: 'todos-today',
+    });
+    await api.del(`/trips/${trip.id}`);
+  });
 });
 
 describe('/api/push', () => {
