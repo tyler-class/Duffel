@@ -2,7 +2,7 @@
 
 A calm, simple packing list for families. Plan what everyone needs, pack it into the right bags, and tick things off together from your phones.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
 ![Duffel on a laptop and a phone: a trip's packing list grouped by person, and its itinerary](docs/screenshots/hero.png)
 
@@ -79,7 +79,7 @@ You can also do this in the middle of the next step: Cloudflare asks you to conn
 
 ### 4. Click Deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
 Sign in to Cloudflare if it asks. You land on a setup page.
 
