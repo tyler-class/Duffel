@@ -1,6 +1,10 @@
 # Duffel
 
-Packing for a family trip is a group project that usually lives in one person's head. Duffel is a calm, shared packing list that gets it out of there. Plan what everyone needs once, let quantities scale with the length of the trip, have items land in the right bags, and tick things off together from your phones. The rest of the trip lives there too. To-dos cover everything that isn't packing, like dropping the dog at the sitter or renewing a passport in time, with dates that move when the trip does. The itinerary keeps flights, stays and reservations in order, and with the built-in MCP server your AI assistant can pull them straight out of your confirmation emails and drop them in for you. Next time, copy the last trip and start from a list that already knows your family. It's built for households with kids, gear and more than one carry-on - the trips where a forgotten diaper bag is a real problem, not an inconvenience.
+Packing for a family trip is a group project that usually lives in one person's head. Duffel is a calm, shared packing list that gets it out of there. Plan what everyone needs once, let quantities scale with the length of the trip, have items land in the right bags, and tick things off together from your phones.
+
+The rest of the trip lives there too. To-dos cover everything that isn't packing, like dropping the dog at the sitter or renewing a passport in time, with dates that move when the trip does. The itinerary keeps flights, stays and reservations in order, and with the built-in MCP server your AI assistant can pull them straight out of your confirmation emails and drop them in for you.
+
+Next time, copy the last trip and start from a list that already knows your family. It's built for households with kids, gear and more than one carry-on - the trips where a forgotten diaper bag is a real problem, not an inconvenience.
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
