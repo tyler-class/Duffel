@@ -1,8 +1,12 @@
 # Duffel
 
-A calm, simple packing list for families. Plan what everyone needs, pack it into the right bags, and tick things off together from your phones.
+Packing for a family trip is a group project that usually lives in one person's head. Duffel is a calm, shared packing list that gets it out of there. Plan what everyone needs once, let quantities scale with the length of the trip, have items land in the right bags, and tick things off together from your phones.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
+The rest of the trip lives there too. To-dos cover everything that isn't packing, like dropping the dog at the sitter or renewing a passport in time, with dates that move when the trip does. The itinerary keeps flights, stays and reservations in order, and with the built-in MCP server your AI assistant can pull them straight out of your confirmation emails and drop them in for you.
+
+Next time, copy the last trip and start from a list that already knows your family. It's built for households with kids, gear and more than one carry-on - the trips where a forgotten diaper bag is a real problem, not an inconvenience.
+
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
 ![Duffel on a laptop and a phone: a trip's packing list grouped by person, and its itinerary](docs/screenshots/hero.png)
 
@@ -79,7 +83,7 @@ You can also do this in the middle of the next step: Cloudflare asks you to conn
 
 ### 4. Click Deploy
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
+[![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
 Sign in to Cloudflare if it asks. You land on a setup page.
 
