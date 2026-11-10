@@ -1,6 +1,6 @@
 # Duffel
 
-A calm, simple packing list for families. Plan what everyone needs, pack it into the right bags, and tick things off together from your phones.
+Packing for a family trip is a group project that usually lives in one person's head. Duffel is a calm, shared packing list that gets it out of there. Plan what everyone needs once, let quantities scale with the length of the trip, have items land in the right bags, and tick things off together from your phones. Next time, copy the last trip and start from a list that already knows your family. It's built for households with kids, gear and more than one carry-on - the trips where a forgotten diaper bag is a real problem, not an inconvenience.
 
 [![Deploy to Cloudflare](docs/deploy-to-cloudflare.svg)](https://deploy.workers.cloudflare.com/?url=https://github.com/tyler-class/Duffel)
 
