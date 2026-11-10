@@ -23,6 +23,10 @@ Next time, copy the last trip and start from a list that already knows your fami
 
 ![Three phone screens from one trip: the packing list by bag, the to-dos, and the itinerary](docs/screenshots/features.png)
 
+**Ask your assistant, typed or out loud.** It builds a trip from your template, adds bookings from your confirmation emails, and tells you what's still not packed.
+
+![An AI assistant connected to Duffel: on a laptop it creates a family trip to Tulum from a template, adds to-dos and pulls the flights and hotel into the itinerary; on a phone it answers when the flight leaves and what's still not packed](docs/screenshots/ai-chat.png)
+
 One deployment is one household.
 
 ## A look around
